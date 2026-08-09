@@ -11,6 +11,12 @@ import com.spotibase.exception.ResourceNotFoundException;
 import com.spotibase.exception.UnauthorizedException;
 import com.spotibase.repository.UserRepository;
 import com.spotibase.security.JwtTokenProvider;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Header;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.ProtectedHeader;
+import io.jsonwebtoken.io.Decoders;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,13 +29,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigInteger;
+import java.security.GeneralSecurityException;
+import java.security.Key;
+import java.security.KeyFactory;
+import java.security.spec.RSAPublicKeySpec;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+    private static final String APPLE_OIDC_DISCOVERY_URL = "https://appleid.apple.com/.well-known/openid-configuration";
+    private static final String APPLE_ISSUER = "https://appleid.apple.com";
 
     private final UserRepository userRepository;
     private final JwtTokenProvider jwtTokenProvider;
@@ -45,6 +60,9 @@ public class AuthService {
 
     @Value("${supabase.anon-key}")
     private String anonKey;
+
+    @Value("${apple.client-id:}")
+    private String appleClientId;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -247,14 +265,120 @@ public class AuthService {
                     result.put("name", response.getBody().get("name"));
                 }
             } else if ("apple".equalsIgnoreCase(provider)) {
-
-                result.put("email", "apple_user@placeholder.com");
-                result.put("name", "Apple User");
+                result.putAll(verifyAppleToken(idToken));
             }
+        } catch (UnauthorizedException e) {
+            // Preserve specific messages (e.g. "Apple sign-in not configured")
+            throw e;
         } catch (Exception e) {
             log.error("Social token verification failed: {}", e.getMessage());
             throw new UnauthorizedException("Invalid social token");
         }
         return result;
+    }
+
+    /**
+     * Verifies a Sign in with Apple identity token end-to-end:
+     * <ol>
+     *   <li>Fetches Apple's OIDC discovery document to locate the JWKS URI.</li>
+     *   <li>Fetches Apple's public keys (JWKS) and selects the RSA key matching
+     *       the token's {@code kid} header.</li>
+     *   <li>Verifies the token's RS256 signature with that key and validates
+     *       {@code iss}, {@code aud} (configured Apple client id) and
+     *       {@code exp} (enforced by the JWT parser).</li>
+     *   <li>Extracts the verified {@code email} claim; {@code name} falls back
+     *       to the {@code sub} claim, since Apple only includes {@code name}
+     *       in the initial authorization response, not in the id_token.</li>
+     * </ol>
+     * No cached keys are trusted: discovery + JWKS are fetched per verification,
+     * so Apple key rotation is always honored.
+     */
+    private Map<String, Object> verifyAppleToken(String idToken) {
+        if (appleClientId == null || appleClientId.isBlank()) {
+            throw new UnauthorizedException("Apple sign-in not configured");
+        }
+
+        // 1. OIDC discovery -> jwks_uri
+        Map<String, Object> discovery = restTemplate.getForObject(APPLE_OIDC_DISCOVERY_URL, Map.class);
+        if (discovery == null || !(discovery.get("jwks_uri") instanceof String jwksUri) || jwksUri.isBlank()) {
+            throw new UnauthorizedException("Invalid social token");
+        }
+
+        // 2. Apple public keys (JWKS)
+        Map<String, Object> jwks = restTemplate.getForObject(jwksUri, Map.class);
+
+        // 3. Verify RS256 signature and validate iss/aud/exp claims.
+        //    jjwt's keyLocator picks the JWKS key by the token's `kid`; the
+        //    parser rejects expired tokens (exp) and requireIssuer/requireAudience
+        //    reject tokens not issued for Apple / for our client id.
+        Claims claims;
+        try {
+            claims = Jwts.parser()
+                    .keyLocator(header -> resolveAppleSigningKey(jwks, keyIdOf(header)))
+                    .requireIssuer(APPLE_ISSUER)
+                    .requireAudience(appleClientId)
+                    .build()
+                    .parseSignedClaims(idToken)
+                    .getPayload();
+        } catch (JwtException | IllegalArgumentException e) {
+            log.warn("Apple id_token verification failed: {}", e.getMessage());
+            throw new UnauthorizedException("Invalid social token");
+        }
+
+        // 4. Extract verified profile claims; email is required for an account
+        String email = claims.get("email", String.class);
+        if (email == null || email.isBlank()) {
+            throw new UnauthorizedException("Invalid social token");
+        }
+        String name = claims.get("name", String.class);
+        if (name == null || name.isBlank()) {
+            name = claims.getSubject();
+        }
+
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("email", email);
+        userInfo.put("name", name);
+        return userInfo;
+    }
+
+    private String keyIdOf(Header header) {
+        if (header instanceof ProtectedHeader protectedHeader) {
+            return protectedHeader.getKeyId();
+        }
+        throw new IllegalArgumentException("Apple id_token header is not a JWS header");
+    }
+
+    private Key resolveAppleSigningKey(Map<String, Object> jwks, String kid) {
+        if (jwks == null || !(jwks.get("keys") instanceof List<?> keys) || keys.isEmpty()) {
+            throw new IllegalArgumentException("Apple JWKS contains no keys");
+        }
+        if (kid == null || kid.isBlank()) {
+            throw new IllegalArgumentException("Apple id_token is missing the kid header");
+        }
+        for (Object keyEntry : keys) {
+            if (keyEntry instanceof Map<?, ?> keyMap && kid.equals(keyMap.get("kid"))) {
+                return rsaPublicKeyFromJwk(keyMap);
+            }
+        }
+        throw new IllegalArgumentException("No Apple signing key found for kid: " + kid);
+    }
+
+    private Key rsaPublicKeyFromJwk(Map<?, ?> jwk) {
+        if (!"RSA".equals(jwk.get("kty"))) {
+            throw new IllegalArgumentException("Unsupported Apple JWK key type: " + jwk.get("kty"));
+        }
+        Object n = jwk.get("n");
+        Object e = jwk.get("e");
+        if (!(n instanceof String) || !(e instanceof String)) {
+            throw new IllegalArgumentException("Invalid Apple RSA JWK (missing n/e)");
+        }
+        byte[] modulus = Decoders.BASE64URL.decode((String) n);
+        byte[] exponent = Decoders.BASE64URL.decode((String) e);
+        RSAPublicKeySpec keySpec = new RSAPublicKeySpec(new BigInteger(1, modulus), new BigInteger(1, exponent));
+        try {
+            return KeyFactory.getInstance("RSA").generatePublic(keySpec);
+        } catch (GeneralSecurityException ex) {
+            throw new IllegalArgumentException("Failed to build Apple RSA public key", ex);
+        }
     }
 }

@@ -1,0 +1,51 @@
+# EAS build upload ignore file.
+# Mirrors mobile/.gitignore (EAS archives the git-tracked project) plus
+# additional entries that should never reach the EAS build server:
+#   * dist-prod/      - web export output (native builds don't need it)
+#   * .env            - machine-specific values (e.g. LAN IP) must never be
+#                       uploaded; per-profile API URLs live in eas.json `env`
+#                       and EAS project environment variables instead.
+
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+dist-prod/
+web-build/
+expo-env.d.ts
+
+# Native (CNG: EAS prebuilds these on the server, never uploads local ones)
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android

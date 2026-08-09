@@ -1,0 +1,122 @@
+# ---------------------------------------------------------------------------
+# EAS Build - manual dispatch workflow
+#
+# PURPOSE
+#   Trigger EAS cloud builds on demand with a chosen platform + profile.
+#   This workflow COMPLEMENTS .github/workflows/mobile.yml:
+#     * mobile.yml already runs production EAS builds (Android + iOS) on push
+#       to main/develop, so we deliberately do NOT add a push trigger here
+#       (would duplicate builds and burn EAS credits). This file is
+#       dispatch-only.
+#
+# REQUIRED SECRETS (repo Settings > Secrets and variables > Actions)
+#   EXPO_TOKEN                 - Expo personal access token (required).
+#                                https://docs.expo.dev/accounts/programmatic-access/
+#   EXPO_PUBLIC_API_URL        - (optional) default API URL for builds when
+#                                the workflow_dispatch input is left blank.
+#
+# HOW EXPO_PUBLIC_API_URL IS INJECTED (read before dispatching)
+#   The value baked into the app bundle is resolved ON THE EAS BUILD SERVER,
+#   not on this runner. Local/CI shell env vars are NOT propagated to the
+#   build server. The effective precedence on the build server is:
+#
+#     1. EAS project environment variables for the profile's environment
+#        (highest). Each profile below sets `environment` so you can override
+#        per environment, e.g.:
+#          eas env:set EXPO_PUBLIC_API_URL https://api.example.com \
+#            --environment production --visibility plaintext
+#        See https://docs.expo.dev/eas/environment-variables/
+#     2. `env` defaults committed in mobile/eas.json for that profile.
+#
+#   The `expo_public_api_url` input (falling back to the EXPO_PUBLIC_API_URL
+#   secret) is exported into the `eas build` step env. This is consumed by the
+#   EAS CLI itself (app config evaluation, EAS Build hooks) on the runner. To
+#   actually change the URL compiled into the app, set the EAS project env var
+#   for the matching environment or edit the profile `env` in mobile/eas.json.
+#
+# iOS NOTES
+#   * preview profile builds for the iOS Simulator (ios.simulator: true) - no
+#     provisioning profile needed, but it also cannot be installed on a real
+#     device. For real-device previews you need an ad hoc / enterprise
+#     provisioning profile (see https://docs.expo.dev/build/internal-distribution/)
+#   * development & production iOS builds require Apple credentials managed
+#     via EAS (run `eas credentials` locally once, or provide an ASC API key).
+#
+# OTHER NOTES
+#   * Production versionCode/buildNumber are auto-incremented REMOTELY
+#     (cli.appVersionSource: "remote" in eas.json) - nothing is written back
+#     to app.json, safe for CI.
+#   * app.json has `expo.extra.eas.projectId: "spotibase"` - this must be the
+#     UUID returned by `eas init` / `eas config`, otherwise EAS will fall back
+#     to resolving the project by slug (@spotibase/spotibase) or fail.
+# ---------------------------------------------------------------------------
+
+name: EAS Build (Manual Dispatch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build for
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+        default: android
+      profile:
+        description: EAS build profile (defined in mobile/eas.json)
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+        default: preview
+      expo_public_api_url:
+        description: >-
+          API base URL for this build. Passed to the EAS CLI environment; the
+          value compiled into the app comes from the EAS project env var of
+          the profile environment, or the profile `env` default in eas.json
+          (see comments above). Leave blank to use defaults.
+        type: string
+        required: false
+
+env:
+  # SDK 57 requires Node >= 22.13.0 (https://docs.expo.dev/versions/v57.0.0/)
+  NODE_VERSION: '22'
+
+jobs:
+  eas-build:
+    name: EAS Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Set up Expo and EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          pack: npm
+
+      - name: Install dependencies
+        working-directory: ./mobile
+        run: npm ci
+
+      - name: Build on EAS
+        working-directory: ./mobile
+        run: eas build --platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive
+        env:
+          EXPO_PUBLIC_API_URL: ${{ inputs.expo_public_api_url || secrets.EXPO_PUBLIC_API_URL }}

@@ -11,6 +11,7 @@ import com.spotibase.exception.ResourceNotFoundException;
 import com.spotibase.exception.UnauthorizedException;
 import com.spotibase.repository.UserRepository;
 import com.spotibase.security.JwtTokenProvider;
+import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -19,8 +20,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.util.Base64;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -347,19 +358,72 @@ class AuthServiceTest {
     }
 
     @Test
-    void socialAuth_apple_usesPlaceholderEmailAndNoNetworkCall() {
-        when(userRepository.findByEmailWithFavoriteGenres("apple_user@placeholder.com")).thenReturn(Optional.empty());
-        when(userRepository.existsByUsername("apple_user")).thenReturn(false);
-        User created = buildUser("user-a", "apple_user@placeholder.com", "apple_user", null, true);
+    void socialAuth_apple_notConfigured_throwsUnauthorizedException() {
+        // APPLE_CLIENT_ID not set: appleClientId stays null in the unit test
+        assertThatThrownBy(() -> authService.socialAuth("apple", "apple-id-token"))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Apple sign-in not configured");
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void socialAuth_apple_malformedToken_throwsUnauthorizedException() {
+        ReflectionTestUtils.setField(authService, "appleClientId", "com.example.spotibase");
+        KeyPair keyPair = generateRsaKeyPair();
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(
+                        Map.of("jwks_uri", "https://appleid.apple.com/auth/keys"),
+                        Map.of("keys", List.of(buildJwk(keyPair.getPublic(), "apple-test-key-1"))));
+
+        assertThatThrownBy(() -> authService.socialAuth("apple", "not-a-jwt"))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Invalid social token");
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void socialAuth_apple_tokenSignedByDifferentKey_throwsUnauthorizedException() {
+        ReflectionTestUtils.setField(authService, "appleClientId", "com.example.spotibase");
+        KeyPair jwksKeyPair = generateRsaKeyPair();
+        KeyPair attackerKeyPair = generateRsaKeyPair();
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(
+                        Map.of("jwks_uri", "https://appleid.apple.com/auth/keys"),
+                        Map.of("keys", List.of(buildJwk(jwksKeyPair.getPublic(), "apple-test-key-1"))));
+
+        // Forged token: signed with a key that is NOT in the JWKS
+        String forgedToken = buildAppleIdToken(attackerKeyPair, "apple-test-key-1", "evil@example.com");
+
+        assertThatThrownBy(() -> authService.socialAuth("apple", forgedToken))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessage("Invalid social token");
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void socialAuth_apple_validToken_createsAccountAndReturnsTokens() {
+        ReflectionTestUtils.setField(authService, "appleClientId", "com.example.spotibase");
+        KeyPair keyPair = generateRsaKeyPair();
+        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+                .thenReturn(
+                        Map.of("jwks_uri", "https://appleid.apple.com/auth/keys"),
+                        Map.of("keys", List.of(buildJwk(keyPair.getPublic(), "apple-test-key-1"))));
+        when(userRepository.findByEmailWithFavoriteGenres("apple-real@example.com")).thenReturn(Optional.empty());
+        when(userRepository.existsByUsername("apple_real_user")).thenReturn(false);
+        User created = buildUser("user-a", "apple-real@example.com", "apple_real_user", null, true);
         when(userRepository.save(any(User.class))).thenReturn(created);
-        when(jwtTokenProvider.generateToken("user-a", "apple_user@placeholder.com", "USER")).thenReturn("access");
+        when(jwtTokenProvider.generateToken("user-a", "apple-real@example.com", "USER")).thenReturn("access");
         when(jwtTokenProvider.generateRefreshToken("user-a")).thenReturn("refresh");
         when(userService.toUserResponse(created)).thenReturn(UserResponse.builder().id("user-a").build());
 
-        AuthResponse response = authService.socialAuth("apple", "apple-id-token");
+        String idToken = buildAppleIdToken(keyPair, "apple-test-key-1", "apple-real@example.com");
+        AuthResponse response = authService.socialAuth("apple", idToken);
 
         assertThat(response.getAccessToken()).isEqualTo("access");
-        verifyNoInteractions(restTemplate);
+        verify(userRepository).save(argThat(u ->
+                "APPLE".equals(u.getAuthProvider())
+                        && "apple-real@example.com".equals(u.getEmail())
+                        && u.isEmailVerified()));
     }
 
     @Test
@@ -406,5 +470,43 @@ class AuthServiceTest {
     @Test
     void resetPassword_isNoOpAndDoesNotThrow() {
         authService.resetPassword("some-token", "new-password-123");
+    }
+
+    // ---------- helpers (Apple verification) ----------
+
+    private KeyPair generateRsaKeyPair() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            return generator.generateKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("RSA algorithm unavailable", e);
+        }
+    }
+
+    private Map<String, Object> buildJwk(PublicKey publicKey, String kid) {
+        RSAPublicKey rsaKey = (RSAPublicKey) publicKey;
+        Map<String, Object> jwk = new HashMap<>();
+        jwk.put("kty", "RSA");
+        jwk.put("kid", kid);
+        jwk.put("use", "sig");
+        jwk.put("alg", "RS256");
+        jwk.put("n", Base64.getUrlEncoder().withoutPadding().encodeToString(rsaKey.getModulus().toByteArray()));
+        jwk.put("e", Base64.getUrlEncoder().withoutPadding().encodeToString(rsaKey.getPublicExponent().toByteArray()));
+        return jwk;
+    }
+
+    private String buildAppleIdToken(KeyPair keyPair, String kid, String email) {
+        return Jwts.builder()
+                .header().keyId(kid).and()
+                .issuer("https://appleid.apple.com")
+                .claim("aud", "com.example.spotibase")
+                .subject("001234.56789.abcdef")
+                .claim("email", email)
+                .claim("name", "Apple Real User")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 300_000))
+                .signWith(keyPair.getPrivate())
+                .compact();
     }
 }

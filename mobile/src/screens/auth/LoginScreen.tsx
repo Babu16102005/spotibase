@@ -2,11 +2,34 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore } from '../../store';
+import {
+  handleSocialLogin,
+  SOCIAL_PROVIDER_LABELS,
+  GOOGLE_BRAND_COLOR,
+  getAppleBrandColor,
+  SocialProvider,
+  SocialMessage,
+} from './socialAuth';
 
-const LoginScreen = ({ navigation }: any) => {
+const CONNECTING_LABEL = 'Connecting...';
+const UNCONFIGURED_NOTICE = 'Social login is not configured yet';
+
+interface LoginScreenProps {
+  navigation?: any;
+  /**
+   * Dev/test seam (and the future auth-session hook): supplies a provider
+   * idToken directly, skipping the browser step. Mirrors the
+   * `idTokenOverride` parameter of handleSocialLogin.
+   */
+  socialIdTokenOverride?: Partial<Record<SocialProvider, string>>;
+}
+
+const LoginScreen = ({ navigation, socialIdTokenOverride }: LoginScreenProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login, isLoading, error, clearError } = useAuth();
+  const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
+  const [socialMessage, setSocialMessage] = useState<SocialMessage | null>(null);
+  const { login, isLoading } = useAuth();
   const { theme } = useThemeStore();
 
   const handleLogin = async () => {
@@ -20,6 +43,20 @@ const LoginScreen = ({ navigation }: any) => {
       Alert.alert('Login Failed', err.response?.data?.message || 'Invalid credentials');
     }
   };
+
+  const handleSocialLoginPress = async (provider: SocialProvider, idTokenOverride?: string) => {
+    setSocialMessage(null);
+    setPendingProvider(provider);
+    const result = await handleSocialLogin(provider, idTokenOverride ?? socialIdTokenOverride?.[provider]);
+    setPendingProvider(null);
+    if (result.status === 'unconfigured') {
+      setSocialMessage({ provider, kind: 'notice', text: UNCONFIGURED_NOTICE });
+    } else if (result.status === 'error') {
+      setSocialMessage({ provider, kind: 'error', text: result.message });
+    }
+  };
+
+  const socialButtonsDisabled = pendingProvider !== null;
 
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: theme.colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -50,9 +87,48 @@ const LoginScreen = ({ navigation }: any) => {
             <Text style={[styles.loginButtonText, { color: '#000' }]}>{isLoading ? 'Signing in...' : 'Sign In'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.socialButton}>
-            <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>Continue with Google</Text>
+          <View style={styles.dividerRow}>
+            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+            <Text style={[styles.dividerText, { color: theme.colors.textTertiary }]}>or continue with</Text>
+            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+          </View>
+
+          <TouchableOpacity
+            testID="social-button-google"
+            style={[styles.socialButton, { borderColor: theme.colors.border }, socialButtonsDisabled && styles.socialButtonDisabled]}
+            onPress={() => handleSocialLoginPress('google')}
+            disabled={socialButtonsDisabled}
+            accessibilityState={{ disabled: socialButtonsDisabled }}
+          >
+            <Text style={[styles.socialGlyph, { color: GOOGLE_BRAND_COLOR }]}>G</Text>
+            <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>
+              {pendingProvider === 'google' ? CONNECTING_LABEL : SOCIAL_PROVIDER_LABELS.google}
+            </Text>
           </TouchableOpacity>
+          {socialMessage?.provider === 'google' && (
+            <Text style={[styles.socialMessage, { color: socialMessage.kind === 'error' ? theme.colors.error : theme.colors.warning }]}>
+              {socialMessage.text}
+            </Text>
+          )}
+
+          <TouchableOpacity
+            testID="social-button-apple"
+            style={[styles.socialButton, { borderColor: theme.colors.border }, socialButtonsDisabled && styles.socialButtonDisabled]}
+            onPress={() => handleSocialLoginPress('apple')}
+            disabled={socialButtonsDisabled}
+            accessibilityState={{ disabled: socialButtonsDisabled }}
+          >
+            {/* Apple's private-use logo glyph (U+F8FF) only renders on iOS —
+                keep the button text-only so it looks right on Android and web. */}
+            <Text style={[styles.socialButtonText, { color: getAppleBrandColor(theme.dark) }]}>
+              {pendingProvider === 'apple' ? CONNECTING_LABEL : SOCIAL_PROVIDER_LABELS.apple}
+            </Text>
+          </TouchableOpacity>
+          {socialMessage?.provider === 'apple' && (
+            <Text style={[styles.socialMessage, { color: socialMessage.kind === 'error' ? theme.colors.error : theme.colors.warning }]}>
+              {socialMessage.text}
+            </Text>
+          )}
 
           <TouchableOpacity style={[styles.socialButton, { borderColor: theme.colors.border }]} onPress={() => navigation?.navigate('Register')}>
             <Text style={[styles.socialButtonText, { color: theme.colors.textSecondary }]}>Don't have an account? Sign Up</Text>
@@ -72,8 +148,14 @@ const styles = StyleSheet.create({
   input: { height: 52, borderRadius: 12, paddingHorizontal: 16, fontSize: 16, borderWidth: 1 },
   loginButton: { height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
   loginButtonText: { fontSize: 16, fontWeight: '700' },
-  socialButton: { height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { fontSize: 13, fontWeight: '500' },
+  socialButton: { height: 52, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
+  socialButtonDisabled: { opacity: 0.5 },
+  socialGlyph: { fontSize: 16, fontWeight: '700', marginRight: 8 },
   socialButtonText: { fontSize: 14, fontWeight: '500' },
+  socialMessage: { fontSize: 13, textAlign: 'center' },
 });
 
 export default LoginScreen;
