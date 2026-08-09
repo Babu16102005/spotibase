@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.servers.Server;
                 license = @License(name = "MIT")
         ),
         servers = {
-                @Server(url = "http://localhost:8080", description = "Local Development"),
+                @Server(url = "http://localhost:8088", description = "Local Development"),
                 @Server(url = "https://api.spotibase.com", description = "Production")
         },
         security = @SecurityRequirement(name = "bearerAuth")

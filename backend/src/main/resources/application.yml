@@ -117,10 +117,14 @@ supabase:
     covers-path: covers
     avatars-path: avatars
 
+# Apple Sign-In (id_token verification; required for /auth/social/apple)
+apple:
+  client-id: ${APPLE_CLIENT_ID:}
+
 # JWT
 jwt:
-  expiration: 86400000  # 24 hours
-  refresh-expiration: 2592000000  # 30 days
+  expiration: ${JWT_EXPIRATION:86400000}  # 24 hours (ms)
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:2592000000}  # 30 days (ms)
 
 # App
 app:
