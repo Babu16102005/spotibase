@@ -1,0 +1,22 @@
+CREATE TABLE user_settings (
+    id VARCHAR(36) PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL UNIQUE,
+    streaming_quality VARCHAR(20) DEFAULT 'HIGH',
+    download_quality VARCHAR(20) DEFAULT 'HIGH',
+    crossfade_duration INT NOT NULL DEFAULT 0,
+    gapless_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    normalize_volume BOOLEAN NOT NULL DEFAULT TRUE,
+    explicit_filter BOOLEAN NOT NULL DEFAULT FALSE,
+    mono_audio BOOLEAN NOT NULL DEFAULT FALSE,
+    bass_boost INT NOT NULL DEFAULT 0,
+    treble INT NOT NULL DEFAULT 0,
+    theme VARCHAR(20) DEFAULT 'DARK',
+    language VARCHAR(10) DEFAULT 'en',
+    wifi_only_download BOOLEAN NOT NULL DEFAULT FALSE,
+    smart_downloads BOOLEAN NOT NULL DEFAULT TRUE,
+    auto_play BOOLEAN NOT NULL DEFAULT TRUE,
+    sleep_timer_minutes INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

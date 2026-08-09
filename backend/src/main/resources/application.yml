@@ -1,0 +1,160 @@
+server:
+  port: ${SERVER_PORT:8088}
+
+spring:
+  application:
+    name: spotibase-backend
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
+
+  cache:
+    type: simple
+
+  datasource:
+    # Supabase direct hosts (db.<ref>.supabase.co) are IPv6-only; the pooler is reachable over IPv4.
+    # Session mode (6543) is recommended for Hibernate/JPA; username needs the project-ref suffix on the pooler.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://aws-1-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require}
+    username: ${SPRING_DATASOURCE_USERNAME:${SUPABASE_DB_USERNAME:postgres}.${SUPABASE_PROJECT_REF}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${SUPABASE_DB_PASSWORD}}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      data-source-properties:
+        prepareThreshold: 0
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # The schema was created by supabase-schema.sql (up to V18) without a
+    # history table. Baseline at 18 so only V19+ migrations apply.
+    baseline-on-migrate: true
+    baseline-version: 18
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+  # Redis is disabled - using simple in-memory cache instead
+  # data:
+  #   redis:
+  #     host: ${REDIS_HOST:localhost}
+  #     port: ${REDIS_PORT:6379}
+  #     timeout: 2000ms
+  #     lettuce:
+  #       pool:
+  #         max-active: 16
+  #         max-idle: 8
+  #         min-idle: 4
+
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        options:
+          model: gpt-4o-mini
+          temperature: 0.7
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+  mail:
+    host: ${SMTP_HOST:smtp.sendgrid.net}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# Cloudflare R2 Storage (for songs only)
+r2:
+  account-id: ${R2_ACCOUNT_ID}
+  access-key-id: ${R2_ACCESS_KEY_ID}
+  secret-access-key: ${R2_SECRET_ACCESS_KEY}
+  bucket-name: ${R2_BUCKET_NAME}
+  public-url: ${R2_PUBLIC_URL:}
+  region: auto
+  songs-path: songs
+
+# Supabase
+supabase:
+  url: https://${SUPABASE_PROJECT_REF}.supabase.co
+  anon-key: ${SUPABASE_ANON_KEY}
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}
+  jwt-secret: ${SUPABASE_JWT_SECRET}
+  storage:
+    bucket: spotibase
+    songs-path: songs
+    covers-path: covers
+    avatars-path: avatars
+
+# JWT
+jwt:
+  expiration: 86400000  # 24 hours
+  refresh-expiration: 2592000000  # 30 days
+
+# App
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8081,exp://localhost:19000}
+
+# Logging
+logging:
+  level:
+    com.spotibase: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN
+    org.flywaydb: INFO
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    mail:
+      # No SMTP is configured; without this the MailHealthIndicator makes
+      # /actuator/health report DOWN (503) even though the app is healthy.
+      enabled: false
+
+# OpenAPI
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method

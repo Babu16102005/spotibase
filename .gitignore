@@ -1,0 +1,70 @@
+# =============================================================================
+# SpotiBase - Root .gitignore
+# =============================================================================
+
+# --- Secrets (never commit) ---
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+backend/.env
+mobile/.env
+
+# --- Java / Spring Boot backend ---
+backend/target/
+*.class
+*.jar
+*.war
+hs_err_pid*.log
+replay_pid*.log
+backend/backend.pid
+backend/*.log
+
+# --- Node / Expo mobile ---
+node_modules/
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/dist-prod/
+mobile/web-build/
+mobile/coverage/
+mobile/.expo-shared/
+*.tsbuildinfo
+
+# --- Logs & runtime artifacts ---
+*.log
+logs/
+frontend_stdout.log
+frontend_stderr.log
+backend_stdout.log
+backend_stderr.log
+backend_prod_stdout.log
+serve.log
+
+# --- Test artifacts ---
+.playwright-mcp/
+playwright-report/
+test-results/
+
+# --- Supabase local ---
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/seed.sql
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+nginx/ssl/
+
+# --- Misc ---
+*.pid
+*.seed

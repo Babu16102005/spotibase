@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(adb -s SCYPNJ4LFMO7FI6P shell pm dump host.exp.exponent)",
+      "Bash(adb -s SCYPNJ4LFMO7FI6P logcat -d)",
+      "Bash(curl -s -X POST http://10.217.11.252:8088/api/v1/auth/register -H \"Content-Type: application/json\" -d '{\"email\":\"test@spotibase.com\",\"username\":\"testuser\",\"password\":\"testpass123\"}')",
+      "Bash(adb -s SCYPNJ4LFMO7FI6P shell \"logcat -d --pid=20503 2>&1\")",
+      "Bash(curl -s \"http://10.217.11.252:8081/index.ts.bundle?platform=android&dev=true&hot=false&lazy=true&transform.engine=hermes\")",
+      "Bash(dir *)",
+      "Bash(adb -s SCYPNJ4LFMO7FI6P shell \"logcat -d -s 'DevLauncher' 2>&1\")",
+      "Bash(adb -s SCYPNJ4LFMO7FI6P shell \"logcat -d -s 'ReactNativeJS' 2>&1\")",
+      "Bash(curl -s -X POST http://10.217.11.252:8088/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"test@spotibase.com\",\"password\":\"testpass123\"}')",
+      "Bash(mvn clean *)",
+      "Bash(mvn spring-boot:run)",
+      "Bash(export SUPABASE_PROJECT_REF=dpyzyeoyeuajtmkqmase)",
+      "Bash(export SUPABASE_DB_USERNAME=postgres)",
+      "Bash(export SUPABASE_DB_PASSWORD=sathishbabu16102005)",
+      "Bash(export SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRweXp5ZW95ZXVhanRta3FtYXNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyMjQ0MDksImV4cCI6MjEwMDgwMDQwOX0.FZw_vKTPxf97kkkw_qpAv1r1JVd_heBoqfYhv8Aa86g)",
+      "Bash(export SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRweXp5ZW95ZXVhanRta3FtYXNlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTIyNDQwOSwiZXhwIjoyMTAwODAwNDA5fQ.uIn5HVNcfec6VsMAgUvLL3XwseL8hl-Y_OPH7yY-XAc)"
+    ]
+  }
+}
