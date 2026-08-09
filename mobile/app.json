@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "SpotiBase",
+    "slug": "spotibase",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.spotibase.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio", "remote-notification"],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "package": "com.spotibase.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.WAKE_LOCK",
+        "android.permission.MEDIA_CONTENT_CONTROL"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "build": {
+        "babel": {
+          "include": ["@react-native", "react-native-track-player"]
+        }
+      },
+      "meta": {
+        "theme-color": "#1DB954",
+        "description": "SpotiBase - Your personal music streaming platform",
+        "apple-mobile-web-app-capable": "yes",
+        "apple-mobile-web-app-status-bar-style": "black-translucent",
+        "apple-mobile-web-app-title": "SpotiBase",
+        "mobile-web-app-capable": "yes"
+      }
+    },
+    "plugins": [
+      "expo-splash-screen"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "spotibase"
+      }
+    },
+    "owner": "spotibase"
+  }
+}
