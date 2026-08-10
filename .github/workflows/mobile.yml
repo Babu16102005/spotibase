@@ -35,7 +35,18 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          node --version
+          npm --version
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          cat /tmp/npm-ci.log
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -80 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
 
       - name: Run ESLint
         working-directory: ./mobile
@@ -63,7 +74,18 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          node --version
+          npm --version
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          cat /tmp/npm-ci.log
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -80 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
 
       - name: Run tests
         working-directory: ./mobile
@@ -95,7 +117,18 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          node --version
+          npm --version
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          cat /tmp/npm-ci.log
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -80 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
 
       - name: Install Expo CLI
         working-directory: ./mobile
@@ -146,7 +179,18 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          node --version
+          npm --version
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          cat /tmp/npm-ci.log
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -80 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
 
       - name: Install EAS CLI
         run: npm install -g eas-cli
@@ -189,7 +233,18 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          node --version
+          npm --version
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          cat /tmp/npm-ci.log
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -80 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
 
       - name: Install EAS CLI
         run: npm install -g eas-cli
