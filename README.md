@@ -231,3 +231,5 @@ See `docs/deployment.md` for: the production Docker stack, full `.env` requireme
 - `docs/api-overview.md` — REST endpoint map, auth model, WebSocket topics
 - `docs/deployment.md` — production deployment walkthrough
 - `docs/testing.md` — test suites, how to run them, CI coverage
+#   s p o t i b a s e  
+ 
