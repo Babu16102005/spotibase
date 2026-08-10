@@ -46,10 +46,8 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: 'maven'
 
-      - name: Set up Maven
-        uses: actions/setup-maven@v4
-        with:
-          maven-version: ${{ env.MAVEN_VERSION }}
+      # NOTE: no explicit Maven setup step — GitHub-hosted ubuntu runners ship
+      # with Maven preinstalled (actions/setup-maven does not exist).
 
       - name: Configure Maven settings
         run: |

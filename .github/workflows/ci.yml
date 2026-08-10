@@ -85,6 +85,7 @@ jobs:
             -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-test:5432/spotibase_test \
             -e SPRING_DATASOURCE_USERNAME=test \
             -e SPRING_DATASOURCE_PASSWORD=test \
+            -e SUPABASE_PROJECT_REF=test \
             -p 8088:8088 \
             spotibase-backend:test
           sleep 30
