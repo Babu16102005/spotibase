@@ -54,7 +54,7 @@ jobs:
   docker-compose-test:
     name: Docker Compose Integration Test
     runs-on: ubuntu-latest
-    needs: [backend, mobile]
+    needs: [validate, backend, mobile]
     if: always() && (needs.validate.outputs.backend-changed == 'true' || needs.validate.outputs.mobile-changed == 'true')
     timeout-minutes: 30
 
