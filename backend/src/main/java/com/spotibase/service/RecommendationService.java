@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class RecommendationService {
 
     private final SongRepository songRepository;
@@ -515,12 +517,25 @@ public class RecommendationService {
     private HomeResponse.Section buildPopularGenresSection() {
         List<Genre> genres = genreRepository.findPopularGenres();
 
+        // Map to plain DTO maps (id/name/imageUrl/color) so lazy associations
+        // (Genre.songs, Genre.albums) are never serialized after the session closes.
+        List<Map<String, Object>> genreItems = genres.stream()
+                .map(g -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", g.getId());
+                    item.put("name", g.getName());
+                    item.put("imageUrl", g.getImageUrl());
+                    item.put("color", g.getColor());
+                    return item;
+                })
+                .collect(Collectors.toList());
+
         return HomeResponse.Section.builder()
                 .id("popular-genres")
                 .title("Popular Genres")
                 .type("GENRE")
                 .subtitle("Browse by genre")
-                .items(genres)
+                .items(genreItems)
                 .build();
     }
 

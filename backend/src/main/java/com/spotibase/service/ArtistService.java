@@ -105,6 +105,7 @@ public class ArtistService {
         return toArtistResponse(artist, null);
     }
 
+    @Transactional(readOnly = true)
     @Cacheable(value = "artists", key = "'top:' + #limit")
     public List<ArtistResponse> getTopArtists(int limit) {
         Pageable pageable = PageRequest.of(0, limit);
@@ -113,6 +114,7 @@ public class ArtistService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     @Cacheable(value = "artists", key = "'featured:' + #limit")
     public List<ArtistResponse> getFeaturedArtists(int limit) {
         Pageable pageable = PageRequest.of(0, limit);
@@ -201,6 +203,7 @@ public class ArtistService {
         return builder.build();
     }
 
+    @Transactional(readOnly = true)
     public List<ArtistResponse> getAllArtists(int page, int size, String userId) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "monthlyListeners"));
         return artistRepository.findAll(pageable).stream()
@@ -208,6 +211,7 @@ public class ArtistService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<ArtistResponse> getLikedArtists(String userId) {
         List<Object[]> rows = likeRepository.findLikedArtistIds(userId);
         List<String> artistIds = rows.stream()

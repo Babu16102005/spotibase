@@ -129,11 +129,18 @@ Test-Case "GET /api/v1/playlists/featured (public, no auth)" {
 }
 
 Test-Case "GET /api/v1/songs/stream is PUBLIC (permitAll per SecurityConfig)" {
-    $r = Invoke-Api -Path "/api/v1/songs/00000000-0000-0000-0000-000000000000/stream"
     # Endpoint is public by design; a real HTTP response (any of 200/302/404) proves
     # the permitAll rule works without auth (an auth-required endpoint would give 403).
-    if ($r.StatusCode -notin @(200, 201, 302, 404)) {
-        throw "Expected public access (2xx/302/404), got $($r.StatusCode)"
+    # PS 5.1 Invoke-WebRequest throws on 4xx, so catch and inspect the raw status.
+    $status = $null
+    try {
+        $r = Invoke-Api -Path "/api/v1/songs/00000000-0000-0000-0000-000000000000/stream"
+        $status = $r.StatusCode
+    } catch {
+        $status = Get-ErrorStatus $_
+    }
+    if ($status -notin @(200, 201, 302, 404)) {
+        throw "Expected public access (2xx/302/404), got $status"
     }
 }
 

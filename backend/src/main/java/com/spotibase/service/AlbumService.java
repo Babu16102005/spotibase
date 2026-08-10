@@ -137,6 +137,7 @@ public class AlbumService {
         log.info("Album restored: {}", id);
     }
 
+    @Transactional(readOnly = true)
     @Cacheable(value = "albums", key = "'featured:' + #userId + ':' + #limit")
     public List<AlbumResponse> getFeaturedAlbums(String userId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
@@ -145,6 +146,7 @@ public class AlbumService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     @Cacheable(value = "albums", key = "'newReleases:' + #userId + ':' + #limit")
     public List<AlbumResponse> getNewReleases(String userId, int limit) {
         Pageable pageable = PageRequest.of(0, limit);
@@ -234,6 +236,7 @@ public class AlbumService {
         return builder.build();
     }
 
+    @Transactional(readOnly = true)
     public List<AlbumResponse> getAllAlbums(int page, int size, String userId) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return albumRepository.findAllActive(pageable).stream()
@@ -241,6 +244,7 @@ public class AlbumService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<AlbumResponse> getLikedAlbums(String userId) {
         List<Object[]> rows = likeRepository.findLikedAlbumIds(userId);
         List<String> albumIds = rows.stream()
