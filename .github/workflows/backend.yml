@@ -18,7 +18,7 @@ env:
 
 jobs:
   test:
-    name: Test (Java ${{ env.JAVA_VERSION }})
+    name: Test (Java 17)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     
@@ -29,7 +29,8 @@ jobs:
           POSTGRES_DB: spotibase_test
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
-        ports: 5432:5432
+        ports:
+          - '5432:5432'
         options: >-
           --health-cmd="pg_isready -U test -d spotibase_test"
           --health-interval=10s
