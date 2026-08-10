@@ -35,7 +35,19 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          echo "NODE: $(node --version) NPM: $(npm --version)"
+          echo "HEAD: $(git rev-parse HEAD)"
+          grep '"eslint"' package.json
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -120 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
+          echo "npm ci OK"
 
       - name: Run ESLint
         working-directory: ./mobile
@@ -63,7 +75,19 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          echo "NODE: $(node --version) NPM: $(npm --version)"
+          echo "HEAD: $(git rev-parse HEAD)"
+          grep '"eslint"' package.json
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -120 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
+          echo "npm ci OK"
 
       - name: Run tests
         working-directory: ./mobile
@@ -95,7 +119,19 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          echo "NODE: $(node --version) NPM: $(npm --version)"
+          echo "HEAD: $(git rev-parse HEAD)"
+          grep '"eslint"' package.json
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -120 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
+          echo "npm ci OK"
 
       - name: Install Expo CLI
         working-directory: ./mobile
@@ -146,7 +182,19 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          echo "NODE: $(node --version) NPM: $(npm --version)"
+          echo "HEAD: $(git rev-parse HEAD)"
+          grep '"eslint"' package.json
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -120 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
+          echo "npm ci OK"
 
       - name: Install EAS CLI
         run: npm install -g eas-cli
@@ -189,7 +237,19 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./mobile
-        run: npm ci
+        run: |
+          echo "NODE: $(node --version) NPM: $(npm --version)"
+          echo "HEAD: $(git rev-parse HEAD)"
+          grep '"eslint"' package.json
+          set +e
+          npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "::error::npm ci failed with exit $status"
+            tail -120 /tmp/npm-ci.log | sed 's/^/::error::/'
+            exit $status
+          fi
+          echo "npm ci OK"
 
       - name: Install EAS CLI
         run: npm install -g eas-cli
