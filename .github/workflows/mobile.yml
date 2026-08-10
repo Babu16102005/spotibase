@@ -126,10 +126,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck, test]
     timeout-minutes: 60
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && secrets.EXPO_TOKEN != ''
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     permissions:
       contents: read
       packages: write
+    env:
+      HAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
 
     steps:
       - name: Checkout code
@@ -151,11 +153,12 @@ jobs:
 
       - name: Configure EAS
         run: |
-          echo "${{ secrets.EAS_CONFIG }}" > eas.json
+          echo "$EAS_CONFIG" > eas.json
         env:
           EAS_CONFIG: ${{ secrets.EAS_CONFIG }}
 
       - name: Build Android
+        if: env.HAS_EXPO_TOKEN == 'true'
         run: eas build --platform android --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -166,10 +169,12 @@ jobs:
     runs-on: macos-latest
     needs: [lint-and-typecheck, test]
     timeout-minutes: 60
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && secrets.EXPO_TOKEN != ''
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     permissions:
       contents: read
       packages: write
+    env:
+      HAS_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
 
     steps:
       - name: Checkout code
@@ -191,11 +196,12 @@ jobs:
 
       - name: Configure EAS
         run: |
-          echo "${{ secrets.EAS_CONFIG }}" > eas.json
+          echo "$EAS_CONFIG" > eas.json
         env:
           EAS_CONFIG: ${{ secrets.EAS_CONFIG }}
 
       - name: Build iOS
+        if: env.HAS_EXPO_TOKEN == 'true'
         run: eas build --platform ios --profile production --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -205,7 +211,9 @@ jobs:
     name: Deploy Web Preview (Vercel)
     runs-on: ubuntu-latest
     needs: build-web
-    if: github.event_name == 'pull_request' && secrets.VERCEL_TOKEN != ''
+    if: github.event_name == 'pull_request'
+    env:
+      HAS_VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
     timeout-minutes: 10
 
     steps:
@@ -216,6 +224,7 @@ jobs:
           path: dist-prod/
 
       - name: Deploy to Vercel Preview
+        if: env.HAS_VERCEL_TOKEN == 'true'
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
@@ -228,7 +237,9 @@ jobs:
     name: Deploy Web Production (Vercel)
     runs-on: ubuntu-latest
     needs: build-web
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.VERCEL_TOKEN != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    env:
+      HAS_VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
     timeout-minutes: 10
     environment: production
 
@@ -240,6 +251,7 @@ jobs:
           path: dist-prod/
 
       - name: Deploy to Vercel Production
+        if: env.HAS_VERCEL_TOKEN == 'true'
         uses: amondnet/vercel-action@v25
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
