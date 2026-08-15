@@ -7,7 +7,7 @@ const storage = getStorage('spotibase-theme');
 describe('themeStore', () => {
   beforeEach(() => {
     storage.clearAll();
-    useThemeStore.setState({ theme: DarkTheme, themeMode: 'DARK' });
+    useThemeStore.setState({ theme: DarkTheme, themeMode: 'DARK', greetingPattern: 'RANDOM' });
   });
 
   it('starts with the dark theme by default', () => {
@@ -59,5 +59,29 @@ describe('themeStore', () => {
     const { theme, themeMode } = useThemeStore.getState();
     expect(themeMode).toBe('LIGHT');
     expect(theme).toBe(LightTheme);
+  });
+
+  it('starts with RANDOM greeting pattern by default', () => {
+    const { greetingPattern } = useThemeStore.getState();
+    expect(greetingPattern).toBe('RANDOM');
+  });
+
+  it('setGreetingPattern updates state and persists to storage', () => {
+    useThemeStore.getState().setGreetingPattern('AURORA');
+    const { greetingPattern } = useThemeStore.getState();
+    expect(greetingPattern).toBe('AURORA');
+    expect(storage.getString('greetingPattern')).toBe('AURORA');
+  });
+
+  it('loadTheme restores persisted greeting pattern', () => {
+    storage.set('greetingPattern', 'AURORA');
+    useThemeStore.getState().loadTheme();
+    expect(useThemeStore.getState().greetingPattern).toBe('AURORA');
+  });
+
+  it('loadTheme migrates legacy RADIAL pattern to AURORA', () => {
+    storage.set('greetingPattern', 'RADIAL');
+    useThemeStore.getState().loadTheme();
+    expect(useThemeStore.getState().greetingPattern).toBe('AURORA');
   });
 });

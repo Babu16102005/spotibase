@@ -33,14 +33,16 @@ public class AlbumController {
             @RequestParam(defaultValue = "20") int size,
             @CurrentUser CustomUserDetails user) {
         log.info("Get all albums, page: {}, size: {}", page, size);
-        return ResponseEntity.ok(albumService.getAllAlbums(page, size, user.getId()));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(albumService.getAllAlbums(page, size, userId));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<AlbumResponse> getAlbumById(@PathVariable String id,
                                                        @CurrentUser CustomUserDetails user) {
         log.info("Get album by id: {}", id);
-        return ResponseEntity.ok(albumService.getAlbumById(id, user.getId()));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(albumService.getAlbumById(id, userId));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -80,19 +82,24 @@ public class AlbumController {
     public ResponseEntity<List<AlbumResponse>> getFeaturedAlbums(@CurrentUser CustomUserDetails user,
                                                                   @RequestParam(defaultValue = "20") int limit) {
         log.info("Get featured albums, limit: {}", limit);
-        return ResponseEntity.ok(albumService.getFeaturedAlbums(user.getId(), limit));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(albumService.getFeaturedAlbums(userId, limit));
     }
 
     @GetMapping("/new-releases")
     public ResponseEntity<List<AlbumResponse>> getNewReleases(@CurrentUser CustomUserDetails user,
                                                                @RequestParam(defaultValue = "20") int limit) {
         log.info("Get new releases, limit: {}", limit);
-        return ResponseEntity.ok(albumService.getNewReleases(user.getId(), limit));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(albumService.getNewReleases(userId, limit));
     }
 
     @PostMapping("/{id}/like")
     public ResponseEntity<Void> likeAlbum(@CurrentUser CustomUserDetails user,
                                            @PathVariable String id) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         log.info("User {} likes album {}", user.getId(), id);
         likeService.likeAlbum(user.getId(), id);
         return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -101,6 +108,9 @@ public class AlbumController {
     @DeleteMapping("/{id}/like")
     public ResponseEntity<Void> unlikeAlbum(@CurrentUser CustomUserDetails user,
                                              @PathVariable String id) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         log.info("User {} unlikes album {}", user.getId(), id);
         likeService.unlikeAlbum(user.getId(), id);
         return ResponseEntity.noContent().build();

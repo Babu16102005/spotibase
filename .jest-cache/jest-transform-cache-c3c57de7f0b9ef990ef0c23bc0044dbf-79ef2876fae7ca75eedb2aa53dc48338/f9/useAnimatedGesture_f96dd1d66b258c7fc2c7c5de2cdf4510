@@ -1,0 +1,276 @@
+dcef244abe70d9aedc3b8de6e373ad1b
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.useAnimatedGesture = useAnimatedGesture;
+var _gesture = require("../gesture");
+var _reanimatedWrapper = require("../reanimatedWrapper");
+var _gestureStateManager = require("../gestureStateManager");
+var _State = require("../../../State");
+var _TouchEventType = require("../../../TouchEventType");
+var _utils = require("../../../utils");
+var _worklet_9983372911602_init_data = {
+  code: "function getHandler_reactNativeGestureHandler_useAnimatedGestureJs1(type,gesture){const{_gesture}=this.__closure;switch(type){case _gesture.CALLBACK_TYPE.BEGAN:return gesture.onBegin;case _gesture.CALLBACK_TYPE.START:return gesture.onStart;case _gesture.CALLBACK_TYPE.UPDATE:return gesture.onUpdate;case _gesture.CALLBACK_TYPE.CHANGE:return gesture.onChange;case _gesture.CALLBACK_TYPE.END:return gesture.onEnd;case _gesture.CALLBACK_TYPE.FINALIZE:return gesture.onFinalize;case _gesture.CALLBACK_TYPE.TOUCHES_DOWN:return gesture.onTouchesDown;case _gesture.CALLBACK_TYPE.TOUCHES_MOVE:return gesture.onTouchesMove;case _gesture.CALLBACK_TYPE.TOUCHES_UP:return gesture.onTouchesUp;case _gesture.CALLBACK_TYPE.TOUCHES_CANCELLED:return gesture.onTouchesCancelled;}}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"getHandler_reactNativeGestureHandler_useAnimatedGestureJs1\",\"type\",\"gesture\",\"_gesture\",\"__closure\",\"CALLBACK_TYPE\",\"BEGAN\",\"onBegin\",\"START\",\"onStart\",\"UPDATE\",\"onUpdate\",\"CHANGE\",\"onChange\",\"END\",\"onEnd\",\"FINALIZE\",\"onFinalize\",\"TOUCHES_DOWN\",\"onTouchesDown\",\"TOUCHES_MOVE\",\"onTouchesMove\",\"TOUCHES_UP\",\"onTouchesUp\",\"TOUCHES_CANCELLED\",\"onTouchesCancelled\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js\"],\"mappings\":\"AAYA,SAAAA,0DAAmCA,CAAAC,IAAA,CAAAC,OAAA,QAAAC,QAAA,OAAAC,SAAA,CAGjC,OAAQH,IAAI,EACV,IAAK,CAAAE,QAAQ,CAACE,aAAa,CAACC,KAAK,CAC/B,MAAO,CAAAJ,OAAO,CAACK,OAAO,CACxB,IAAK,CAAAJ,QAAQ,CAACE,aAAa,CAACG,KAAK,CAC/B,MAAO,CAAAN,OAAO,CAACO,OAAO,CACxB,IAAK,CAAAN,QAAQ,CAACE,aAAa,CAACK,MAAM,CAChC,MAAO,CAAAR,OAAO,CAACS,QAAQ,CACzB,IAAK,CAAAR,QAAQ,CAACE,aAAa,CAACO,MAAM,CAChC,MAAO,CAAAV,OAAO,CAACW,QAAQ,CACzB,IAAK,CAAAV,QAAQ,CAACE,aAAa,CAACS,GAAG,CAC7B,MAAO,CAAAZ,OAAO,CAACa,KAAK,CACtB,IAAK,CAAAZ,QAAQ,CAACE,aAAa,CAACW,QAAQ,CAClC,MAAO,CAAAd,OAAO,CAACe,UAAU,CAC3B,IAAK,CAAAd,QAAQ,CAACE,aAAa,CAACa,YAAY,CACtC,MAAO,CAAAhB,OAAO,CAACiB,aAAa,CAC9B,IAAK,CAAAhB,QAAQ,CAACE,aAAa,CAACe,YAAY,CACtC,MAAO,CAAAlB,OAAO,CAACmB,aAAa,CAC9B,IAAK,CAAAlB,QAAQ,CAACE,aAAa,CAACiB,UAAU,CACpC,MAAO,CAAApB,OAAO,CAACqB,WAAW,CAC5B,IAAK,CAAApB,QAAQ,CAACE,aAAa,CAACmB,iBAAiB,CAC3C,MAAO,CAAAtB,OAAO,CAACuB,kBAAkB,CACrC,CACF\",\"ignoreList\":[]}"
+};
+var getHandler = function getHandler_reactNativeGestureHandler_useAnimatedGestureJs1Factory(_ref) {
+  var _worklet_9983372911602_init_data = _ref._worklet_9983372911602_init_data,
+    _gesture = _ref._gesture;
+  var _e = [new global.Error(), -2, -27];
+  var getHandler = function (type, gesture) {
+    switch (type) {
+      case _gesture.CALLBACK_TYPE.BEGAN:
+        return gesture.onBegin;
+      case _gesture.CALLBACK_TYPE.START:
+        return gesture.onStart;
+      case _gesture.CALLBACK_TYPE.UPDATE:
+        return gesture.onUpdate;
+      case _gesture.CALLBACK_TYPE.CHANGE:
+        return gesture.onChange;
+      case _gesture.CALLBACK_TYPE.END:
+        return gesture.onEnd;
+      case _gesture.CALLBACK_TYPE.FINALIZE:
+        return gesture.onFinalize;
+      case _gesture.CALLBACK_TYPE.TOUCHES_DOWN:
+        return gesture.onTouchesDown;
+      case _gesture.CALLBACK_TYPE.TOUCHES_MOVE:
+        return gesture.onTouchesMove;
+      case _gesture.CALLBACK_TYPE.TOUCHES_UP:
+        return gesture.onTouchesUp;
+      case _gesture.CALLBACK_TYPE.TOUCHES_CANCELLED:
+        return gesture.onTouchesCancelled;
+    }
+  };
+  getHandler.__closure = {
+    _gesture
+  };
+  getHandler.__workletHash = 9983372911602;
+  getHandler.__pluginVersion = "0.10.1";
+  getHandler.__initData = _worklet_9983372911602_init_data;
+  getHandler.__stackDetails = _e;
+  return getHandler;
+}({
+  _worklet_9983372911602_init_data,
+  _gesture
+});
+var _worklet_11603674222200_init_data = {
+  code: "function touchEventTypeToCallbackType_reactNativeGestureHandler_useAnimatedGestureJs2(eventType){const{_TouchEventType,_gesture}=this.__closure;switch(eventType){case _TouchEventType.TouchEventType.TOUCHES_DOWN:return _gesture.CALLBACK_TYPE.TOUCHES_DOWN;case _TouchEventType.TouchEventType.TOUCHES_MOVE:return _gesture.CALLBACK_TYPE.TOUCHES_MOVE;case _TouchEventType.TouchEventType.TOUCHES_UP:return _gesture.CALLBACK_TYPE.TOUCHES_UP;case _TouchEventType.TouchEventType.TOUCHES_CANCELLED:return _gesture.CALLBACK_TYPE.TOUCHES_CANCELLED;}return _gesture.CALLBACK_TYPE.UNDEFINED;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"touchEventTypeToCallbackType_reactNativeGestureHandler_useAnimatedGestureJs2\",\"eventType\",\"_TouchEventType\",\"_gesture\",\"__closure\",\"TouchEventType\",\"TOUCHES_DOWN\",\"CALLBACK_TYPE\",\"TOUCHES_MOVE\",\"TOUCHES_UP\",\"TOUCHES_CANCELLED\",\"UNDEFINED\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js\"],\"mappings\":\"AAsCA,SAAAA,4EAAiDA,CAAAC,SAAA,QAAAC,eAAA,CAAAC,QAAA,OAAAC,SAAA,CAG/C,OAAQH,SAAS,EACf,IAAK,CAAAC,eAAe,CAACG,cAAc,CAACC,YAAY,CAC9C,MAAO,CAAAH,QAAQ,CAACI,aAAa,CAACD,YAAY,CAC5C,IAAK,CAAAJ,eAAe,CAACG,cAAc,CAACG,YAAY,CAC9C,MAAO,CAAAL,QAAQ,CAACI,aAAa,CAACC,YAAY,CAC5C,IAAK,CAAAN,eAAe,CAACG,cAAc,CAACI,UAAU,CAC5C,MAAO,CAAAN,QAAQ,CAACI,aAAa,CAACE,UAAU,CAC1C,IAAK,CAAAP,eAAe,CAACG,cAAc,CAACK,iBAAiB,CACnD,MAAO,CAAAP,QAAQ,CAACI,aAAa,CAACG,iBAAiB,CACnD,CACA,MAAO,CAAAP,QAAQ,CAACI,aAAa,CAACI,SAAS,CACzC\",\"ignoreList\":[]}"
+};
+var touchEventTypeToCallbackType = function touchEventTypeToCallbackType_reactNativeGestureHandler_useAnimatedGestureJs2Factory(_ref2) {
+  var _worklet_11603674222200_init_data = _ref2._worklet_11603674222200_init_data,
+    _TouchEventType = _ref2._TouchEventType,
+    _gesture = _ref2._gesture;
+  var _e = [new global.Error(), -3, -27];
+  var touchEventTypeToCallbackType = function (eventType) {
+    switch (eventType) {
+      case _TouchEventType.TouchEventType.TOUCHES_DOWN:
+        return _gesture.CALLBACK_TYPE.TOUCHES_DOWN;
+      case _TouchEventType.TouchEventType.TOUCHES_MOVE:
+        return _gesture.CALLBACK_TYPE.TOUCHES_MOVE;
+      case _TouchEventType.TouchEventType.TOUCHES_UP:
+        return _gesture.CALLBACK_TYPE.TOUCHES_UP;
+      case _TouchEventType.TouchEventType.TOUCHES_CANCELLED:
+        return _gesture.CALLBACK_TYPE.TOUCHES_CANCELLED;
+    }
+    return _gesture.CALLBACK_TYPE.UNDEFINED;
+  };
+  touchEventTypeToCallbackType.__closure = {
+    _TouchEventType,
+    _gesture
+  };
+  touchEventTypeToCallbackType.__workletHash = 11603674222200;
+  touchEventTypeToCallbackType.__pluginVersion = "0.10.1";
+  touchEventTypeToCallbackType.__initData = _worklet_11603674222200_init_data;
+  touchEventTypeToCallbackType.__stackDetails = _e;
+  return touchEventTypeToCallbackType;
+}({
+  _worklet_11603674222200_init_data,
+  _TouchEventType,
+  _gesture
+});
+var _worklet_7449783137826_init_data = {
+  code: "function runWorklet_reactNativeGestureHandler_useAnimatedGestureJs3(type,gesture,event,...args){const{getHandler,_utils}=this.__closure;const handler=getHandler(type,gesture);if(gesture.isWorklet[type]){handler===null||handler===void 0||handler(event,...args);}else if(handler){console.warn((0,_utils.tagMessage)('Animated gesture callback must be a worklet'));}}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"runWorklet_reactNativeGestureHandler_useAnimatedGestureJs3\",\"type\",\"gesture\",\"event\",\"args\",\"getHandler\",\"_utils\",\"__closure\",\"handler\",\"isWorklet\",\"console\",\"warn\",\"tagMessage\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js\"],\"mappings\":\"AAqDA,SAAAA,0DAAmDA,CAAAC,IAAA,CAAAC,OAAA,CAAAC,KAAA,IAAAC,IAAA,QAAAC,UAAA,CAAAC,MAAA,OAAAC,SAAA,CAGjD,KAAM,CAAAC,OAAO,CAAGH,UAAU,CAACJ,IAAI,CAAEC,OAAO,CAAC,CACzC,GAAIA,OAAO,CAACO,SAAS,CAACR,IAAI,CAAC,CAAE,CAG3BO,OAAO,SAAPA,OAAO,WAAPA,OAAO,CAAGL,KAAK,CAAE,GAAGC,IAAI,CAAC,CAC3B,CAAC,IAAM,IAAII,OAAO,CAAE,CAClBE,OAAO,CAACC,IAAI,CAAC,CAAC,CAAC,CAAEL,MAAM,CAACM,UAAU,EAAE,6CAA6C,CAAC,CAAC,CACrF,CACF\",\"ignoreList\":[]}"
+};
+var runWorklet = function runWorklet_reactNativeGestureHandler_useAnimatedGestureJs3Factory(_ref3) {
+  var _worklet_7449783137826_init_data = _ref3._worklet_7449783137826_init_data,
+    getHandler = _ref3.getHandler,
+    _utils = _ref3._utils;
+  var _e = [new global.Error(), -3, -27];
+  var runWorklet = function (type, gesture, event) {
+    var handler = getHandler(type, gesture);
+    if (gesture.isWorklet[type]) {
+      for (var _len = arguments.length, args = new Array(_len > 3 ? _len - 3 : 0), _key = 3; _key < _len; _key++) {
+        args[_key - 3] = arguments[_key];
+      }
+      handler?.(event, ...args);
+    } else if (handler) {
+      console.warn((0, _utils.tagMessage)('Animated gesture callback must be a worklet'));
+    }
+  };
+  runWorklet.__closure = {
+    getHandler,
+    _utils
+  };
+  runWorklet.__workletHash = 7449783137826;
+  runWorklet.__pluginVersion = "0.10.1";
+  runWorklet.__initData = _worklet_7449783137826_init_data;
+  runWorklet.__stackDetails = _e;
+  return runWorklet;
+}({
+  _worklet_7449783137826_init_data,
+  getHandler,
+  _utils
+});
+var _worklet_7889847699524_init_data = {
+  code: "function isStateChangeEvent_reactNativeGestureHandler_useAnimatedGestureJs4(event){return event.oldState!=null;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"isStateChangeEvent_reactNativeGestureHandler_useAnimatedGestureJs4\",\"event\",\"oldState\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js\"],\"mappings\":\"AAiEA,SAAAA,kEAAmCA,CAAAC,KAAA,EAIjC,MAAO,CAAAA,KAAK,CAACC,QAAQ,EAAI,IAAI,CAC/B\",\"ignoreList\":[]}"
+};
+var isStateChangeEvent = function isStateChangeEvent_reactNativeGestureHandler_useAnimatedGestureJs4Factory(_ref4) {
+  var _worklet_7889847699524_init_data = _ref4._worklet_7889847699524_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var isStateChangeEvent = function (event) {
+    return event.oldState != null;
+  };
+  isStateChangeEvent.__closure = {};
+  isStateChangeEvent.__workletHash = 7889847699524;
+  isStateChangeEvent.__pluginVersion = "0.10.1";
+  isStateChangeEvent.__initData = _worklet_7889847699524_init_data;
+  isStateChangeEvent.__stackDetails = _e;
+  return isStateChangeEvent;
+}({
+  _worklet_7889847699524_init_data
+});
+var _worklet_13087507825621_init_data = {
+  code: "function isTouchEvent_reactNativeGestureHandler_useAnimatedGestureJs5(event){return event.eventType!=null;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"isTouchEvent_reactNativeGestureHandler_useAnimatedGestureJs5\",\"event\",\"eventType\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js\"],\"mappings\":\"AAuEA,SAAAA,4DAA6BA,CAAAC,KAAA,EAG3B,MAAO,CAAAA,KAAK,CAACC,SAAS,EAAI,IAAI,CAChC\",\"ignoreList\":[]}"
+};
+var isTouchEvent = function isTouchEvent_reactNativeGestureHandler_useAnimatedGestureJs5Factory(_ref5) {
+  var _worklet_13087507825621_init_data = _ref5._worklet_13087507825621_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var isTouchEvent = function (event) {
+    return event.eventType != null;
+  };
+  isTouchEvent.__closure = {};
+  isTouchEvent.__workletHash = 13087507825621;
+  isTouchEvent.__pluginVersion = "0.10.1";
+  isTouchEvent.__initData = _worklet_13087507825621_init_data;
+  isTouchEvent.__stackDetails = _e;
+  return isTouchEvent;
+}({
+  _worklet_13087507825621_init_data
+});
+var _worklet_14238430738713_init_data = {
+  code: "function reactNativeGestureHandler_useAnimatedGestureJs6(event){const{sharedHandlersCallbacks,isStateChangeEvent,_State,runWorklet,_gesture,lastUpdateEvent,isTouchEvent,stateControllers,_gestureStateManager,_TouchEventType,touchEventTypeToCallbackType}=this.__closure;const currentCallback=sharedHandlersCallbacks.value;if(!currentCallback){return;}for(let i=0;i<currentCallback.length;i++){const gesture=currentCallback[i];if(event.handlerTag!==gesture.handlerTag){continue;}if(isStateChangeEvent(event)){if(event.oldState===_State.State.UNDETERMINED&&event.state===_State.State.BEGAN){runWorklet(_gesture.CALLBACK_TYPE.BEGAN,gesture,event);}else if((event.oldState===_State.State.BEGAN||event.oldState===_State.State.UNDETERMINED)&&event.state===_State.State.ACTIVE){runWorklet(_gesture.CALLBACK_TYPE.START,gesture,event);lastUpdateEvent.value[gesture.handlerTag]=undefined;}else if(event.oldState!==event.state&&event.state===_State.State.END){if(event.oldState===_State.State.ACTIVE){runWorklet(_gesture.CALLBACK_TYPE.END,gesture,event,true);}runWorklet(_gesture.CALLBACK_TYPE.FINALIZE,gesture,event,true);}else if((event.state===_State.State.FAILED||event.state===_State.State.CANCELLED)&&event.state!==event.oldState){if(event.oldState===_State.State.ACTIVE){runWorklet(_gesture.CALLBACK_TYPE.END,gesture,event,false);}runWorklet(_gesture.CALLBACK_TYPE.FINALIZE,gesture,event,false);}}else if(isTouchEvent(event)){if(!stateControllers[i]||stateControllers[i].handlerTag!==event.handlerTag){stateControllers[i]=_gestureStateManager.GestureStateManager.create(event.handlerTag);}if(event.eventType!==_TouchEventType.TouchEventType.UNDETERMINED){runWorklet(touchEventTypeToCallbackType(event.eventType),gesture,event,stateControllers[i]);}}else{runWorklet(_gesture.CALLBACK_TYPE.UPDATE,gesture,event);if(gesture.onChange&&gesture.changeEventCalculator){var _gesture$changeEventC;runWorklet(_gesture.CALLBACK_TYPE.CHANGE,gesture,(_gesture$changeEventC=gesture.changeEventCalculator)===null||_gesture$changeEventC===void 0?void 0:_gesture$changeEventC.call(gesture,event,lastUpdateEvent.value[gesture.handlerTag]));lastUpdateEvent.value[gesture.handlerTag]=event;}}}}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"reactNativeGestureHandler_useAnimatedGestureJs6\",\"event\",\"sharedHandlersCallbacks\",\"isStateChangeEvent\",\"_State\",\"runWorklet\",\"_gesture\",\"lastUpdateEvent\",\"isTouchEvent\",\"stateControllers\",\"_gestureStateManager\",\"_TouchEventType\",\"touchEventTypeToCallbackType\",\"__closure\",\"currentCallback\",\"value\",\"i\",\"length\",\"gesture\",\"handlerTag\",\"oldState\",\"State\",\"UNDETERMINED\",\"state\",\"BEGAN\",\"CALLBACK_TYPE\",\"ACTIVE\",\"START\",\"undefined\",\"END\",\"FINALIZE\",\"FAILED\",\"CANCELLED\",\"GestureStateManager\",\"create\",\"eventType\",\"TouchEventType\",\"UPDATE\",\"onChange\",\"changeEventCalculator\",\"_gesture$changeEventC\",\"CHANGE\",\"call\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/GestureDetector/useAnimatedGesture.js\"],\"mappings\":\"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\",\"ignoreList\":[]}"
+};
+function useAnimatedGesture(preparedGesture, needsRebuild) {
+  if (!_reanimatedWrapper.Reanimated) {
+    return;
+  }
+  var sharedHandlersCallbacks = _reanimatedWrapper.Reanimated.useSharedValue(null);
+  var lastUpdateEvent = _reanimatedWrapper.Reanimated.useSharedValue([]);
+  var stateControllers = [];
+  var callback = function reactNativeGestureHandler_useAnimatedGestureJs6Factory(_ref6) {
+    var _worklet_14238430738713_init_data = _ref6._worklet_14238430738713_init_data,
+      sharedHandlersCallbacks = _ref6.sharedHandlersCallbacks,
+      isStateChangeEvent = _ref6.isStateChangeEvent,
+      _State = _ref6._State,
+      runWorklet = _ref6.runWorklet,
+      _gesture = _ref6._gesture,
+      lastUpdateEvent = _ref6.lastUpdateEvent,
+      isTouchEvent = _ref6.isTouchEvent,
+      stateControllers = _ref6.stateControllers,
+      _gestureStateManager = _ref6._gestureStateManager,
+      _TouchEventType = _ref6._TouchEventType,
+      touchEventTypeToCallbackType = _ref6.touchEventTypeToCallbackType;
+    var _e = [new global.Error(), -12, -27];
+    var reactNativeGestureHandler_useAnimatedGestureJs6 = function (event) {
+      var currentCallback = sharedHandlersCallbacks.value;
+      if (!currentCallback) {
+        return;
+      }
+      for (var i = 0; i < currentCallback.length; i++) {
+        var gesture = currentCallback[i];
+        if (event.handlerTag !== gesture.handlerTag) {
+          continue;
+        }
+        if (isStateChangeEvent(event)) {
+          if (event.oldState === _State.State.UNDETERMINED && event.state === _State.State.BEGAN) {
+            runWorklet(_gesture.CALLBACK_TYPE.BEGAN, gesture, event);
+          } else if ((event.oldState === _State.State.BEGAN || event.oldState === _State.State.UNDETERMINED) && event.state === _State.State.ACTIVE) {
+            runWorklet(_gesture.CALLBACK_TYPE.START, gesture, event);
+            lastUpdateEvent.value[gesture.handlerTag] = undefined;
+          } else if (event.oldState !== event.state && event.state === _State.State.END) {
+            if (event.oldState === _State.State.ACTIVE) {
+              runWorklet(_gesture.CALLBACK_TYPE.END, gesture, event, true);
+            }
+            runWorklet(_gesture.CALLBACK_TYPE.FINALIZE, gesture, event, true);
+          } else if ((event.state === _State.State.FAILED || event.state === _State.State.CANCELLED) && event.state !== event.oldState) {
+            if (event.oldState === _State.State.ACTIVE) {
+              runWorklet(_gesture.CALLBACK_TYPE.END, gesture, event, false);
+            }
+            runWorklet(_gesture.CALLBACK_TYPE.FINALIZE, gesture, event, false);
+          }
+        } else if (isTouchEvent(event)) {
+          if (!stateControllers[i] || stateControllers[i].handlerTag !== event.handlerTag) {
+            stateControllers[i] = _gestureStateManager.GestureStateManager.create(event.handlerTag);
+          }
+          if (event.eventType !== _TouchEventType.TouchEventType.UNDETERMINED) {
+            runWorklet(touchEventTypeToCallbackType(event.eventType), gesture, event, stateControllers[i]);
+          }
+        } else {
+          runWorklet(_gesture.CALLBACK_TYPE.UPDATE, gesture, event);
+          if (gesture.onChange && gesture.changeEventCalculator) {
+            runWorklet(_gesture.CALLBACK_TYPE.CHANGE, gesture, gesture.changeEventCalculator?.(event, lastUpdateEvent.value[gesture.handlerTag]));
+            lastUpdateEvent.value[gesture.handlerTag] = event;
+          }
+        }
+      }
+    };
+    reactNativeGestureHandler_useAnimatedGestureJs6.__closure = {
+      sharedHandlersCallbacks,
+      isStateChangeEvent,
+      _State,
+      runWorklet,
+      _gesture,
+      lastUpdateEvent,
+      isTouchEvent,
+      stateControllers,
+      _gestureStateManager,
+      _TouchEventType,
+      touchEventTypeToCallbackType
+    };
+    reactNativeGestureHandler_useAnimatedGestureJs6.__workletHash = 14238430738713;
+    reactNativeGestureHandler_useAnimatedGestureJs6.__pluginVersion = "0.10.1";
+    reactNativeGestureHandler_useAnimatedGestureJs6.__initData = _worklet_14238430738713_init_data;
+    reactNativeGestureHandler_useAnimatedGestureJs6.__stackDetails = _e;
+    return reactNativeGestureHandler_useAnimatedGestureJs6;
+  }({
+    _worklet_14238430738713_init_data,
+    sharedHandlersCallbacks,
+    isStateChangeEvent,
+    _State,
+    runWorklet,
+    _gesture,
+    lastUpdateEvent,
+    isTouchEvent,
+    stateControllers,
+    _gestureStateManager,
+    _TouchEventType,
+    touchEventTypeToCallbackType
+  });
+  var event = _reanimatedWrapper.Reanimated.useEvent(callback, ['onGestureHandlerStateChange', 'onGestureHandlerEvent'], needsRebuild);
+  preparedGesture.animatedEventHandler = event;
+  preparedGesture.animatedHandlers = sharedHandlersCallbacks;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJfcmVhbmltYXRlZFdyYXBwZXIiLCJfZ2VzdHVyZVN0YXRlTWFuYWdlciIsIl9TdGF0ZSIsIl9Ub3VjaEV2ZW50VHlwZSIsIl91dGlscyIsIl93b3JrbGV0Xzk5ODMzNzI5MTE2MDJfaW5pdF9kYXRhIiwiY29kZSIsImxvY2F0aW9uIiwic291cmNlTWFwIiwiZ2V0SGFuZGxlciIsImdldEhhbmRsZXJfcmVhY3ROYXRpdmVHZXN0dXJlSGFuZGxlcl91c2VBbmltYXRlZEdlc3R1cmVKczFGYWN0b3J5IiwiX3JlZiIsIkNBTExCQUNLX1RZUEUiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwidHlwZSIsImdlc3R1cmUiLCJCRUdBTiIsIm9uQmVnaW4iLCJTVEFSVCIsIm9uU3RhcnQiLCJVUERBVEUiLCJvblVwZGF0ZSIsIkNIQU5HRSIsIm9uQ2hhbmdlIiwiRU5EIiwib25FbmQiLCJGSU5BTElaRSIsIm9uRmluYWxpemUiLCJUT1VDSEVTX0RPV04iLCJvblRvdWNoZXNEb3duIiwiVE9VQ0hFU19NT1ZFIiwib25Ub3VjaGVzTW92ZSIsIlRPVUNIRVNfVVAiLCJvblRvdWNoZXNVcCIsIlRPVUNIRVNfQ0FOQ0VMTEVEIiwib25Ub3VjaGVzQ2FuY2VsbGVkIiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyIsIl93b3JrbGV0XzExNjAzNjc0MjIyMjAwX2luaXRfZGF0YSIsInRvdWNoRXZlbnRUeXBlVG9DYWxsYmFja1R5cGUiLCJ0b3VjaEV2ZW50VHlwZVRvQ2FsbGJhY2tUeXBlX3JlYWN0TmF0aXZlR2VzdHVyZUhhbmRsZXJfdXNlQW5pbWF0ZWRHZXN0dXJlSnMyRmFjdG9yeSIsIl9yZWYyIiwiVG91Y2hFdmVudFR5cGUiLCJldmVudFR5cGUiLCJVTkRFRklORUQiLCJfd29ya2xldF83NDQ5NzgzMTM3ODI2X2luaXRfZGF0YSIsInJ1bldvcmtsZXQiLCJydW5Xb3JrbGV0X3JlYWN0TmF0aXZlR2VzdHVyZUhhbmRsZXJfdXNlQW5pbWF0ZWRHZXN0dXJlSnMzRmFjdG9yeSIsIl9yZWYzIiwiZXZlbnQiLCJoYW5kbGVyIiwiaXNXb3JrbGV0IiwiX2xlbiIsImFyZ3VtZW50cyIsImxlbmd0aCIsImFyZ3MiLCJBcnJheSIsIl9rZXkiLCJjb25zb2xlIiwid2FybiIsInRhZ01lc3NhZ2UiLCJfd29ya2xldF83ODg5ODQ3Njk5NTI0X2luaXRfZGF0YSIsImlzU3RhdGVDaGFuZ2VFdmVudCIsImlzU3RhdGVDaGFuZ2VFdmVudF9yZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX3VzZUFuaW1hdGVkR2VzdHVyZUpzNEZhY3RvcnkiLCJfcmVmNCIsIm9sZFN0YXRlIiwiX3dvcmtsZXRfMTMwODc1MDc4MjU2MjFfaW5pdF9kYXRhIiwiaXNUb3VjaEV2ZW50IiwiaXNUb3VjaEV2ZW50X3JlYWN0TmF0aXZlR2VzdHVyZUhhbmRsZXJfdXNlQW5pbWF0ZWRHZXN0dXJlSnM1RmFjdG9yeSIsIl9yZWY1IiwiX3dvcmtsZXRfMTQyMzg0MzA3Mzg3MTNfaW5pdF9kYXRhIiwidXNlQW5pbWF0ZWRHZXN0dXJlIiwicHJlcGFyZWRHZXN0dXJlIiwibmVlZHNSZWJ1aWxkIiwiUmVhbmltYXRlZCIsInNoYXJlZEhhbmRsZXJzQ2FsbGJhY2tzIiwidXNlU2hhcmVkVmFsdWUiLCJsYXN0VXBkYXRlRXZlbnQiLCJzdGF0ZUNvbnRyb2xsZXJzIiwiY2FsbGJhY2siLCJyZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX3VzZUFuaW1hdGVkR2VzdHVyZUpzNkZhY3RvcnkiLCJfcmVmNiIsIkdlc3R1cmVTdGF0ZU1hbmFnZXIiLCJyZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX3VzZUFuaW1hdGVkR2VzdHVyZUpzNiIsImN1cnJlbnRDYWxsYmFjayIsInZhbHVlIiwiaSIsImhhbmRsZXJUYWciLCJTdGF0ZSIsIlVOREVURVJNSU5FRCIsInN0YXRlIiwiQUNUSVZFIiwidW5kZWZpbmVkIiwiRkFJTEVEIiwiQ0FOQ0VMTEVEIiwiY3JlYXRlIiwiY2hhbmdlRXZlbnRDYWxjdWxhdG9yIiwidXNlRXZlbnQiLCJhbmltYXRlZEV2ZW50SGFuZGxlciIsImFuaW1hdGVkSGFuZGxlcnMiXSwic291cmNlcyI6WyIuLi8uLi8uLi8uLi8uLi9zcmMvaGFuZGxlcnMvZ2VzdHVyZXMvR2VzdHVyZURldGVjdG9yL3VzZUFuaW1hdGVkR2VzdHVyZS50cyJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6Ijs7Ozs7O0FBQUEsSUFBQUEsUUFBQSxHQUFBQyxPQUFBO0FBQ0EsSUFBQUMsa0JBQUEsR0FBQUQsT0FBQTtBQU1BLElBQUFFLG9CQUFBLEdBQUFGLE9BQUE7QUFJQSxJQUFBRyxNQUFBLEdBQUFILE9BQUE7QUFDQSxJQUFBSSxlQUFBLEdBQUFKLE9BQUE7QUFDQSxJQUFBSyxNQUFBLEdBQUFMLE9BQUE7QUFBQSxJQUFBTSxnQ0FBQTtFQUFBQyxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBQUEsSUFBQUMsVUFBQSxHQUdBLFNBQUFDLGtFQUFBQyxJQUFBO0VBQUEsSUFBQU4sZ0NBQUEsR0FBQU0sSUFBQSxDQUFBTixnQ0FBQTtJQU1TTyxRQUFBLEdBQUFELElBQUEsQ0FBQUMsUUFBQTtFQUFBLElBQUFDLEVBQUEsUUFBQUMsTUFBQSxDQUFBQyxLQUFBO0VBQUEsSUFBQU4sVUFBQSxZQUFBQSxDQUxQTyxJQUFtQixFQUNuQkMsT0FBa0QsRUFDbEQ7SUFFQSxRQUFRRCxJQUFJO01BQ1YsS0FBS0osUUFBQSxDQUFBQSxhQUFhLENBQUNNLEtBQUs7UUFDdEIsT0FBT0QsT0FBTyxDQUFDRSxPQUFPO01BQ3hCLEtBQUtQLFFBQUEsQ0FBQUEsYUFBYSxDQUFDUSxLQUFLO1FBQ3RCLE9BQU9ILE9BQU8sQ0FBQ0ksT0FBTztNQUN4QixLQUFLVCxRQUFBLENBQUFBLGFBQWEsQ0FBQ1UsTUFBTTtRQUN2QixPQUFPTCxPQUFPLENBQUNNLFFBQVE7TUFDekIsS0FBS1gsUUFBQSxDQUFBQSxhQUFhLENB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

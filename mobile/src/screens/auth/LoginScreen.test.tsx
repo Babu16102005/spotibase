@@ -35,12 +35,12 @@ describe('LoginScreen', () => {
   });
 
   it('renders email/password inputs and the Sign In button', () => {
-    const { getByPlaceholderText, getByText } = render(<LoginScreen navigation={{}} />);
+    const { getByPlaceholderText, getByText, getByLabelText } = render(<LoginScreen navigation={{}} />);
 
-    expect(getByPlaceholderText('Email')).toBeTruthy();
+    expect(getByPlaceholderText('Email or username')).toBeTruthy();
     expect(getByPlaceholderText('Password')).toBeTruthy();
     expect(getByText('Sign In')).toBeTruthy();
-    expect(getByText('SpotiBase')).toBeTruthy();
+    expect(getByLabelText('SpotiBase Logo')).toBeTruthy();
   });
 
   it('shows an alert and does not call the api when fields are empty', () => {
@@ -56,7 +56,7 @@ describe('LoginScreen', () => {
     (authApi.login as jest.Mock).mockResolvedValue({ data: makeAuthResponse() });
 
     const { getByPlaceholderText, getByText } = render(<LoginScreen navigation={{}} />);
-    fireEvent.changeText(getByPlaceholderText('Email'), 'alice@example.com');
+    fireEvent.changeText(getByPlaceholderText('Email or username'), 'alice@example.com');
     fireEvent.changeText(getByPlaceholderText('Password'), 'secret123');
     fireEvent.press(getByText('Sign In'));
     await act(async () => {});
@@ -78,7 +78,7 @@ describe('LoginScreen', () => {
     );
 
     const { getByPlaceholderText, getByText } = render(<LoginScreen navigation={{}} />);
-    fireEvent.changeText(getByPlaceholderText('Email'), 'alice@example.com');
+    fireEvent.changeText(getByPlaceholderText('Email or username'), 'alice@example.com');
     fireEvent.changeText(getByPlaceholderText('Password'), 'secret123');
     fireEvent.press(getByText('Sign In'));
 
@@ -96,7 +96,7 @@ describe('LoginScreen', () => {
     });
 
     const { getByPlaceholderText, getByText } = render(<LoginScreen navigation={{}} />);
-    fireEvent.changeText(getByPlaceholderText('Email'), 'alice@example.com');
+    fireEvent.changeText(getByPlaceholderText('Email or username'), 'alice@example.com');
     fireEvent.changeText(getByPlaceholderText('Password'), 'wrong');
     fireEvent.press(getByText('Sign In'));
     await act(async () => {});
@@ -108,7 +108,7 @@ describe('LoginScreen', () => {
     const navigation = { navigate: jest.fn() };
     const { getByText } = render(<LoginScreen navigation={navigation} />);
 
-    fireEvent.press(getByText("Don't have an account? Sign Up"));
+    fireEvent.press(getByText('Sign Up for SpotiBase'));
 
     expect(navigation.navigate).toHaveBeenCalledWith('Register');
   });

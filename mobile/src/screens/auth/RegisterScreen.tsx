@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert, Image, ScrollView } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore } from '../../store';
+import GlassButton from '../../components/GlassButton';
+
+const LOGIN_LOGO = require('../../../assets/loginlogo.png');
 import {
   handleSocialLogin,
   SOCIAL_PROVIDER_LABELS,
@@ -45,7 +48,8 @@ const RegisterScreen = ({ navigation, socialIdTokenOverride }: RegisterScreenPro
     try {
       await register({ email, username, password });
     } catch (err: any) {
-      Alert.alert('Registration Failed', err.response?.data?.message || 'Could not create account');
+      const message = err.response?.data?.message || (err.response ? 'Could not create account' : 'Unable to connect to backend server');
+      Alert.alert('Registration Failed', message);
     }
   };
 
@@ -64,112 +68,146 @@ const RegisterScreen = ({ navigation, socialIdTokenOverride }: RegisterScreenPro
   const socialButtonsDisabled = pendingProvider !== null;
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: theme.colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={styles.content}>
-        <Text style={[styles.logo, { color: theme.colors.primary }]}>SpotiBase</Text>
-        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Create your account</Text>
-
-        <View style={styles.form}>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-            placeholder="Email"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-            placeholder="Username"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
-            placeholder="Password"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <TouchableOpacity style={[styles.registerButton, { backgroundColor: theme.colors.primary }]} onPress={handleRegister} disabled={isLoading}>
-            <Text style={[styles.registerButtonText, { color: '#000' }]}>{isLoading ? 'Creating account...' : 'Sign Up'}</Text>
-          </TouchableOpacity>
-
-          <View style={styles.dividerRow}>
-            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-            <Text style={[styles.dividerText, { color: theme.colors.textTertiary }]}>or continue with</Text>
-            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <View style={styles.content}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={LOGIN_LOGO}
+              style={styles.heroLogo}
+              resizeMode="contain"
+              accessibilityLabel="SpotiBase Logo"
+            />
           </View>
+          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Create your account</Text>
 
-          <TouchableOpacity
-            testID="social-button-google"
-            style={[styles.socialButton, { borderColor: theme.colors.border }, socialButtonsDisabled && styles.socialButtonDisabled]}
-            onPress={() => handleSocialLoginPress('google')}
-            disabled={socialButtonsDisabled}
-            accessibilityState={{ disabled: socialButtonsDisabled }}
-          >
-            <Text style={[styles.socialGlyph, { color: GOOGLE_BRAND_COLOR }]}>G</Text>
-            <Text style={[styles.socialButtonText, { color: theme.colors.text }]}>
-              {pendingProvider === 'google' ? CONNECTING_LABEL : SOCIAL_PROVIDER_LABELS.google}
-            </Text>
-          </TouchableOpacity>
-          {socialMessage?.provider === 'google' && (
-            <Text style={[styles.socialMessage, { color: socialMessage.kind === 'error' ? theme.colors.error : theme.colors.warning }]}>
-              {socialMessage.text}
-            </Text>
-          )}
+          <View style={styles.form}>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
+              placeholder="Email"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
+              placeholder="Username"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.colors.surface, color: theme.colors.text, borderColor: theme.colors.border }]}
+              placeholder="Password"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
 
-          <TouchableOpacity
-            testID="social-button-apple"
-            style={[styles.socialButton, { borderColor: theme.colors.border }, socialButtonsDisabled && styles.socialButtonDisabled]}
-            onPress={() => handleSocialLoginPress('apple')}
-            disabled={socialButtonsDisabled}
-            accessibilityState={{ disabled: socialButtonsDisabled }}
-          >
-            {/* Apple's private-use logo glyph (U+F8FF) only renders on iOS —
-                keep the button text-only so it looks right on Android and web. */}
-            <Text style={[styles.socialButtonText, { color: getAppleBrandColor(theme.dark) }]}>
-              {pendingProvider === 'apple' ? CONNECTING_LABEL : SOCIAL_PROVIDER_LABELS.apple}
-            </Text>
-          </TouchableOpacity>
-          {socialMessage?.provider === 'apple' && (
-            <Text style={[styles.socialMessage, { color: socialMessage.kind === 'error' ? theme.colors.error : theme.colors.warning }]}>
-              {socialMessage.text}
-            </Text>
-          )}
+            <GlassButton
+              variant="primary"
+              size="lg"
+              fullWidth
+              title={isLoading ? 'Creating account...' : 'Sign Up'}
+              onPress={handleRegister}
+              loading={isLoading}
+              disabled={isLoading}
+              style={{ marginTop: 8 }}
+            />
 
-          <TouchableOpacity onPress={() => navigation?.goBack()}>
-            <Text style={[styles.loginLink, { color: theme.colors.textSecondary }]}>Already have an account? Sign In</Text>
-          </TouchableOpacity>
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+              <Text style={[styles.dividerText, { color: theme.colors.textTertiary }]}>or continue with</Text>
+              <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+            </View>
+
+            <View style={styles.socialRow}>
+              <View style={styles.socialCol}>
+                <GlassButton
+                  testID="social-button-google"
+                  variant="metal"
+                  size="md"
+                  fullWidth
+                  icon="google"
+                  iconSize={18}
+                  title={pendingProvider === 'google' ? CONNECTING_LABEL : SOCIAL_PROVIDER_LABELS.google}
+                  onPress={() => handleSocialLoginPress('google')}
+                  disabled={socialButtonsDisabled}
+                />
+              </View>
+              <View style={styles.socialCol}>
+                <GlassButton
+                  testID="social-button-apple"
+                  variant="metal"
+                  size="md"
+                  fullWidth
+                  icon="apple"
+                  iconSize={18}
+                  iconColor={getAppleBrandColor(theme.dark)}
+                  title={pendingProvider === 'apple' ? CONNECTING_LABEL : SOCIAL_PROVIDER_LABELS.apple}
+                  onPress={() => handleSocialLoginPress('apple')}
+                  disabled={socialButtonsDisabled}
+                  textStyle={{ color: getAppleBrandColor(theme.dark) }}
+                />
+              </View>
+            </View>
+            {socialMessage && (
+              <Text style={[styles.socialMessage, { color: socialMessage.kind === 'error' ? theme.colors.error : theme.colors.warning }]}>
+                {socialMessage.text}
+              </Text>
+            )}
+
+            <GlassButton
+              variant="ghost"
+              size="md"
+              fullWidth
+              title="Already have an account? Sign In"
+              onPress={() => navigation?.goBack()}
+              style={{ marginTop: 8 }}
+            />
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  logo: { fontSize: 42, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 40 },
-  form: { gap: 16 },
-  input: { height: 52, borderRadius: 12, paddingHorizontal: 16, fontSize: 16, borderWidth: 1 },
-  registerButton: { height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
-  registerButtonText: { fontSize: 16, fontWeight: '700' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  scroll: { flexGrow: 1, justifyContent: 'center' },
+  content: { paddingHorizontal: 28, paddingVertical: 32 },
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  heroLogo: {
+    width: 96,
+    height: 96,
+  },
+  subtitle: { fontSize: 16, textAlign: 'center', marginBottom: 32 },
+  form: { gap: 14 },
+  input: { height: 52, borderRadius: 24, paddingHorizontal: 20, fontSize: 16, borderWidth: 1 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
   dividerLine: { flex: 1, height: 1 },
-  dividerText: { fontSize: 13, fontWeight: '500' },
-  socialButton: { height: 52, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
-  socialButtonDisabled: { opacity: 0.5 },
-  socialGlyph: { fontSize: 16, fontWeight: '700', marginRight: 8 },
-  socialButtonText: { fontSize: 14, fontWeight: '500' },
+  dividerText: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.6 },
+  socialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  socialCol: {
+    flex: 1,
+  },
   socialMessage: { fontSize: 13, textAlign: 'center' },
-  loginLink: { fontSize: 14, textAlign: 'center', marginTop: 16 },
 });
 
 export default RegisterScreen;

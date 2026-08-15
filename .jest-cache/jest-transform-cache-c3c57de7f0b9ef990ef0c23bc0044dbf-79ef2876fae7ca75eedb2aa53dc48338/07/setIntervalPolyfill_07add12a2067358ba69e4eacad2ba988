@@ -1,0 +1,50 @@
+ba0e7b68e79051e86cc8d6e4454924a2
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.setupSetInterval = void 0;
+var _worklet_2731038767774_init_data = {
+  code: "function setupSetInterval_reactNativeWorklets_setIntervalPolyfillJs1(){const intervalHandleToTimeoutHandle=new Map();const setIntervalPolyfill=function(callback,delay=0,...args){let intervalHandle=0;const repeatingCallback=function(){const timeoutHandle=setTimeout(repeatingCallback,delay);intervalHandleToTimeoutHandle.set(intervalHandle,timeoutHandle);callback(...args);};intervalHandle=setTimeout(repeatingCallback,delay);intervalHandleToTimeoutHandle.set(intervalHandle,intervalHandle);return intervalHandle;};const clearIntervalPolyfill=function(intervalHandle){const timeoutHandle=intervalHandleToTimeoutHandle.get(intervalHandle);clearTimeout(timeoutHandle);intervalHandleToTimeoutHandle.delete(intervalHandle);};globalThis.setInterval=setIntervalPolyfill;globalThis.clearInterval=clearIntervalPolyfill;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runLoop/common/setIntervalPolyfill.js",
+  sourceMap: "{\"version\":3,\"names\":[\"setupSetInterval_reactNativeWorklets_setIntervalPolyfillJs1\",\"intervalHandleToTimeoutHandle\",\"Map\",\"setIntervalPolyfill\",\"callback\",\"delay\",\"args\",\"intervalHandle\",\"repeatingCallback\",\"timeoutHandle\",\"setTimeout\",\"set\",\"clearIntervalPolyfill\",\"get\",\"clearTimeout\",\"delete\",\"globalThis\",\"setInterval\",\"clearInterval\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runLoop/common/setIntervalPolyfill.js\"],\"mappings\":\"AAEO,SAAAA,2DAA4BA,CAAA,EAGjC,KAAM,CAAAC,6BAA6B,CAAG,GAAI,CAAAC,GAAG,CAAC,CAAC,CAC/C,KAAM,CAAAC,mBAAmB,CAAG,QAAAA,CAACC,QAAQ,CAAEC,KAAK,CAAG,CAAC,CAAE,GAAGC,IAAI,CAAK,CAC5D,GAAI,CAAAC,cAAc,CAAG,CAAC,CACtB,KAAM,CAAAC,iBAAiB,CAAG,QAAAA,CAAA,CAAM,CAC9B,KAAM,CAAAC,aAAa,CAAGC,UAAU,CAACF,iBAAiB,CAAEH,KAAK,CAAC,CAC1DJ,6BAA6B,CAACU,GAAG,CAACJ,cAAc,CAAEE,aAAa,CAAC,CAChEL,QAAQ,CAAC,GAAGE,IAAI,CAAC,CACnB,CAAC,CACDC,cAAc,CAAGG,UAAU,CAACF,iBAAiB,CAAEH,KAAK,CAAC,CACrDJ,6BAA6B,CAACU,GAAG,CAACJ,cAAc,CAAEA,cAAc,CAAC,CACjE,MAAO,CAAAA,cAAc,CACvB,CAAC,CACD,KAAM,CAAAK,qBAAqB,CAAG,QAAAA,CAAAL,cAAc,CAAI,CAC9C,KAAM,CAAAE,aAAa,CAAGR,6BAA6B,CAACY,GAAG,CAACN,cAAc,CAAC,CACvEO,YAAY,CAACL,aAAa,CAAC,CAC3BR,6BAA6B,CAACc,MAAM,CAACR,cAAc,CAAC,CACtD,CAAC,CACDS,UAAU,CAACC,WAAW,CAAGd,mBAAmB,CAC5Ca,UAAU,CAACE,aAAa,CAAGN,qBAAqB,CAClD\",\"ignoreList\":[]}"
+};
+var setupSetInterval = exports.setupSetInterval = function setupSetInterval_reactNativeWorklets_setIntervalPolyfillJs1Factory(_ref) {
+  var _worklet_2731038767774_init_data = _ref._worklet_2731038767774_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var setupSetInterval = function () {
+    var intervalHandleToTimeoutHandle = new Map();
+    var setIntervalPolyfill = function (callback) {
+      var delay = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+      for (var _len = arguments.length, args = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
+        args[_key - 2] = arguments[_key];
+      }
+      var intervalHandle = 0;
+      var repeatingCallback = () => {
+        var timeoutHandle = setTimeout(repeatingCallback, delay);
+        intervalHandleToTimeoutHandle.set(intervalHandle, timeoutHandle);
+        callback(...args);
+      };
+      intervalHandle = setTimeout(repeatingCallback, delay);
+      intervalHandleToTimeoutHandle.set(intervalHandle, intervalHandle);
+      return intervalHandle;
+    };
+    var clearIntervalPolyfill = intervalHandle => {
+      var timeoutHandle = intervalHandleToTimeoutHandle.get(intervalHandle);
+      clearTimeout(timeoutHandle);
+      intervalHandleToTimeoutHandle.delete(intervalHandle);
+    };
+    globalThis.setInterval = setIntervalPolyfill;
+    globalThis.clearInterval = clearIntervalPolyfill;
+  };
+  setupSetInterval.__closure = {};
+  setupSetInterval.__workletHash = 2731038767774;
+  setupSetInterval.__pluginVersion = "0.10.1";
+  setupSetInterval.__initData = _worklet_2731038767774_init_data;
+  setupSetInterval.__stackDetails = _e;
+  return setupSetInterval;
+}({
+  _worklet_2731038767774_init_data
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsInNldHVwU2V0SW50ZXJ2YWwiLCJfd29ya2xldF8yNzMxMDM4NzY3Nzc0X2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsInNldHVwU2V0SW50ZXJ2YWxfcmVhY3ROYXRpdmVXb3JrbGV0c19zZXRJbnRlcnZhbFBvbHlmaWxsSnMxRmFjdG9yeSIsIl9yZWYiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwiaW50ZXJ2YWxIYW5kbGVUb1RpbWVvdXRIYW5kbGUiLCJNYXAiLCJzZXRJbnRlcnZhbFBvbHlmaWxsIiwiY2FsbGJhY2siLCJkZWxheSIsImFyZ3VtZW50cyIsImxlbmd0aCIsInVuZGVmaW5lZCIsIl9sZW4iLCJhcmdzIiwiQXJyYXkiLCJfa2V5IiwiaW50ZXJ2YWxIYW5kbGUiLCJyZXBlYXRpbmdDYWxsYmFjayIsInRpbWVvdXRIYW5kbGUiLCJzZXRUaW1lb3V0Iiwic2V0IiwiY2xlYXJJbnRlcnZhbFBvbHlmaWxsIiwiZ2V0IiwiY2xlYXJUaW1lb3V0IiwiZGVsZXRlIiwiZ2xvYmFsVGhpcyIsInNldEludGVydmFsIiwiY2xlYXJJbnRlcnZhbCIsIl9fY2xvc3VyZSIsIl9fd29ya2xldEhhc2giLCJfX3BsdWdpblZlcnNpb24iLCJfX2luaXREYXRhIiwiX19zdGFja0RldGFpbHMiXSwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvcnVuTG9vcC9jb21tb24vc2V0SW50ZXJ2YWxQb2x5ZmlsbC50cyJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTs7QUFBQUEsTUFBQSxDQUFBQyxjQUFBLENBQUFDLE9BQUE7RUFBQUMsS0FBQTtBQUFBO0FBQUFELE9BQUEsQ0FBQUUsZ0JBQUE7QUFBQSxJQUFBQyxnQ0FBQTtFQUFBQyxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBQUEsSUFBQUosZ0JBQUEsR0FBQUYsT0FBQSxDQUFBRSxnQkFBQSxHQUVMLFNBQUFLLG1FQUFBQyxJQUFBO0VBQUEsSUFBQUwsZ0NBQUEsR0FBQUssSUFBQSxDQUFBTCxnQ0FBQTtFQUFBLElBQUFNLEVBQUEsUUFBQUMsTUFBQSxDQUFBQyxLQUFBO0VBQUEsSUFBQVQsZ0JBQUEsWUFBQUEsQ0FBQSxFQUE0QjtJQUdqQyxJQUFNVSw2QkFBa0QsR0FBRyxJQUFJQyxHQUFHLENBQUMsQ0FBQztJQUVwRSxJQUFNQyxtQkFBbUIsR0FBRyxTQUFBQSxDQUMxQkMsUUFBc0MsRUFHbkM7TUFBQSxJQUZIQyxLQUFhLEdBQUFDLFNBQUEsQ0FBQUMsTUFBQSxRQUFBRCxTQUFBLFFBQUFFLFNBQUEsR0FBQUYsU0FBQSxNQUFHLENBQUM7TUFBQSxTQUFBRyxJQUFBLEdBQUFILFNBQUEsQ0FBQUMsTUFBQSxFQUNkRyxJQUFlLE9BQUFDLEtBQUEsQ0FBQUYsSUFBQSxPQUFBQSxJQUFBLFdBQUFHLElBQUEsTUFBQUEsSUFBQSxHQUFBSCxJQUFBLEVBQUFHLElBQUE7UUFBZkYsSUFBZSxDQUFBRSxJQUFBLFFBQUFOLFNBQUEsQ0FBQU0sSUFBQTtNQUFBO01BRWxCLElBQUlDLGNBQWMsR0FBRyxDQUFDO01BRXRCLElBQU1DLGlCQUFpQixHQUFHQSxDQUFBLEtBQU07UUFDOUIsSUFBTUMsYUFBYSxHQUFHQyxVQUFVLENBQzlCRixpQkFBaUIsRUFDakJULEtBQ0YsQ0FBc0I7UUFDdEJKLDZCQUE2QixDQUFDZ0IsR0FBRyxDQUFDSixjQUFjLEVBQUVFLGFBQWEsQ0FBQztRQUNoRVgsUUFBUSxDQUFDLEdBQUdNLElBQUksQ0FBQztNQUNuQixDQUFDO01BRURHLGNBQWMsR0FBR0csVUFBVSxDQUFDRixpQkFBaUIsRUFBRVQsS0FBSyxDQUFzQjtNQUMxRUosNkJBQTZCLENBQUNnQixHQUFHLENBQUNKLGNBQWMsRUFBRUEsY0FBYyxDQUFDO01BRWpFLE9BQU9BLGNBQWM7SUFDdkIsQ0FBQztJQUVELElBQU1LLHFCQUFxQixHQUFJTCxjQUFzQixJQUFLO01BQ3hELElBQU1FLGFBQWEsR0FBR2QsNkJBQTZCLENBQUNrQixHQUFHLENBQUNOLGNBQWMsQ0FBQztNQUN2RU8sWUFBWSxDQUFDTCxhQUFhLENBQUM7TUFDM0JkLDZCQUE2QixDQUFDb0IsTUFBTSxDQUFDUixjQUFjLENBQUM7SUFDdEQsQ0FBQztJQUVEUyxVQUFVLENBQUNDLFdBQVcsR0FBR3BCLG1CQUF5QztJQUNsRW1CLFVBQVUsQ0FBQ0UsYUFBYSxHQUFHTixxQkFBNkM7RUFDMUU7RUFBQTNCLGdCQUFBLENBQUFrQyxTQUFBO0VBQUFsQyxnQkFBQSxDQUFBbUMsYUFBQTtFQUFBbkMsZ0JBQUEsQ0FBQW9DLGVBQUE7RUFBQXBDLGdCQUFBLENBQUFxQyxVQUFBLEdBQUFwQyxnQ0FBQTtFQUFBRCxnQkFBQSxDQUFBc0MsY0FBQSxHQUFBL0IsRUFBQTtFQUFBLE9BQUFQLGdCQUFBO0FBQUEsQ0FuQ087RUFBQUM7QUFBQSIsImlnbm9yZUxpc3QiOltdfQ==

@@ -1,0 +1,39 @@
+fda15a7f5f774cc6b19aa3b018364cf4
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.NativeGesture = void 0;
+var _gesture = require("./gesture");
+var NativeGesture = function (_gesture$BaseGesture) {
+  function NativeGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, NativeGesture);
+    _this = (0, _callSuper2.default)(this, NativeGesture);
+    _this.config = {};
+    _this.handlerName = 'NativeViewGestureHandler';
+    return _this;
+  }
+  (0, _inherits2.default)(NativeGesture, _gesture$BaseGesture);
+  return (0, _createClass2.default)(NativeGesture, [{
+    key: "shouldActivateOnStart",
+    value: function shouldActivateOnStart(value) {
+      this.config.shouldActivateOnStart = value;
+      return this;
+    }
+  }, {
+    key: "disallowInterruption",
+    value: function disallowInterruption(value) {
+      this.config.disallowInterruption = value;
+      return this;
+    }
+  }]);
+}(_gesture.BaseGesture);
+exports.NativeGesture = NativeGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJOYXRpdmVHZXN0dXJlIiwiX2dlc3R1cmUkQmFzZUdlc3R1cmUiLCJjb25zdHJ1Y3RvciIsIl90aGlzIiwiX2NsYXNzQ2FsbENoZWNrMiIsImRlZmF1bHQiLCJfY2FsbFN1cGVyMiIsImNvbmZpZyIsImhhbmRsZXJOYW1lIiwiX2luaGVyaXRzMiIsIl9jcmVhdGVDbGFzczIiLCJrZXkiLCJ2YWx1ZSIsInNob3VsZEFjdGl2YXRlT25TdGFydCIsImRpc2FsbG93SW50ZXJydXB0aW9uIiwiQmFzZUdlc3R1cmUiLCJleHBvcnRzIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL2hhbmRsZXJzL2dlc3R1cmVzL25hdGl2ZUdlc3R1cmUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7O0FBQUEsSUFBQUEsUUFBQSxHQUFBQyxPQUFBO0FBQUEsSUFJYUMsYUFBYSxhQUFBQyxvQkFBQTtFQUd4QixTQUFBQyxjQUFBLEVBQWM7SUFBQSxJQUFBQyxLQUFBO0lBQUEsSUFBQUMsZ0JBQUEsQ0FBQUMsT0FBQSxRQUFBTCxhQUFBO0lBQ1pHLEtBQUEsT0FBQUcsV0FBQSxDQUFBRCxPQUFBLFFBQUFMLGFBQUE7SUFBT0csS0FBQSxDQUhGSSxNQUFNLEdBQWdELENBQUMsQ0FBQztJQUs3REosS0FBQSxDQUFLSyxXQUFXLEdBQUcsMEJBQTBCO0lBQUEsT0FBQUwsS0FBQTtFQUMvQztFQUFBLElBQUFNLFVBQUEsQ0FBQUosT0FBQSxFQUFBTCxhQUFBLEVBQUFDLG9CQUFBO0VBQUEsV0FBQVMsYUFBQSxDQUFBTCxPQUFBLEVBQUFMLGFBQUE7SUFBQVcsR0FBQTtJQUFBQyxLQUFBLEVBTUEsU0FBQUMscUJBQXFCQSxDQUFDRCxLQUFjLEVBQUU7TUFDcEMsSUFBSSxDQUFDTCxNQUFNLENBQUNNLHFCQUFxQixHQUFHRCxLQUFLO01BQ3pDLE9BQU8sSUFBSTtJQUNiO0VBQUE7SUFBQUQsR0FBQTtJQUFBQyxLQUFBLEVBTUEsU0FBQUUsb0JBQW9CQSxDQUFDRixLQUFjLEVBQUU7TUFDbkMsSUFBSSxDQUFDTCxNQUFNLENBQUNPLG9CQUFvQixHQUFHRixLQUFLO01BQ3hDLE9BQU8sSUFBSTtJQUNiO0VBQUE7QUFBQSxFQXpCaUNkLFFBQUEsQ0FBQWlCLFdBQVc7QUEwQjdDQyxPQUFBLENBQUFoQixhQUFBLEdBQUFBLGFBQUEiLCJpZ25vcmVMaXN0IjpbXX0=

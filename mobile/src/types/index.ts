@@ -202,6 +202,12 @@ export interface AdminDashboardResponse {
   totalPlaylists: number;
   totalListeningHours: number;
   totalDownloads: number;
+  totalStorageUsedBytes?: number;
+  maxStorageLimitBytes?: number;
+  maxStorageThresholdBytes?: number;
+  storageLimitReached?: boolean;
+  r2ObjectCount?: number;
+  storageProvider?: string;
   topSongs: any[];
   topArtists: any[];
   topGenres: any[];
@@ -246,8 +252,6 @@ export interface UpdateProfileRequest {
 }
 
 export interface UpdateSettingsRequest {
-  streamingQuality?: string;
-  downloadQuality?: string;
   crossfadeDuration?: number;
   gaplessEnabled?: boolean;
   normalizeVolume?: boolean;
@@ -265,6 +269,32 @@ export interface UpdateSettingsRequest {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 export type PlaybackState = 'idle' | 'playing' | 'paused' | 'loading' | 'error';
+
+/**
+ * A song file picked from the device (single or bulk selection).
+ */
+export interface PickedSongFile {
+  uri: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+}
+
+/**
+ * Optional per-file metadata sent with a bulk upload. Any field left empty is
+ * auto-derived server-side from the audio file's embedded tags (FLAC/MP3...).
+ */
+export interface BulkUploadEntry {
+  title?: string;
+  artistName?: string;
+  albumName?: string;
+  genreName?: string;
+  language?: string;
+  releaseDate?: string;
+  trackNumber?: number;
+  discNumber?: number;
+  explicit?: boolean;
+}
 
 export interface DownloadResponse {
   id: string;

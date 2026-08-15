@@ -4,6 +4,7 @@ import com.spotibase.dto.request.CreateSongRequest;
 import com.spotibase.dto.response.PagedResponse;
 import com.spotibase.dto.response.SongResponse;
 import com.spotibase.entity.*;
+import com.spotibase.exception.BadRequestException;
 import com.spotibase.exception.ResourceNotFoundException;
 import com.spotibase.repository.*;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,6 @@ import org.springframework.mock.web.MockMultipartFile;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
@@ -49,6 +49,8 @@ class SongServiceTest {
     private StorageService storageService;
     @Mock
     private SongContributingArtistRepository contributingArtistRepository;
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private SongService songService;
@@ -382,13 +384,13 @@ class SongServiceTest {
     void getNewReleases_delegatesToFindNewReleases() {
         Artist artist = buildArtist("artist-1", "The Band");
         Song song = buildSong("song-1", "Fresh", artist);
-        when(songRepository.findNewReleases(any(LocalDate.class), any(Pageable.class)))
+        when(songRepository.findNewReleases(any(Pageable.class)))
                 .thenReturn(List.of(song));
 
         List<SongResponse> songs = songService.getNewReleases(null, 5);
 
         assertThat(songs).hasSize(1);
-        verify(songRepository).findNewReleases(any(LocalDate.class), argThat(p -> p.getPageSize() == 5));
+        verify(songRepository).findNewReleases(argThat(p -> p.getPageSize() == 5));
     }
 
     @Test
@@ -479,5 +481,140 @@ class SongServiceTest {
 
         verify(songRepository, never()).findByAlbumIdOrderByTrackNumber(anyString());
         verify(albumRepository, never()).save(any(Album.class));
+    }
+
+    // ---------- createSongsBulk ----------
+
+    @Test
+    void createSongsBulk_withoutFiles_throwsBadRequest() {
+        assertThatThrownBy(() -> songService.createSongsBulk(List.of(), List.of()))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("At least one audio file");
+    }
+
+    @Test
+    void createSongsBulk_withClientMetadata_createsSongs() {
+        Artist artist = buildArtist("artist-1", "Artist A");
+        when(artistRepository.findByName("Artist A")).thenReturn(Optional.empty());
+        when(artistRepository.save(any(Artist.class))).thenReturn(artist);
+        when(storageService.uploadSong(any(), anyString())).thenReturn("https://r2/songs/artist-1/a.flac");
+        when(songRepository.save(any(Song.class))).thenAnswer(inv -> {
+            Song s = inv.getArgument(0);
+            s.setId("song-new");
+            return s;
+        });
+
+        CreateSongRequest req = CreateSongRequest.builder()
+                .title("Track One")
+                .artistName("Artist A")
+                .releaseDate(LocalDate.of(2025, 1, 1))
+                .build();
+        MockMultipartFile file = new MockMultipartFile("files", "a.flac", "audio/flac", new byte[]{1, 2, 3});
+
+        List<SongResponse> created = songService.createSongsBulk(List.of(file), List.of(req));
+
+        assertThat(created).hasSize(1);
+        assertThat(created.get(0).getTitle()).isEqualTo("Track One");
+        assertThat(created.get(0).getArtistName()).isEqualTo("Artist A");
+        verify(artistRepository).save(any(Artist.class));
+        verify(storageService).uploadSong(any(), anyString());
+    }
+
+    @Test
+    void createSongsBulk_emptyRequestList_fallsBackToFilenameTitle() {
+        Artist artist = buildArtist("artist-1", "Unknown Artist");
+        when(artistRepository.findByName("Unknown Artist")).thenReturn(Optional.empty());
+        when(artistRepository.save(any(Artist.class))).thenReturn(artist);
+        when(storageService.uploadSong(any(), anyString())).thenReturn("https://r2/songs/artist-1/a.flac");
+        when(songRepository.save(any(Song.class))).thenAnswer(inv -> {
+            Song s = inv.getArgument(0);
+            s.setId("song-new");
+            return s;
+        });
+
+        MockMultipartFile file = new MockMultipartFile("files", "My Track.flac", "audio/flac", new byte[]{1, 2, 3});
+
+        List<SongResponse> created = songService.createSongsBulk(List.of(file), List.of());
+
+        assertThat(created).hasSize(1);
+        assertThat(created.get(0).getTitle()).isEqualTo("My Track");
+    }
+
+    @Test
+    void createSongsBulk_parsesRealFlacTags_andKeepsPartReadable() throws Exception {
+        // Regression: metadata parsing must NOT consume or move the multipart
+        // part. The old implementation used transferTo(), which on a real
+        // Tomcat server MOVES the disk-backed temp file - the subsequent
+        // storage upload (file.getBytes()) then failed with NoSuchFileException.
+        // MockMultipartFile copies, so this test additionally proves the tags
+        // are actually parsed from a real FLAC (old code also fell back to the
+        // filename because the temp file lost its .flac extension).
+        Artist artist = buildArtist("artist-1", "Orchestrator Test");
+        when(artistRepository.findByName("Orchestrator Test")).thenReturn(Optional.empty());
+        when(artistRepository.save(any(Artist.class))).thenReturn(artist);
+        when(albumRepository.findByArtistId("artist-1")).thenReturn(List.of());
+        Album album = Album.builder().id("album-1").name("Verification EP").artist(artist).build();
+        when(albumRepository.save(any(Album.class))).thenReturn(album);
+        when(storageService.uploadSong(any(), anyString())).thenReturn("https://r2/songs/artist-1/test-tone.flac");
+        when(songRepository.save(any(Song.class))).thenAnswer(inv -> {
+            Song s = inv.getArgument(0);
+            s.setId("song-new");
+            return s;
+        });
+
+        byte[] flacBytes;
+        try (java.io.InputStream in = getClass().getResourceAsStream("/test-tone.flac")) {
+            assertThat(in).as("test-tone.flac fixture missing").isNotNull();
+            flacBytes = in.readAllBytes();
+        }
+        MockMultipartFile file = new MockMultipartFile("files", "test-tone.flac", "audio/flac", flacBytes);
+
+        List<SongResponse> created = songService.createSongsBulk(List.of(file), List.of());
+
+        assertThat(created).hasSize(1);
+        // Tags parsed from the real FLAC (title/artist/album/duration)
+        assertThat(created.get(0).getTitle()).isEqualTo("Test Tone 440Hz");
+        assertThat(created.get(0).getArtistName()).isEqualTo("Orchestrator Test");
+        assertThat(created.get(0).getAlbumName()).isEqualTo("Verification EP");
+        assertThat(created.get(0).getDurationMs()).isGreaterThan(0);
+        // The part is still fully readable for the storage upload
+        assertThat(file.getBytes()).hasSize(flacBytes.length);
+    }
+
+    // ---------- recordPlayback ----------
+
+    @Test
+    void recordPlayback_upsertsRecentlyPlayed_andRecordsHistory() {
+        User user = User.builder().id("user-1").build();
+        when(userRepository.getReferenceById("user-1")).thenReturn(user);
+        when(listeningHistoryRepository.findFirstByUserIdAndSongIdOrderByPlayedAtDesc("user-1", "song-1"))
+                .thenReturn(Optional.empty());
+
+        songService.recordPlayback("user-1", "song-1", "STREAM");
+
+        verify(recentlyPlayedRepository).deleteByUserIdAndItemTypeAndItemId("user-1", "SONG", "song-1");
+        verify(recentlyPlayedRepository).save(any(RecentlyPlayed.class));
+        verify(listeningHistoryRepository).save(any(ListeningHistory.class));
+    }
+
+    @Test
+    void recordPlayback_skipsHistoryWhenRecentEntryExists() {
+        User user = User.builder().id("user-1").build();
+        when(userRepository.getReferenceById("user-1")).thenReturn(user);
+        when(listeningHistoryRepository.findFirstByUserIdAndSongIdOrderByPlayedAtDesc("user-1", "song-1"))
+                .thenReturn(Optional.of(ListeningHistory.builder().playedAt(java.time.LocalDateTime.now()).build()));
+
+        songService.recordPlayback("user-1", "song-1", "STREAM");
+
+        verify(recentlyPlayedRepository).save(any(RecentlyPlayed.class));
+        verify(listeningHistoryRepository, never()).save(any(ListeningHistory.class));
+    }
+
+    @Test
+    void recordPlayback_blankUser_isNoOp() {
+        songService.recordPlayback("", "song-1", "STREAM");
+
+        verifyNoInteractions(recentlyPlayedRepository);
+        verifyNoInteractions(listeningHistoryRepository);
     }
 }

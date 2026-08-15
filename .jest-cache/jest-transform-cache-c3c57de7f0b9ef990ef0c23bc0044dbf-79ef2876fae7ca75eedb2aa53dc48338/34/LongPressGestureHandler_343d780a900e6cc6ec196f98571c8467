@@ -1,0 +1,24 @@
+b03755130ecce390a29bbca5ec55bdaf
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.longPressHandlerName = exports.longPressGestureHandlerProps = exports.LongPressGestureHandler = void 0;
+var _createHandler = _interopRequireDefault(require("./createHandler"));
+var _gestureHandlerCommon = require("./gestureHandlerCommon");
+function _interopRequireDefault(e) {
+  return e && e.__esModule ? e : {
+    default: e
+  };
+}
+var longPressGestureHandlerProps = exports.longPressGestureHandlerProps = ['minDurationMs', 'maxDist', 'numberOfPointers'];
+var longPressHandlerName = exports.longPressHandlerName = 'LongPressGestureHandler';
+var LongPressGestureHandler = exports.LongPressGestureHandler = (0, _createHandler.default)({
+  name: longPressHandlerName,
+  allowedProps: [..._gestureHandlerCommon.baseGestureHandlerProps, ...longPressGestureHandlerProps],
+  config: {
+    shouldCancelWhenOutside: true
+  }
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfY3JlYXRlSGFuZGxlciIsIl9pbnRlcm9wUmVxdWlyZURlZmF1bHQiLCJyZXF1aXJlIiwiX2dlc3R1cmVIYW5kbGVyQ29tbW9uIiwiZSIsIl9fZXNNb2R1bGUiLCJkZWZhdWx0IiwibG9uZ1ByZXNzR2VzdHVyZUhhbmRsZXJQcm9wcyIsImV4cG9ydHMiLCJsb25nUHJlc3NIYW5kbGVyTmFtZSIsIkxvbmdQcmVzc0dlc3R1cmVIYW5kbGVyIiwibmFtZSIsImFsbG93ZWRQcm9wcyIsImJhc2VHZXN0dXJlSGFuZGxlclByb3BzIiwiY29uZmlnIiwic2hvdWxkQ2FuY2VsV2hlbk91dHNpZGUiXSwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvaGFuZGxlcnMvTG9uZ1ByZXNzR2VzdHVyZUhhbmRsZXIudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztBQUNBLElBQUFBLGNBQUEsR0FBQUMsc0JBQUEsQ0FBQUMsT0FBQTtBQUNBLElBQUFDLHFCQUFBLEdBQUFELE9BQUE7QUFHZ0MsU0FBQUQsdUJBQUFHLENBQUE7RUFBQSxPQUFBQSxDQUFBLElBQUFBLENBQUEsQ0FBQUMsVUFBQSxHQUFBRCxDQUFBO0lBQUFFLE9BQUEsRUFBQUY7RUFBQTtBQUFBO0FBRXpCLElBQU1HLDRCQUE0QixHQUFBQyxPQUFBLENBQUFELDRCQUFBLEdBQUcsQ0FDMUMsZUFBZSxFQUNmLFNBQVMsRUFDVCxrQkFBa0IsQ0FDVjtBQThCSCxJQUFNRSxvQkFBb0IsR0FBQUQsT0FBQSxDQUFBQyxvQkFBQSxHQUFHLHlCQUF5QjtBQVd0RCxJQUFNQyx1QkFBdUIsR0FBQUYsT0FBQSxDQUFBRSx1QkFBQSxHQUFHLElBQUFWLGNBQUEsQ0FBQU0sT0FBYSxFQUdsRDtFQUNBSyxJQUFJLEVBQUVGLG9CQUFvQjtFQUMxQkcsWUFBWSxFQUFFLENBQ1osR0FBR1QscUJBQUEsQ0FBQVUsdUJBQXVCLEVBQzFCLEdBQUdOLDRCQUE0QixDQUN2QjtFQUNWTyxNQUFNLEVBQUU7SUFDTkMsdUJBQXVCLEVBQUU7RUFDM0I7QUFDRixDQUFDLENBQUMiLCJpZ25vcmVMaXN0IjpbXX0=

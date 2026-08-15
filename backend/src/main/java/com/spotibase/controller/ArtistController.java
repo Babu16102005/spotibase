@@ -33,14 +33,16 @@ public class ArtistController {
             @RequestParam(defaultValue = "20") int size,
             @CurrentUser CustomUserDetails user) {
         log.info("Get all artists, page: {}, size: {}", page, size);
-        return ResponseEntity.ok(artistService.getAllArtists(page, size, user.getId()));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(artistService.getAllArtists(page, size, userId));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ArtistResponse> getArtistById(@PathVariable String id,
                                                          @CurrentUser CustomUserDetails user) {
         log.info("Get artist by id: {}", id);
-        return ResponseEntity.ok(artistService.getArtistById(id, user.getId()));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(artistService.getArtistById(id, userId));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -52,8 +54,9 @@ public class ArtistController {
             @RequestParam(value = "coverFile", required = false) MultipartFile coverFile,
             @CurrentUser CustomUserDetails user) {
         log.info("Create artist: {}", name);
+        String userId = user != null ? user.getId() : null;
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(artistService.createArtist(name, bio, imageFile, coverFile, user.getId()));
+                .body(artistService.createArtist(name, bio, imageFile, coverFile, userId));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -83,6 +86,9 @@ public class ArtistController {
     @PostMapping("/{id}/follow")
     public ResponseEntity<Void> followArtist(@CurrentUser CustomUserDetails user,
                                               @PathVariable String id) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         log.info("User {} follows artist {}", user.getId(), id);
         artistService.followArtist(user.getId(), id);
         return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -91,6 +97,9 @@ public class ArtistController {
     @DeleteMapping("/{id}/follow")
     public ResponseEntity<Void> unfollowArtist(@CurrentUser CustomUserDetails user,
                                                 @PathVariable String id) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         log.info("User {} unfollows artist {}", user.getId(), id);
         artistService.unfollowArtist(user.getId(), id);
         return ResponseEntity.noContent().build();

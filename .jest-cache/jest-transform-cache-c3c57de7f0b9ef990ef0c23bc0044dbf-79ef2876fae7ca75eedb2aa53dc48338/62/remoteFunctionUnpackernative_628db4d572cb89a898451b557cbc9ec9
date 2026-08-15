@@ -1,0 +1,37 @@
+2768a10beda44e1c354d988834d4c788
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.installRemoteFunctionUnpacker = void 0;
+var _worklet_16054547490208_init_data = {
+  code: "function installRemoteFunctionUnpacker_reactNativeWorklets_remoteFunctionUnpackerNativeJs1(){function remoteFunctionUnpacker(remoteFunctionName){remoteFunctionName=remoteFunctionName?remoteFunctionName:'anonymous';const fun=function installRemoteFunctionUnpacker_reactNativeWorklets_remoteFunctionUnpackerNativeJs1(){throw new Error(\"[Worklets] Tried to synchronously call a Remote Function. Called \\\"\"+remoteFunctionName+\"\\\" on the \"+globalThis.__RUNTIME_NAME+\" Runtime.\\nSee https://docs.swmansion.com/react-native-worklets/docs/guides/troubleshooting#tried-to-synchronously-call-a-remote-function for more details.\");};fun.__remoteFunction=true;return fun;}globalThis.__remoteFunctionUnpacker=remoteFunctionUnpacker;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/memory/remoteFunctionUnpacker.native.js",
+  sourceMap: "{\"version\":3,\"names\":[\"installRemoteFunctionUnpacker_reactNativeWorklets_remoteFunctionUnpackerNativeJs1\",\"remoteFunctionUnpacker\",\"remoteFunctionName\",\"fun\",\"remoteFunctionGuard\",\"Error\",\"globalThis\",\"__RUNTIME_NAME\",\"__remoteFunction\",\"__remoteFunctionUnpacker\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/memory/remoteFunctionUnpacker.native.js\"],\"mappings\":\"AAEO,SAAAA,iFAAyCA,CAAA,EAI9C,QAAS,CAAAC,sBAAsBA,CAACC,kBAAkB,CAAE,CAClDA,kBAAkB,CAAGA,kBAAkB,CAAGA,kBAAkB,CAAG,WAAW,CAC1E,KAAM,CAAAC,GAAG,CAAG,QAAS,CAAAC,iFAAsBA,CAAA,EACzC,KAAM,IAAI,CAAAC,KAAK,uEAAsEH,kBAAkB,cAAYI,UAAU,CAACC,cAAc,8JACD,CAAC,CAC9I,CAAC,CACDJ,GAAG,CAACK,gBAAgB,CAAG,IAAI,CAC3B,MAAO,CAAAL,GAAG,CACZ,CACAG,UAAU,CAACG,wBAAwB,CAAGR,sBAAsB,CAC9D\",\"ignoreList\":[]}"
+};
+var installRemoteFunctionUnpacker = exports.installRemoteFunctionUnpacker = function installRemoteFunctionUnpacker_reactNativeWorklets_remoteFunctionUnpackerNativeJs1Factory(_ref) {
+  var _worklet_16054547490208_init_data = _ref._worklet_16054547490208_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var installRemoteFunctionUnpacker = function () {
+    function remoteFunctionUnpacker(remoteFunctionName) {
+      remoteFunctionName = remoteFunctionName ? remoteFunctionName : 'anonymous';
+      var fun = function remoteFunctionGuard() {
+        throw new Error(`[Worklets] Tried to synchronously call a Remote Function. Called "${remoteFunctionName}" on the ${globalThis.__RUNTIME_NAME} Runtime.
+See https://docs.swmansion.com/react-native-worklets/docs/guides/troubleshooting#tried-to-synchronously-call-a-remote-function for more details.`);
+      };
+      fun.__remoteFunction = true;
+      return fun;
+    }
+    globalThis.__remoteFunctionUnpacker = remoteFunctionUnpacker;
+  };
+  installRemoteFunctionUnpacker.__closure = {};
+  installRemoteFunctionUnpacker.__workletHash = 16054547490208;
+  installRemoteFunctionUnpacker.__pluginVersion = "0.10.1";
+  installRemoteFunctionUnpacker.__initData = _worklet_16054547490208_init_data;
+  installRemoteFunctionUnpacker.__stackDetails = _e;
+  return installRemoteFunctionUnpacker;
+}({
+  _worklet_16054547490208_init_data
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImluc3RhbGxSZW1vdGVGdW5jdGlvblVucGFja2VyIiwiX3dvcmtsZXRfMTYwNTQ1NDc0OTAyMDhfaW5pdF9kYXRhIiwiY29kZSIsImxvY2F0aW9uIiwic291cmNlTWFwIiwiaW5zdGFsbFJlbW90ZUZ1bmN0aW9uVW5wYWNrZXJfcmVhY3ROYXRpdmVXb3JrbGV0c19yZW1vdGVGdW5jdGlvblVucGFja2VyTmF0aXZlSnMxRmFjdG9yeSIsIl9yZWYiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwicmVtb3RlRnVuY3Rpb25VbnBhY2tlciIsInJlbW90ZUZ1bmN0aW9uTmFtZSIsImZ1biIsInJlbW90ZUZ1bmN0aW9uR3VhcmQiLCJnbG9iYWxUaGlzIiwiX19SVU5USU1FX05BTUUiLCJfX3JlbW90ZUZ1bmN0aW9uIiwiX19yZW1vdGVGdW5jdGlvblVucGFja2VyIiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9tZW1vcnkvcmVtb3RlRnVuY3Rpb25VbnBhY2tlci5uYXRpdmUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7O0FBQUFBLE1BQUEsQ0FBQUMsY0FBQSxDQUFBQyxPQUFBO0VBQUFDLEtBQUE7QUFBQTtBQUFBRCxPQUFBLENBQUFFLDZCQUFBO0FBQUEsSUFBQUMsaUNBQUE7RUFBQUMsSUFBQTtFQUFBQyxRQUFBO0VBQUFDLFNBQUE7QUFBQTtBQUFBLElBQUFKLDZCQUFBLEdBQUFGLE9BQUEsQ0FBQUUsNkJBQUEsR0FFTCxTQUFBSyx5RkFBQUMsSUFBQTtFQUFBLElBQUFMLGlDQUFBLEdBQUFLLElBQUEsQ0FBQUwsaUNBQUE7RUFBQSxJQUFBTSxFQUFBLFFBQUFDLE1BQUEsQ0FBQUMsS0FBQTtFQUFBLElBQUFULDZCQUFBLFlBQUFBLENBQUEsRUFBeUM7SUFJOUMsU0FBU1Usc0JBQXNCQSxDQUM3QkMsa0JBQXNDLEVBQzdCO01BQ1RBLGtCQUFrQixHQUFHQSxrQkFBa0IsR0FBR0Esa0JBQWtCLEdBQUcsV0FBVztNQUUxRSxJQUFNQyxHQUFHLEdBQUcsU0FBU0MsbUJBQW1CQSxDQUFBLEVBQUc7UUFDekMsTUFBTSxJQUFJSixLQUFLLENBQUMscUVBQXFFRSxrQkFBa0IsWUFBWUcsVUFBVSxDQUFDQyxjQUFjO0FBQ2xKLGlKQUFpSixDQUFDO01BQzlJLENBQUM7TUFFREgsR0FBRyxDQUFDSSxnQkFBZ0IsR0FBRyxJQUFJO01BQzNCLE9BQU9KLEdBQUc7SUFDWjtJQUVBRSxVQUFVLENBQUNHLHdCQUF3QixHQUNqQ1Asc0JBQWdEO0VBQ3BEO0VBQUFWLDZCQUFBLENBQUFrQixTQUFBO0VBQUFsQiw2QkFBQSxDQUFBbUIsYUFBQTtFQUFBbkIsNkJBQUEsQ0FBQW9CLGVBQUE7RUFBQXBCLDZCQUFBLENBQUFxQixVQUFBLEdBQUFwQixpQ0FBQTtFQUFBRCw2QkFBQSxDQUFBc0IsY0FBQSxHQUFBZixFQUFBO0VBQUEsT0FBQVAsNkJBQUE7QUFBQSxDQXBCTztFQUFBQztBQUFBIiwiaWdub3JlTGlzdCI6W119

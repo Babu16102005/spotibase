@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export const formatDuration = (ms: number): string => {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -5,27 +7,22 @@ export const formatDuration = (ms: number): string => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
-export const formatFileSize = (bytes: number): string => {
-  if (!bytes || bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / Math.pow(1024, i);
-  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-};
-
 export const formatCount = (count: number): string => {
-  if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
-  if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  }
   return count.toString();
 };
 
-export const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+export const formatFileSize = (bytes?: number | null): string => {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const unitIndex = Math.min(i, units.length - 1);
+  return `${(bytes / Math.pow(1024, unitIndex)).toFixed(unitIndex === 0 ? 0 : 2)} ${units[unitIndex]}`;
 };
 
 export const getGreeting = (): string => {
@@ -35,18 +32,43 @@ export const getGreeting = (): string => {
   return 'Good Evening';
 };
 
-export const getRelativeTime = (dateStr: string): string => {
-  const now = new Date();
+export const formatDate = (dateStr?: string | null): string => {
+  if (!dateStr) return '';
   const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
+export const formatYear = (dateStr?: string | null): string => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '';
+  return String(date.getFullYear());
+};
+
+export const formatReleaseDate = (dateStr?: string | null): string => {
+  return formatDate(dateStr);
+};
+
+export const getRelativeTime = (dateStr?: string | null): string => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '';
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
   return formatDate(dateStr);
 };
 
@@ -58,9 +80,17 @@ export const getImageUrl = (url?: string, size: number = 300): string => {
   return url;
 };
 
-// MMKV storage cache
-let mmkvInstance: any = null;
+// Bundled placeholder art (no external image service dependency).
+// Used when a cover/avatar URL is missing. Imported at build time so it is
+// packed into the bundle on both native and web.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+export const PLACEHOLDER_IMAGE = require('../../assets/placeholder.png');
 
+export const coverSource = (url?: string | null): { uri: string } | number =>
+  url ? { uri: url } : PLACEHOLDER_IMAGE;
+
+// Multi-instance MMKV & in-memory cache keyed by store ID
+const mmkvInstances: Record<string, any> = {};
 const memoryStore: Record<string, string> = {};
 
 const makeFallbackStorage = (id: string) => {
@@ -70,11 +100,11 @@ const makeFallbackStorage = (id: string) => {
   return {
     getString: (key: string) => {
       if (webStorage) return webStorage.getItem(prefix + key);
-      return memoryStore[key] || null;
+      return memoryStore[prefix + key] || null;
     },
     set: (key: string, value: string) => {
       if (webStorage) webStorage.setItem(prefix + key, value);
-      else memoryStore[key] = value;
+      else memoryStore[prefix + key] = value;
     },
     clearAll: () => {
       if (webStorage) {
@@ -82,23 +112,27 @@ const makeFallbackStorage = (id: string) => {
           .filter((k) => k.startsWith(prefix))
           .forEach((k) => webStorage.removeItem(k));
       } else {
-        Object.keys(memoryStore).forEach((k) => delete memoryStore[k]);
+        Object.keys(memoryStore)
+          .filter((k) => k.startsWith(prefix))
+          .forEach((k) => delete memoryStore[k]);
       }
     },
   };
 };
 
 export const getStorage = (id: string) => {
-  if (!mmkvInstance) {
+  if (!mmkvInstances[id]) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { MMKV } = require('react-native-mmkv');
-      mmkvInstance = new MMKV({ id });
+      mmkvInstances[id] = new MMKV({ id });
     } catch {
       // Fallback for environments where MMKV is not available (web, tests):
       // localStorage on web, in-memory otherwise.
-      mmkvInstance = makeFallbackStorage(id);
+      mmkvInstances[id] = makeFallbackStorage(id);
     }
   }
-  return mmkvInstance;
+  return mmkvInstances[id];
 };
+
+export * from './playerSharedValue';

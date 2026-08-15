@@ -1,0 +1,79 @@
+3930ac69e761e07dcc8614e35086122d
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _superPropGet2 = _interopRequireDefault(require("@babel/runtime/helpers/superPropGet"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.hoverGestureHandlerProps = exports.HoverGesture = exports.HoverEffect = void 0;
+var _gesture = require("./gesture");
+var HoverEffect = exports.HoverEffect = function (HoverEffect) {
+  HoverEffect[HoverEffect["NONE"] = 0] = "NONE";
+  HoverEffect[HoverEffect["LIFT"] = 1] = "LIFT";
+  HoverEffect[HoverEffect["HIGHLIGHT"] = 2] = "HIGHLIGHT";
+  return HoverEffect;
+}({});
+var hoverGestureHandlerProps = exports.hoverGestureHandlerProps = ['hoverEffect'];
+var _worklet_15895574323364_init_data = {
+  code: "function changeEventCalculator_reactNativeGestureHandler_hoverGestureJs1(current,previous){let changePayload;if(previous===undefined){changePayload={changeX:current.x,changeY:current.y};}else{changePayload={changeX:current.x-previous.x,changeY:current.y-previous.y};}return{...current,...changePayload};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/hoverGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"changeEventCalculator_reactNativeGestureHandler_hoverGestureJs1\",\"current\",\"previous\",\"changePayload\",\"undefined\",\"changeX\",\"x\",\"changeY\",\"y\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/hoverGesture.js\"],\"mappings\":\"AAcA,SAAAA,+DAAkDA,CAAAC,OAAA,CAAAC,QAAA,EAGhD,GAAI,CAAAC,aAAa,CACjB,GAAID,QAAQ,GAAKE,SAAS,CAAE,CAC1BD,aAAa,CAAG,CACdE,OAAO,CAAEJ,OAAO,CAACK,CAAC,CAClBC,OAAO,CAAEN,OAAO,CAACO,CACnB,CAAC,CACH,CAAC,IAAM,CACLL,aAAa,CAAG,CACdE,OAAO,CAAEJ,OAAO,CAACK,CAAC,CAAGJ,QAAQ,CAACI,CAAC,CAC/BC,OAAO,CAAEN,OAAO,CAACO,CAAC,CAAGN,QAAQ,CAACM,CAChC,CAAC,CACH,CACA,MAAO,CACL,GAAGP,OAAO,CACV,GAAGE,aACL,CAAC,CACH\",\"ignoreList\":[]}"
+};
+var changeEventCalculator = function changeEventCalculator_reactNativeGestureHandler_hoverGestureJs1Factory(_ref) {
+  var _worklet_15895574323364_init_data = _ref._worklet_15895574323364_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var changeEventCalculator = function (current, previous) {
+    var changePayload;
+    if (previous === undefined) {
+      changePayload = {
+        changeX: current.x,
+        changeY: current.y
+      };
+    } else {
+      changePayload = {
+        changeX: current.x - previous.x,
+        changeY: current.y - previous.y
+      };
+    }
+    return Object.assign({}, current, changePayload);
+  };
+  changeEventCalculator.__closure = {};
+  changeEventCalculator.__workletHash = 15895574323364;
+  changeEventCalculator.__pluginVersion = "0.10.1";
+  changeEventCalculator.__initData = _worklet_15895574323364_init_data;
+  changeEventCalculator.__stackDetails = _e;
+  return changeEventCalculator;
+}({
+  _worklet_15895574323364_init_data
+});
+var HoverGesture = function (_gesture$ContinousBas) {
+  function HoverGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, HoverGesture);
+    _this = (0, _callSuper2.default)(this, HoverGesture);
+    _this.config = {};
+    _this.handlerName = 'HoverGestureHandler';
+    return _this;
+  }
+  (0, _inherits2.default)(HoverGesture, _gesture$ContinousBas);
+  return (0, _createClass2.default)(HoverGesture, [{
+    key: "effect",
+    value: function effect(_effect) {
+      this.config.hoverEffect = _effect;
+      return this;
+    }
+  }, {
+    key: "onChange",
+    value: function onChange(callback) {
+      this.handlers.changeEventCalculator = changeEventCalculator;
+      return (0, _superPropGet2.default)(HoverGesture, "onChange", this, 3)([callback]);
+    }
+  }]);
+}(_gesture.ContinousBaseGesture);
+exports.HoverGesture = HoverGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJIb3ZlckVmZmVjdCIsImV4cG9ydHMiLCJob3Zlckdlc3R1cmVIYW5kbGVyUHJvcHMiLCJfd29ya2xldF8xNTg5NTU3NDMyMzM2NF9pbml0X2RhdGEiLCJjb2RlIiwibG9jYXRpb24iLCJzb3VyY2VNYXAiLCJjaGFuZ2VFdmVudENhbGN1bGF0b3IiLCJjaGFuZ2VFdmVudENhbGN1bGF0b3JfcmVhY3ROYXRpdmVHZXN0dXJlSGFuZGxlcl9ob3Zlckdlc3R1cmVKczFGYWN0b3J5IiwiX3JlZiIsIl9lIiwiZ2xvYmFsIiwiRXJyb3IiLCJjdXJyZW50IiwicHJldmlvdXMiLCJjaGFuZ2VQYXlsb2FkIiwidW5kZWZpbmVkIiwiY2hhbmdlWCIsIngiLCJjaGFuZ2VZIiwieSIsIk9iamVjdCIsImFzc2lnbiIsIl9fY2xvc3VyZSIsIl9fd29ya2xldEhhc2giLCJfX3BsdWdpblZlcnNpb24iLCJfX2luaXREYXRhIiwiX19zdGFja0RldGFpbHMiLCJIb3Zlckdlc3R1cmUiLCJfZ2VzdHVyZSRDb250aW5vdXNCYXMiLCJjb25zdHJ1Y3RvciIsIl90aGlzIiwiX2NsYXNzQ2FsbENoZWNrMiIsImRlZmF1bHQiLCJfY2FsbFN1cGVyMiIsImNvbmZpZyIsImhhbmRsZXJOYW1lIiwiX2luaGVyaXRzMiIsIl9jcmVhdGVDbGFzczIiLCJrZXkiLCJ2YWx1ZSIsImVmZmVjdCIsImhvdmVyRWZmZWN0Iiwib25DaGFuZ2UiLCJjYWxsYmFjayIsImhhbmRsZXJzIiwiX3N1cGVyUHJvcEdldDIiLCJDb250aW5vdXNCYXNlR2VzdHVyZSJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9oYW5kbGVycy9nZXN0dXJlcy9ob3Zlckdlc3R1cmUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7OztBQUFBLElBQUFBLFFBQUEsR0FBQUMsT0FBQTtBQUFvRSxJQVN4REMsV0FBVyxHQUFBQyxPQUFBLENBQUFELFdB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

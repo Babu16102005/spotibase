@@ -21,7 +21,8 @@ public class HomeController {
 
     @GetMapping
     public ResponseEntity<HomeResponse> getHomeSections(@CurrentUser CustomUserDetails user) {
-        log.info("Get home sections for user: {}", user.getId());
-        return ResponseEntity.ok(recommendationService.getHomeSections(user.getId()));
+        String userId = user != null ? user.getId() : null;
+        log.info("Get home sections for user: {}", userId != null ? userId : "guest");
+        return ResponseEntity.ok(recommendationService.getHomeSections(userId));
     }
 }

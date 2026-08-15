@@ -134,9 +134,13 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void generalException_mapsTo500WithGenericMessage() {
+        org.springframework.mock.web.MockHttpServletResponse servletResponse =
+                new org.springframework.mock.web.MockHttpServletResponse();
         ResponseEntity<ErrorResponse> response =
-                handler.handleGeneral(new IllegalStateException("boom"));
+                handler.handleGeneral(new IllegalStateException("boom"), servletResponse);
 
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(servletResponse.getContentType()).isEqualTo("application/json");
         assertBodyShape(response, HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
     }
 }

@@ -1,0 +1,55 @@
+e439c5f11a12aad3d7afaac5c793023a
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.DynamicFlags = void 0;
+exports.getDynamicFeatureFlag = getDynamicFeatureFlag;
+exports.getStaticFeatureFlag = getStaticFeatureFlag;
+exports.setDynamicFeatureFlag = setDynamicFeatureFlag;
+var _logger = require("../debug/logger.js");
+var _NativeWorklets = require("../WorkletsModule/NativeWorklets");
+var DynamicFlags = exports.DynamicFlags = {
+  EXAMPLE_DYNAMIC_FLAG: true,
+  init() {
+    Object.keys(DynamicFlags).forEach(key => {
+      if (key !== 'init' && key !== 'setFlag' && key !== 'getFlag') {
+        _NativeWorklets.WorkletsModule.setDynamicFeatureFlag(key, DynamicFlags[key]);
+      }
+    });
+  },
+  setFlag(name, value) {
+    if (name in DynamicFlags) {
+      DynamicFlags[name] = value;
+      _NativeWorklets.WorkletsModule.setDynamicFeatureFlag(name, value);
+    } else {
+      _logger.logger.warn(`The feature flag: '${name}' no longer exists, you can safely remove invocation of \`setDynamicFeatureFlag('${name}')\` from your code.`);
+    }
+  },
+  getFlag(name) {
+    if (name in DynamicFlags) {
+      return DynamicFlags[name];
+    } else {
+      _logger.logger.warn(`The feature flag: '${name}' no longer exists, you can safely remove invocation of \`getDynamicFeatureFlag('${name}')\` from your code.`);
+      return false;
+    }
+  }
+};
+DynamicFlags.init();
+function setDynamicFeatureFlag(name, value) {
+  DynamicFlags.setFlag(name, value);
+}
+function getDynamicFeatureFlag(name) {
+  return DynamicFlags.getFlag(name);
+}
+var staticFeatureFlags = {};
+function getStaticFeatureFlag(name) {
+  if (name in staticFeatureFlags) {
+    return staticFeatureFlags[name];
+  }
+  var featureFlagValue = _NativeWorklets.WorkletsModule.getStaticFeatureFlag(name);
+  staticFeatureFlags[name] = featureFlagValue;
+  return featureFlagValue;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsIkR5bmFtaWNGbGFncyIsImdldER5bmFtaWNGZWF0dXJlRmxhZyIsImdldFN0YXRpY0ZlYXR1cmVGbGFnIiwic2V0RHluYW1pY0ZlYXR1cmVGbGFnIiwiX2xvZ2dlciIsInJlcXVpcmUiLCJfTmF0aXZlV29ya2xldHMiLCJFWEFNUExFX0RZTkFNSUNfRkxBRyIsImluaXQiLCJrZXlzIiwiZm9yRWFjaCIsImtleSIsIldvcmtsZXRzTW9kdWxlIiwic2V0RmxhZyIsIm5hbWUiLCJsb2dnZXIiLCJ3YXJuIiwiZ2V0RmxhZyIsInN0YXRpY0ZlYXR1cmVGbGFncyIsImZlYXR1cmVGbGFnVmFsdWUiXSwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvZmVhdHVyZUZsYWdzL2ZlYXR1cmVGbGFncy5uYXRpdmUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7O0FBQUFBLE1BQUEsQ0FBQUMsY0FBQSxDQUFBQyxPQUFBO0VBQUFDLEtBQUE7QUFBQTtBQUFBRCxPQUFBLENBQUFFLFlBQUE7QUFBQUYsT0FBQSxDQUFBRyxxQkFBQSxHQUFBQSxxQkFBQTtBQUFBSCxPQUFBLENBQUFJLG9CQUFBLEdBQUFBLG9CQUFBO0FBQUFKLE9BQUEsQ0FBQUsscUJBQUEsR0FBQUEscUJBQUE7QUFDWixJQUFBQyxPQUFBLEdBQUFDLE9BQUE7QUFDQSxJQUFBQyxlQUFBLEdBQUFELE9BQUE7QUFPTyxJQUFNTCxZQUE4QixHQUFBRixPQUFBLENBQUFFLFlBQUEsR0FBRztFQUM1Q08sb0JBQW9CLEVBQUUsSUFBSTtFQUUxQkMsSUFBSUEsQ0FBQSxFQUFHO0lBQ0xaLE1BQU0sQ0FBQ2EsSUFBSSxDQUFDVCxZQUFZLENBQUMsQ0FBQ1UsT0FBTyxDQUFFQyxHQUFHLElBQUs7TUFDekMsSUFBSUEsR0FBRyxLQUFLLE1BQU0sSUFBSUEsR0FBRyxLQUFLLFNBQVMsSUFBSUEsR0FBRyxLQUFLLFNBQVMsRUFBRTtRQUM1REMsOEJBQWMsQ0FBQ1QscUJBQXFCLENBQ2xDUSxHQUFHLEVBQ0hYLFlBQVksQ0FBQ1csR0FBRyxDQUNsQixDQUFDO01BQ0g7SUFDRixDQUFDLENBQUM7RUFDSixDQUFDO0VBQ0RFLE9BQU9BLENBQUNDLElBQUksRUFBRWYsS0FBSyxFQUFFO0lBQ25CLElBQUllLElBQUksSUFBSWQsWUFBWSxFQUFFO01BQ3hCQSxZQUFZLENBQUNjLElBQUksQ0FBQyxHQUFHZixLQUFLO01BQzFCYSw4QkFBYyxDQUFDVCxxQkFBcUIsQ0FBQ1csSUFBSSxFQUFFZixLQUFLLENBQUM7SUFDbkQsQ0FBQyxNQUFNO01BQ0xnQixjQUFNLENBQUNDLElBQUksQ0FDVCxzQkFBc0JGLElBQUksb0ZBQW9GQSxJQUFJLHNCQUNwSCxDQUFDO0lBQ0g7RUFDRixDQUFDO0VBQ0RHLE9BQU9BLENBQUNILElBQUksRUFBRTtJQUNaLElBQUlBLElBQUksSUFBSWQsWUFBWSxFQUFFO01BQ3hCLE9BQU9BLFlBQVksQ0FBQ2MsSUFBSSxDQUFDO0lBQzNCLENBQUMsTUFBTTtNQUNMQyxjQUFNLENBQUNDLElBQUksQ0FDVCxzQkFBc0JGLElBQUksb0ZBQW9GQSxJQUFJLHNCQUNwSCxDQUFDO01BQ0QsT0FBTyxLQUFLO0lBQ2Q7RUFDRjtBQUNGLENBQUM7QUFDRGQsWUFBWSxDQUFDUSxJQUFJLENBQUMsQ0FBQztBQUdaLFNBQVNMLHFCQUFxQkEsQ0FDbkNXLElBQXFCLEVBQ3JCZixLQUFjLEVBQ1I7RUFDTkMsWUFBWSxDQUFDYSxPQUFPLENBQUNDLElBQUksRUFBRWYsS0FBSyxDQUFDO0FBQ25DO0FBR08sU0FBU0UscUJBQXFCQSxDQUFDYSxJQUFxQixFQUFXO0VBQ3BFLE9BQU9kLFlBQVksQ0FBQ2lCLE9BQU8sQ0FBQ0gsSUFBSSxDQUFDO0FBQ25DO0FBRUEsSUFBTUksa0JBQXFELEdBQUcsQ0FBQyxDQUFDO0FBRXpELFNBQVNoQixvQkFBb0JBLENBQ2xDWSxJQUFvQyxFQUMzQjtFQUNULElBQUlBLElBQUksSUFBSUksa0JBQWtCLEVBQUU7SUFDOUIsT0FBT0Esa0JBQWtCLENBQUNKLElBQUksQ0FBQztFQUNqQztFQUNBLElBQU1LLGdCQUFnQixHQUFHUCw4QkFBYyxDQUFDVixvQkFBb0IsQ0FBQ1ksSUFBSSxDQUFDO0VBQ2xFSSxrQkFBa0IsQ0FBQ0osSUFBSSxDQUFDLEdBQUdLLGdCQUFnQjtFQUMzQyxPQUFPQSxnQkFBZ0I7QUFDekIiLCJpZ25vcmVMaXN0IjpbXX0=

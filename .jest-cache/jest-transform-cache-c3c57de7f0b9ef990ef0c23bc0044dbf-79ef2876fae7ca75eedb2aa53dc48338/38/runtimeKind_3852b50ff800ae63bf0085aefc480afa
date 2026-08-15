@@ -1,0 +1,117 @@
+277e362aa8a7a28a1bf98b8bef8095ef
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.isWorkletRuntime = exports.isWorkerRuntime = exports.isUIRuntime = exports.isRNRuntime = exports.getRuntimeKind = exports.RuntimeKind = void 0;
+var RuntimeKind = exports.RuntimeKind = function (RuntimeKind) {
+  RuntimeKind[RuntimeKind["ReactNative"] = 1] = "ReactNative";
+  RuntimeKind[RuntimeKind["UI"] = 2] = "UI";
+  RuntimeKind[RuntimeKind["Worker"] = 3] = "Worker";
+  return RuntimeKind;
+}({});
+var _worklet_5459235766634_init_data = {
+  code: "function getRuntimeKind_reactNativeWorklets_runtimeKindJs1(){return globalThis.__RUNTIME_KIND;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js",
+  sourceMap: "{\"version\":3,\"names\":[\"getRuntimeKind_reactNativeWorklets_runtimeKindJs1\",\"globalThis\",\"__RUNTIME_KIND\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js\"],\"mappings\":\"AA2BO,SAAAA,iDAA0BA,CAAA,EAG/B,MAAO,CAAAC,UAAU,CAACC,cAAc,CAClC\",\"ignoreList\":[]}"
+};
+var getRuntimeKind = exports.getRuntimeKind = function getRuntimeKind_reactNativeWorklets_runtimeKindJs1Factory(_ref) {
+  var _worklet_5459235766634_init_data = _ref._worklet_5459235766634_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var getRuntimeKind = function () {
+    return globalThis.__RUNTIME_KIND;
+  };
+  getRuntimeKind.__closure = {};
+  getRuntimeKind.__workletHash = 5459235766634;
+  getRuntimeKind.__pluginVersion = "0.10.1";
+  getRuntimeKind.__initData = _worklet_5459235766634_init_data;
+  getRuntimeKind.__stackDetails = _e;
+  return getRuntimeKind;
+}({
+  _worklet_5459235766634_init_data
+});
+var _worklet_14260766394141_init_data = {
+  code: "function isRNRuntime_reactNativeWorklets_runtimeKindJs2(){return globalThis.__RUNTIME_KIND===1;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js",
+  sourceMap: "{\"version\":3,\"names\":[\"isRNRuntime_reactNativeWorklets_runtimeKindJs2\",\"globalThis\",\"__RUNTIME_KIND\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js\"],\"mappings\":\"AAwCO,SAAAA,8CAAuBA,CAAA,EAG5B,MAAO,CAAAC,UAAU,CAACC,cAAc,GAAK,CAAC,CACxC\",\"ignoreList\":[]}"
+};
+var isRNRuntime = exports.isRNRuntime = function isRNRuntime_reactNativeWorklets_runtimeKindJs2Factory(_ref2) {
+  var _worklet_14260766394141_init_data = _ref2._worklet_14260766394141_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var isRNRuntime = function () {
+    return globalThis.__RUNTIME_KIND === 1;
+  };
+  isRNRuntime.__closure = {};
+  isRNRuntime.__workletHash = 14260766394141;
+  isRNRuntime.__pluginVersion = "0.10.1";
+  isRNRuntime.__initData = _worklet_14260766394141_init_data;
+  isRNRuntime.__stackDetails = _e;
+  return isRNRuntime;
+}({
+  _worklet_14260766394141_init_data
+});
+var _worklet_5954481634144_init_data = {
+  code: "function isWorkletRuntime_reactNativeWorklets_runtimeKindJs3(){return globalThis.__RUNTIME_KIND!==1;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js",
+  sourceMap: "{\"version\":3,\"names\":[\"isWorkletRuntime_reactNativeWorklets_runtimeKindJs3\",\"globalThis\",\"__RUNTIME_KIND\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js\"],\"mappings\":\"AAqDO,SAAAA,mDAA4BA,CAAA,EAGjC,MAAO,CAAAC,UAAU,CAACC,cAAc,GAAK,CAAC,CACxC\",\"ignoreList\":[]}"
+};
+var isWorkletRuntime = exports.isWorkletRuntime = function isWorkletRuntime_reactNativeWorklets_runtimeKindJs3Factory(_ref3) {
+  var _worklet_5954481634144_init_data = _ref3._worklet_5954481634144_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var isWorkletRuntime = function () {
+    return globalThis.__RUNTIME_KIND !== 1;
+  };
+  isWorkletRuntime.__closure = {};
+  isWorkletRuntime.__workletHash = 5954481634144;
+  isWorkletRuntime.__pluginVersion = "0.10.1";
+  isWorkletRuntime.__initData = _worklet_5954481634144_init_data;
+  isWorkletRuntime.__stackDetails = _e;
+  return isWorkletRuntime;
+}({
+  _worklet_5954481634144_init_data
+});
+var _worklet_3846245719320_init_data = {
+  code: "function isUIRuntime_reactNativeWorklets_runtimeKindJs4(){return globalThis.__RUNTIME_KIND===2;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js",
+  sourceMap: "{\"version\":3,\"names\":[\"isUIRuntime_reactNativeWorklets_runtimeKindJs4\",\"globalThis\",\"__RUNTIME_KIND\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js\"],\"mappings\":\"AAiEO,SAAAA,8CAAuBA,CAAA,EAG5B,MAAO,CAAAC,UAAU,CAACC,cAAc,GAAK,CAAC,CACxC\",\"ignoreList\":[]}"
+};
+var isUIRuntime = exports.isUIRuntime = function isUIRuntime_reactNativeWorklets_runtimeKindJs4Factory(_ref4) {
+  var _worklet_3846245719320_init_data = _ref4._worklet_3846245719320_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var isUIRuntime = function () {
+    return globalThis.__RUNTIME_KIND === 2;
+  };
+  isUIRuntime.__closure = {};
+  isUIRuntime.__workletHash = 3846245719320;
+  isUIRuntime.__pluginVersion = "0.10.1";
+  isUIRuntime.__initData = _worklet_3846245719320_init_data;
+  isUIRuntime.__stackDetails = _e;
+  return isUIRuntime;
+}({
+  _worklet_3846245719320_init_data
+});
+var _worklet_7400609686962_init_data = {
+  code: "function isWorkerRuntime_reactNativeWorklets_runtimeKindJs5(){return globalThis.__RUNTIME_KIND===3;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js",
+  sourceMap: "{\"version\":3,\"names\":[\"isWorkerRuntime_reactNativeWorklets_runtimeKindJs5\",\"globalThis\",\"__RUNTIME_KIND\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runtimeKind.js\"],\"mappings\":\"AA8EO,SAAAA,kDAA2BA,CAAA,EAGhC,MAAO,CAAAC,UAAU,CAACC,cAAc,GAAK,CAAC,CACxC\",\"ignoreList\":[]}"
+};
+var isWorkerRuntime = exports.isWorkerRuntime = function isWorkerRuntime_reactNativeWorklets_runtimeKindJs5Factory(_ref5) {
+  var _worklet_7400609686962_init_data = _ref5._worklet_7400609686962_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var isWorkerRuntime = function () {
+    return globalThis.__RUNTIME_KIND === 3;
+  };
+  isWorkerRuntime.__closure = {};
+  isWorkerRuntime.__workletHash = 7400609686962;
+  isWorkerRuntime.__pluginVersion = "0.10.1";
+  isWorkerRuntime.__initData = _worklet_7400609686962_init_data;
+  isWorkerRuntime.__stackDetails = _e;
+  return isWorkerRuntime;
+}({
+  _worklet_7400609686962_init_data
+});
+if (globalThis.__RUNTIME_KIND === undefined) {
+  globalThis.__RUNTIME_KIND = RuntimeKind.ReactNative;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImlzV29ya2xldFJ1bnRpbWUiLCJpc1dvcmtlclJ1bnRpbWUiLCJpc1VJUnVudGltZSIsImlzUk5SdW50aW1lIiwiZ2V0UnVudGltZUtpbmQiLCJSdW50aW1lS2luZCIsIl93b3JrbGV0XzU0NTkyMzU3NjY2MzRfaW5pdF9kYXRhIiwiY29kZSIsImxvY2F0aW9uIiwic291cmNlTWFwIiwiZ2V0UnVudGltZUtpbmRfcmVhY3ROYXRpdmVXb3JrbGV0c19ydW50aW1lS2luZEpzMUZhY3RvcnkiLCJfcmVmIiwiX2UiLCJnbG9iYWwiLCJFcnJvciIsImdsb2JhbFRoaXMiLCJfX1JVTlRJTUVfS0lORCIsIl9fY2xvc3VyZSIsIl9fd29ya2xldEhhc2giLCJfX3BsdWdpblZlcnNpb24iLCJfX2luaXREYXRhIiwiX19zdGFja0RldGFpbHMiLCJfd29ya2xldF8xNDI2MDc2NjM5NDE0MV9pbml0X2RhdGEiLCJpc1JOUnVudGltZV9yZWFjdE5hdGl2ZVdvcmtsZXRzX3J1bnRpbWVLaW5kSnMyRmFjdG9yeSIsIl9yZWYyIiwiX3dvcmtsZXRfNTk1NDQ4MTYzNDE0NF9pbml0X2RhdGEiLCJpc1dvcmtsZXRSdW50aW1lX3JlYWN0TmF0aXZlV29ya2xldHNfcnVudGltZUtpbmRKczNGYWN0b3J5IiwiX3JlZjMiLCJfd29ya2xldF8zODQ2MjQ1NzE5MzIwX2luaXRfZGF0YSIsImlzVUlSdW50aW1lX3JlYWN0TmF0aXZlV29ya2xldHNfcnVudGltZUtpbmRKczRGYWN0b3J5IiwiX3JlZjQiLCJfd29ya2xldF83NDAwNjA5Njg2OTYyX2luaXRfZGF0YSIsImlzV29ya2VyUnVudGltZV9yZWFjdE5hdGl2ZVdvcmtsZXRzX3J1bnRpbWVLaW5kSnM1RmFjdG9yeSIsIl9yZWY1IiwidW5kZWZpbmVkIiwiUmVhY3ROYXRpdmUiXSwic291cmNlcyI6WyIuLi8uLi9zcmMvcnVudGltZUtpbmQudHMiXSwic291cmNl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

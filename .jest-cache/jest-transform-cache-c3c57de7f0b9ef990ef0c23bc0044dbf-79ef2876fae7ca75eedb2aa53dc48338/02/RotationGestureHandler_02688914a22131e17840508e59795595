@@ -1,0 +1,21 @@
+339a56280c460a52cc2f4e43eecbee6a
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.rotationHandlerName = exports.RotationGestureHandler = void 0;
+var _createHandler = _interopRequireDefault(require("./createHandler"));
+var _gestureHandlerCommon = require("./gestureHandlerCommon");
+function _interopRequireDefault(e) {
+  return e && e.__esModule ? e : {
+    default: e
+  };
+}
+var rotationHandlerName = exports.rotationHandlerName = 'RotationGestureHandler';
+var RotationGestureHandler = exports.RotationGestureHandler = (0, _createHandler.default)({
+  name: rotationHandlerName,
+  allowedProps: _gestureHandlerCommon.baseGestureHandlerProps,
+  config: {}
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfY3JlYXRlSGFuZGxlciIsIl9pbnRlcm9wUmVxdWlyZURlZmF1bHQiLCJyZXF1aXJlIiwiX2dlc3R1cmVIYW5kbGVyQ29tbW9uIiwiZSIsIl9fZXNNb2R1bGUiLCJkZWZhdWx0Iiwicm90YXRpb25IYW5kbGVyTmFtZSIsImV4cG9ydHMiLCJSb3RhdGlvbkdlc3R1cmVIYW5kbGVyIiwibmFtZSIsImFsbG93ZWRQcm9wcyIsImJhc2VHZXN0dXJlSGFuZGxlclByb3BzIiwiY29uZmlnIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2hhbmRsZXJzL1JvdGF0aW9uR2VzdHVyZUhhbmRsZXIudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztBQUNBLElBQUFBLGNBQUEsR0FBQUMsc0JBQUEsQ0FBQUMsT0FBQTtBQUNBLElBQUFDLHFCQUFBLEdBQUFELE9BQUE7QUFHZ0MsU0FBQUQsdUJBQUFHLENBQUE7RUFBQSxPQUFBQSxDQUFBLElBQUFBLENBQUEsQ0FBQUMsVUFBQSxHQUFBRCxDQUFBO0lBQUFFLE9BQUEsRUFBQUY7RUFBQTtBQUFBO0FBUXpCLElBQU1HLG1CQUFtQixHQUFBQyxPQUFBLENBQUFELG1CQUFBLEdBQUcsd0JBQXdCO0FBV3BELElBQU1FLHNCQUFzQixHQUFBRCxPQUFBLENBQUFDLHNCQUFBLEdBQUcsSUFBQVQsY0FBQSxDQUFBTSxPQUFhLEVBR2pEO0VBQ0FJLElBQUksRUFBRUgsbUJBQW1CO0VBQ3pCSSxZQUFZLEVBQUVDLHFCQUFBLENBQUFBLHVCQUF1QjtFQUNyQ0MsTUFBTSxFQUFFLENBQUM7QUFDWCxDQUFDLENBQUMiLCJpZ25vcmVMaXN0IjpbXX0=

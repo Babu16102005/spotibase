@@ -31,10 +31,6 @@ public class SettingsService {
         UserSetting settings = userSettingRepository.findByUserId(userId)
                 .orElseGet(() -> createDefaultSettings(userId));
 
-        if (request.getStreamingQuality() != null)
-            settings.setStreamingQuality(request.getStreamingQuality());
-        if (request.getDownloadQuality() != null)
-            settings.setDownloadQuality(request.getDownloadQuality());
         if (request.getCrossfadeDuration() != null)
             settings.setCrossfadeDuration(request.getCrossfadeDuration());
         if (request.getGaplessEnabled() != null)
@@ -88,8 +84,6 @@ public class SettingsService {
 
     private UserSettingsResponse toSettingsResponse(UserSetting settings) {
         return UserSettingsResponse.builder()
-                .streamingQuality(settings.getStreamingQuality())
-                .downloadQuality(settings.getDownloadQuality())
                 .crossfadeDuration(settings.getCrossfadeDuration())
                 .gaplessEnabled(settings.isGaplessEnabled())
                 .normalizeVolume(settings.isNormalizeVolume())

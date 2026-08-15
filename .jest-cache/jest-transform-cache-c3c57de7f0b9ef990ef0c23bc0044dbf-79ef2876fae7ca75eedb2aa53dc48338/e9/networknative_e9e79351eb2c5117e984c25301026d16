@@ -1,0 +1,29 @@
+bcdf8ac098df49e62c0cb5fe614eec6b
+'use strict';
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.initializeNetworking = initializeNetworking;
+function initializeNetworking() {
+  var TurboModules = globalThis.TurboModules;
+  TurboModules.set('FileReaderModule', makeMockTurboModule('FileReaderModule'));
+  TurboModules.set('PlatformConstants', makeMockTurboModule('PlatformConstants'));
+  TurboModules.set('WebSocketModule', makeMockTurboModule('WebSocketModule'));
+  TurboModules.set('BlobModule', makeMockTurboModule('BlobModule', ['addNetworkingHandler']));
+  require('react-native/Libraries/Core/setUpXHR');
+}
+var noopMethods = ['getConstants'];
+function makeMockTurboModule(name, extraNoopMethods) {
+  var proxy = new Proxy({}, {
+    get: function get(_target, prop) {
+      if ([...noopMethods, ...(extraNoopMethods ?? [])].includes(prop)) {
+        return () => {
+          return () => {};
+        };
+      }
+      throw new Error(`[Worklets] You tried to call method '${String(prop)}' from '${name}' TurboModule on a Worklet Runtime. Using '${name}' TurboModule on a Worklet Runtime is not allowed.`);
+    }
+  });
+  return proxy;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImluaXRpYWxpemVOZXR3b3JraW5nIiwiVHVyYm9Nb2R1bGVzIiwiZ2xvYmFsVGhpcyIsInNldCIsIm1ha2VNb2NrVHVyYm9Nb2R1bGUiLCJyZXF1aXJlIiwibm9vcE1ldGhvZHMiLCJuYW1lIiwiZXh0cmFOb29wTWV0aG9kcyIsInByb3h5IiwiUHJveHkiLCJnZXQiLCJfdGFyZ2V0IiwicHJvcCIsImluY2x1ZGVzIiwiRXJyb3IiLCJTdHJpbmciXSwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvYnVuZGxlTW9kZS9uZXR3b3JrLm5hdGl2ZS50cyJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTtBQUFBQSxNQUFBLENBQUFDLGNBQUEsQ0FBQUMsT0FBQTtFQUFBQyxLQUFBO0FBQUE7QUFBQUQsT0FBQSxDQUFBRSxvQkFBQSxHQUFBQSxvQkFBQTtBQU9MLFNBQVNBLG9CQUFvQkEsQ0FBQSxFQUFHO0VBQ3JDLElBQU1DLFlBQVksR0FBR0MsVUFBVSxDQUFDRCxZQUFZO0VBRTVDQSxZQUFZLENBQUNFLEdBQUcsQ0FBQyxrQkFBa0IsRUFBRUMsbUJBQW1CLENBQUMsa0JBQWtCLENBQUMsQ0FBQztFQUM3RUgsWUFBWSxDQUFDRSxHQUFHLENBQ2QsbUJBQW1CLEVBQ25CQyxtQkFBbUIsQ0FBQyxtQkFBbUIsQ0FDekMsQ0FBQztFQUNESCxZQUFZLENBQUNFLEdBQUcsQ0FBQyxpQkFBaUIsRUFBRUMsbUJBQW1CLENBQUMsaUJBQWlCLENBQUMsQ0FBQztFQUMzRUgsWUFBWSxDQUFDRSxHQUFHLENBQ2QsWUFBWSxFQUNaQyxtQkFBbUIsQ0FBQyxZQUFZLEVBQUUsQ0FBQyxzQkFBc0IsQ0FBQyxDQUM1RCxDQUFDO0VBVURDLE9BQU8sQ0FBQyxzQ0FBc0MsQ0FBQztBQUNqRDtBQUVBLElBQU1DLFdBQVcsR0FBRyxDQUFDLGNBQWMsQ0FBQztBQUVwQyxTQUFTRixtQkFBbUJBLENBQUNHLElBQVksRUFBRUMsZ0JBQTJCLEVBQUU7RUFDdEUsSUFBTUMsS0FBSyxHQUFHLElBQUlDLEtBQUssQ0FDckIsQ0FBQyxDQUFDLEVBQ0Y7SUFDRUMsR0FBRyxFQUFFLFNBQVNBLEdBQUdBLENBQUNDLE9BQU8sRUFBRUMsSUFBSSxFQUFFO01BQy9CLElBQ0UsQ0FBQyxHQUFHUCxXQUFXLEVBQUUsSUFBSUUsZ0JBQWdCLElBQUksRUFBRSxDQUFDLENBQUMsQ0FBQ00sUUFBUSxDQUFDRCxJQUFjLENBQUMsRUFDdEU7UUFDQSxPQUFPLE1BQU07VUFDWCxPQUFPLE1BQU0sQ0FBQyxDQUFDO1FBQ2pCLENBQUM7TUFDSDtNQUNBLE1BQU0sSUFBSUUsS0FBSyxDQUNiLHdDQUF3Q0MsTUFBTSxDQUM1Q0gsSUFDRixDQUFDLFdBQVdOLElBQUksOENBQThDQSxJQUFJLG9EQUNwRSxDQUFDO0lBQ0g7RUFDRixDQUNGLENBQUM7RUFFRCxPQUFPRSxLQUFLO0FBQ2QiLCJpZ25vcmVMaXN0IjpbXX0=

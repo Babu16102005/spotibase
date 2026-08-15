@@ -18,6 +18,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store';
 import { formatFileSize } from '../../utils';
 import SongCard from '../../components/SongCard';
+import GlassButton from '../../components/GlassButton';
 
 interface DownloadsScreenProps {
   navigation: any;
@@ -225,18 +226,18 @@ const DownloadsScreen = ({ navigation }: DownloadsScreenProps) => {
               This will remove all {completedDownloads.length} downloaded songs and free up {stats ? formatFileSize(stats.totalSizeBytes) : 'storage space'}. This action cannot be undone.
             </Text>
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalButtonCancel}
+              <GlassButton
+                variant="outline"
+                size="md"
+                title="Cancel"
                 onPress={() => setShowClearModal(false)}
-              >
-                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButtonConfirm, { backgroundColor: theme.colors.error }]}
+              />
+              <GlassButton
+                variant="destructive"
+                size="md"
+                title="Clear All"
                 onPress={handleClearCompleted}
-              >
-                <Text style={styles.modalButtonTextConfirm}>Clear All</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </View>

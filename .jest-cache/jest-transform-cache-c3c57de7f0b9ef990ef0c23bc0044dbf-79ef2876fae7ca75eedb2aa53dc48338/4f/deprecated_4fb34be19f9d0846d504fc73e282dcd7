@@ -1,0 +1,44 @@
+70d4a80b8779373378cd5684906ce260
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.isShareableRef = exports.callMicrotasks = void 0;
+Object.defineProperty(exports, "makeShareable", {
+  enumerable: true,
+  get: function () {
+    return _serializable.makeShareable;
+  }
+});
+Object.defineProperty(exports, "makeShareableCloneOnUIRecursive", {
+  enumerable: true,
+  get: function () {
+    return _serializable.makeShareableCloneOnUIRecursive;
+  }
+});
+exports.shareableMappingCache = exports.makeShareableCloneRecursive = void 0;
+var _serializable = require("./memory/serializable");
+var _serializableMappingCache = require("./memory/serializableMappingCache");
+var makeShareableCloneRecursive = exports.makeShareableCloneRecursive = _serializable.createSerializable;
+var isShareableRef = exports.isShareableRef = _serializable.isSerializableRef;
+var shareableMappingCache = exports.shareableMappingCache = _serializableMappingCache.serializableMappingCache;
+var _worklet_6635913777778_init_data = {
+  code: "function callMicrotasks_reactNativeWorklets_deprecatedJs1(){}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/deprecated.js",
+  sourceMap: "{\"version\":3,\"names\":[\"callMicrotasks_reactNativeWorklets_deprecatedJs1\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/deprecated.js\"],\"mappings\":\"AAqBO,SAAAA,gDAIPA,CAAA\",\"ignoreList\":[]}"
+};
+var callMicrotasks = exports.callMicrotasks = function callMicrotasks_reactNativeWorklets_deprecatedJs1Factory(_ref) {
+  var _worklet_6635913777778_init_data = _ref._worklet_6635913777778_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var callMicrotasks = function () {};
+  callMicrotasks.__closure = {};
+  callMicrotasks.__workletHash = 6635913777778;
+  callMicrotasks.__pluginVersion = "0.10.1";
+  callMicrotasks.__initData = _worklet_6635913777778_init_data;
+  callMicrotasks.__stackDetails = _e;
+  return callMicrotasks;
+}({
+  _worklet_6635913777778_init_data
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImlzU2hhcmVhYmxlUmVmIiwiY2FsbE1pY3JvdGFza3MiLCJlbnVtZXJhYmxlIiwiZ2V0IiwiX3NlcmlhbGl6YWJsZSIsIm1ha2VTaGFyZWFibGUiLCJtYWtlU2hhcmVhYmxlQ2xvbmVPblVJUmVjdXJzaXZlIiwic2hhcmVhYmxlTWFwcGluZ0NhY2hlIiwibWFrZVNoYXJlYWJsZUNsb25lUmVjdXJzaXZlIiwicmVxdWlyZSIsIl9zZXJpYWxpemFibGVNYXBwaW5nQ2FjaGUiLCJjcmVhdGVTZXJpYWxpemFibGUiLCJpc1NlcmlhbGl6YWJsZVJlZiIsInNlcmlhbGl6YWJsZU1hcHBpbmdDYWNoZSIsIl93b3JrbGV0XzY2MzU5MTM3Nzc3NzhfaW5pdF9kYXRhIiwiY29kZSIsImxvY2F0aW9uIiwic291cmNlTWFwIiwiY2FsbE1pY3JvdGFza3NfcmVhY3ROYXRpdmVXb3JrbGV0c19kZXByZWNhdGVkSnMxRmFjdG9yeSIsIl9yZWYiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyJdLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy9kZXByZWNhdGVkLnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiQUFBQSxZQUFZOztBQUFBQSxNQUFBLENBQUFDLGNBQUEsQ0FBQUMsT0FBQTtFQUFBQyxLQUFBO0FBQUE7QUFBQUQsT0FBQSxDQUFBRSxjQUFBLEdBQUFGLE9BQUEsQ0FBQUcsY0FBQTtBQUFBTCxNQUFBLENBQUFDLGNBQUEsQ0FBQUMsT0FBQTtFQUFBSSxVQUFBO0VBQUFDLEdBQUEsV0FBQUEsQ0FBQTtJQUFBLE9BQUFDLGFBQUEsQ0FBQUMsYUFBQTtFQUFBO0FBQUE7QUFBQVQsTUFBQSxDQUFBQyxjQUFBLENBQUFDLE9BQUE7RUFBQUksVUFBQTtFQUFBQyxHQUFBLFdBQUFBLENBQUE7SUFBQSxPQUFBQyxhQUFBLENBQUFFLCtCQUFBO0VBQUE7QUFBQTtBQUFBUixPQUFBLENBQUFTLHFCQUFBLEdBQUFULE9BQUEsQ0FBQVUsMkJBQUE7QUFFWixJQUFBSixhQUFBLEdBQUFLLE9BQUE7QUFNQSxJQUFBQyx5QkFBQSxHQUFBRCxPQUFBO0FBZ0JPLElBQU1ELDJCQUErQyxHQUFBVixPQUFBLENBQUFVLDJCQUFBLEdBQzFERyxnQ0FBa0I7QUFHYixJQUFNWCxjQUFjLEdBQUFGLE9BQUEsQ0FBQUUsY0FBQSxHQUFHWSwrQkFBaUI7QUFHeEMsSUFBTUwscUJBQXFCLEdBQUFULE9BQUEsQ0FBQVMscUJBQUEsR0FBR00sa0RBQXdCO0FBQUEsSUFBQUMsZ0NBQUE7RUFBQUMsSUFBQTtFQUFBQyxRQUFBO0VBQUFDLFNBQUE7QUFBQTtBQUFBLElBQUFoQixjQUFBLEdBQUFILE9BQUEsQ0FBQUcsY0FBQSxHQUd0RCxTQUFBaUIsd0RBQUFDLElBQUE7RUFBQSxJQUFBTCxnQ0FBQSxHQUFBSyxJQUFBLENBQUFMLGdDQUFBO0VBQUEsSUFBQU0sRUFBQSxRQUFBQyxNQUFBLENBQUFDLEtBQUE7RUFBQSxJQUFBckIsY0FBQSxZQUFBQSxDQUFBLEVBQWdDLENBR3ZDO0VBQUFBLGNBQUEsQ0FBQXNCLFNBQUE7RUFBQXRCLGNBQUEsQ0FBQXVCLGFBQUE7RUFBQXZCLGNBQUEsQ0FBQXdCLGVBQUE7RUFBQXhCLGNBQUEsQ0FBQXlCLFVBQUEsR0FBQVosZ0NBQUE7RUFBQWIsY0FBQSxDQUFBMEIsY0FBQSxHQUFBUCxFQUFBO0VBQUEsT0FBQW5CLGNBQUE7QUFBQSxDQUhPO0VBQUFhO0FBQUEiLCJpZ25vcmVMaXN0IjpbXX0=

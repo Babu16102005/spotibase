@@ -44,7 +44,6 @@ class SettingsServiceTest {
         settings = UserSetting.builder()
                 .id("s-1")
                 .user(user)
-                .streamingQuality("HIGH")
                 .theme("DARK")
                 .build();
     }
@@ -57,7 +56,6 @@ class SettingsServiceTest {
 
         UserSettingsResponse response = settingsService.getSettings("user-1");
 
-        assertThat(response.getStreamingQuality()).isEqualTo("HIGH");
         assertThat(response.getTheme()).isEqualTo("DARK");
         assertThat(response.isGaplessEnabled()).isTrue(); // builder default
     }
@@ -70,7 +68,6 @@ class SettingsServiceTest {
 
         UserSettingsResponse response = settingsService.getSettings("user-1");
 
-        assertThat(response.getStreamingQuality()).isEqualTo("HIGH");
         assertThat(response.getTheme()).isEqualTo("DARK");
         verify(userSettingRepository).save(argThat(s -> s.getUser().getId().equals("user-1")));
     }
@@ -93,14 +90,12 @@ class SettingsServiceTest {
         when(userSettingRepository.save(any(UserSetting.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UpdateSettingsRequest request = UpdateSettingsRequest.builder()
-                .streamingQuality("LOSSLESS")
                 .theme("AMOLED")
                 .crossfadeDuration(5)
                 .build();
 
         UserSettingsResponse response = settingsService.updateSettings("user-1", request);
 
-        assertThat(response.getStreamingQuality()).isEqualTo("LOSSLESS");
         assertThat(response.getTheme()).isEqualTo("AMOLED");
         assertThat(response.getCrossfadeDuration()).isEqualTo(5);
         // untouched field keeps its previous value
@@ -117,7 +112,7 @@ class SettingsServiceTest {
 
         UserSettingsResponse response = settingsService.updateSettings("user-1", request);
 
-        assertThat(response.getStreamingQuality()).isEqualTo("HIGH");
+        assertThat(response.getTheme()).isEqualTo("DARK");
         verify(userSettingRepository).save(settings);
     }
 

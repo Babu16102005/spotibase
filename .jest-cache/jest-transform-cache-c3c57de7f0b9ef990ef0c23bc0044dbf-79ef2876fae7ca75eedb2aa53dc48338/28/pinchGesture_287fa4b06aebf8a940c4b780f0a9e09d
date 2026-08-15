@@ -1,0 +1,63 @@
+049f41603ad8eb657513801fbb277ace
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _superPropGet2 = _interopRequireDefault(require("@babel/runtime/helpers/superPropGet"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.PinchGesture = void 0;
+var _gesture = require("./gesture");
+var _worklet_168466708215_init_data = {
+  code: "function changeEventCalculator_reactNativeGestureHandler_pinchGestureJs1(current,previous){let changePayload;if(previous===undefined){changePayload={scaleChange:current.scale};}else{changePayload={scaleChange:current.scale/previous.scale};}return{...current,...changePayload};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/pinchGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"changeEventCalculator_reactNativeGestureHandler_pinchGestureJs1\",\"current\",\"previous\",\"changePayload\",\"undefined\",\"scaleChange\",\"scale\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/pinchGesture.js\"],\"mappings\":\"AAOA,SAAAA,+DAAkDA,CAAAC,OAAA,CAAAC,QAAA,EAGhD,GAAI,CAAAC,aAAa,CACjB,GAAID,QAAQ,GAAKE,SAAS,CAAE,CAC1BD,aAAa,CAAG,CACdE,WAAW,CAAEJ,OAAO,CAACK,KACvB,CAAC,CACH,CAAC,IAAM,CACLH,aAAa,CAAG,CACdE,WAAW,CAAEJ,OAAO,CAACK,KAAK,CAAGJ,QAAQ,CAACI,KACxC,CAAC,CACH,CACA,MAAO,CACL,GAAGL,OAAO,CACV,GAAGE,aACL,CAAC,CACH\",\"ignoreList\":[]}"
+};
+var changeEventCalculator = function changeEventCalculator_reactNativeGestureHandler_pinchGestureJs1Factory(_ref) {
+  var _worklet_168466708215_init_data = _ref._worklet_168466708215_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var changeEventCalculator = function (current, previous) {
+    var changePayload;
+    if (previous === undefined) {
+      changePayload = {
+        scaleChange: current.scale
+      };
+    } else {
+      changePayload = {
+        scaleChange: current.scale / previous.scale
+      };
+    }
+    return Object.assign({}, current, changePayload);
+  };
+  changeEventCalculator.__closure = {};
+  changeEventCalculator.__workletHash = 168466708215;
+  changeEventCalculator.__pluginVersion = "0.10.1";
+  changeEventCalculator.__initData = _worklet_168466708215_init_data;
+  changeEventCalculator.__stackDetails = _e;
+  return changeEventCalculator;
+}({
+  _worklet_168466708215_init_data
+});
+var PinchGesture = function (_gesture$ContinousBas) {
+  function PinchGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, PinchGesture);
+    _this = (0, _callSuper2.default)(this, PinchGesture);
+    _this.handlerName = 'PinchGestureHandler';
+    return _this;
+  }
+  (0, _inherits2.default)(PinchGesture, _gesture$ContinousBas);
+  return (0, _createClass2.default)(PinchGesture, [{
+    key: "onChange",
+    value: function onChange(callback) {
+      this.handlers.changeEventCalculator = changeEventCalculator;
+      return (0, _superPropGet2.default)(PinchGesture, "onChange", this, 3)([callback]);
+    }
+  }]);
+}(_gesture.ContinousBaseGesture);
+exports.PinchGesture = PinchGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJfd29ya2xldF8xNjg0NjY3MDgyMTVfaW5pdF9kYXRhIiwiY29kZSIsImxvY2F0aW9uIiwic291cmNlTWFwIiwiY2hhbmdlRXZlbnRDYWxjdWxhdG9yIiwiY2hhbmdlRXZlbnRDYWxjdWxhdG9yX3JlYWN0TmF0aXZlR2VzdHVyZUhhbmRsZXJfcGluY2hHZXN0dXJlSnMxRmFjdG9yeSIsIl9yZWYiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwiY3VycmVudCIsInByZXZpb3VzIiwiY2hhbmdlUGF5bG9hZCIsInVuZGVmaW5lZCIsInNjYWxlQ2hhbmdlIiwic2NhbGUiLCJPYmplY3QiLCJhc3NpZ24iLCJfX2Nsb3N1cmUiLCJfX3dvcmtsZXRIYXNoIiwiX19wbHVnaW5WZXJzaW9uIiwiX19pbml0RGF0YSIsIl9fc3RhY2tEZXRhaWxzIiwiUGluY2hHZXN0dXJlIiwiX2dlc3R1cmUkQ29udGlub3VzQmFzIiwiY29uc3RydWN0b3IiLCJfdGhpcyIsIl9jbGFzc0NhbGxDaGVjazIiLCJkZWZhdWx0IiwiX2NhbGxTdXBlcjIiLCJoYW5kbGVyTmFtZSIsIl9pbmhlcml0czIiLCJfY3JlYXRlQ2xhc3MyIiwia2V5IiwidmFsdWUiLCJvbkNoYW5nZSIsImNhbGxiYWNrIiwiaGFuZGxlcnMiLCJfc3VwZXJQcm9wR2V0MiIsIkNvbnRpbm91c0Jhc2VHZXN0dXJlIiwiZXhwb3J0cyJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9oYW5kbGVycy9nZXN0dXJlcy9waW5jaEdlc3R1cmUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7OztBQUFBLElBQUFBLFFBQUEsR0FBQUMsT0FBQTtBQUFBLElBQUFDLCtCQUFBO0VBQUFDLElBQUE7RUFBQUMsUUFBQTtFQUFBQyxTQUFBO0FBQUE7QUFBQSxJQUFBQyxxQkFBQSxHQVFBLFNBQUFDLHVFQUFBQyxJQUFBO0VBQUEsSUFBQU4sK0JBQUEsR0FBQU0sSUFBQSxDQUFBTiwrQkFBQTtFQUFBLElBQUFPLEVBQUEsUUFBQUMsTUFBQSxDQUFBQyxLQUFBO0VBQUEsSUFBQUwscUJBQUEsWUFBQUEsQ0FDRU0sT0FBNEQsRUFDNURDLFFBQThELEVBQzlEO0lBRUEsSUFBSUMsYUFBNkM7SUFDakQsSUFBSUQsUUFBUSxLQUFLRSxTQUFTLEVBQUU7TUFDMUJELGFBQWEsR0FBRztRQUNkRSxXQUFXLEVBQUVKLE9BQU8sQ0FBQ0s7TUFDdkIsQ0FBQztJQUNILENBQUMsTUFBTTtNQUNMSCxhQUFhLEdBQUc7UUFDZEUsV0FBVyxFQUFFSixPQUFPLENBQUNLLEtBQUssR0FBR0osUUFBUSxDQUFDSTtNQUN4QyxDQUFDO0lBQ0g7SUFFQSxPQUFBQyxNQUFBLENBQUFDLE1BQUEsS0FBWVAsT0FBTyxFQUFLRSxhQUFBO0VBQzFCO0VBQUFSLHFCQUFBLENBQUFjLFNBQUE7RUFBQWQscUJBQUEsQ0FBQWUsYUFBQTtFQUFBZixxQkFBQSxDQUFBZ0IsZUFBQTtFQUFBaEIscUJBQUEsQ0FBQWlCLFVBQUEsR0FBQXJCLCtCQUFBO0VBQUFJLHFCQUFBLENBQUFrQixjQUFBLEdBQUFmLEVBQUE7RUFBQSxPQUFBSCxxQkFBQTtBQUFBLENBakJBO0VBQUFKO0FBQUE7QUFBQSxJQW1CYXVCLFlBQVksYUFBQUMscUJBQUE7RUFJdkIsU0FBQUMsYUFBQSxFQUFjO0lBQUEsSUFBQUMsS0FBQTtJQUFBLElBQUFDLGdCQUFBLENBQUFDLE9BQUEsUUFBQUwsWUFBQTtJQUNaRyxLQUFBLE9BQUFHLFdBQUEsQ0FBQUQsT0FBQSxRQUFBTCxZQUFBO0lBRUFHLEtBQUEsQ0FBS0ksV0FBVyxHQUFHLHFCQUFxQjtJQUFBLE9BQUFKLEtBQUE7RUFDMUM7RUFBQSxJQUFBSyxVQUFBLENBQUFILE9BQUEsRUFBQUwsWUFBQSxFQUFBQyxxQkFBQTtFQUFBLFdBQUFRLGFBQUEsQ0FBQUosT0FBQSxFQUFBTCxZQUFBO0lBQUFVLEdBQUE7SUFBQUMsS0FBQSxFQUVBLFNBQUFDLFFBQVFBLENBQ05DLFFBSVMsRUFDVDtNQUVBLElBQUksQ0FBQ0MsUUFBUSxDQUFDakMscUJBQXFCLEdBQUdBLHFCQUFxQjtNQUMzRCxXQUFBa0MsY0FBQSxDQUFBVixPQUFBLEVBQUFMLFlBQUEsd0JBQXNCYSxRQUFRO0lBQ2hDO0VBQUE7QUFBQSxFQXBCZ0N0QyxRQUFBLENBQUF5QyxvQkFBb0I7QUFxQnJEQyxPQUFBLENBQUFqQixZQUFBLEdBQUFBLFlBQUEiLCJpZ25vcmVMaXN0IjpbXX0=

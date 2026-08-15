@@ -10,8 +10,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateSettingsRequest {
-    private String streamingQuality;
-    private String downloadQuality;
     private Integer crossfadeDuration;
     private Boolean gaplessEnabled;
     private Boolean normalizeVolume;

@@ -1,0 +1,16 @@
+f53901d83f875e29afef83f8972c2878
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.PointerType = void 0;
+var PointerType = exports.PointerType = function (PointerType) {
+  PointerType[PointerType["TOUCH"] = 0] = "TOUCH";
+  PointerType[PointerType["STYLUS"] = 1] = "STYLUS";
+  PointerType[PointerType["MOUSE"] = 2] = "MOUSE";
+  PointerType[PointerType["KEY"] = 3] = "KEY";
+  PointerType[PointerType["OTHER"] = 4] = "OTHER";
+  return PointerType;
+}({});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJQb2ludGVyVHlwZSIsImV4cG9ydHMiXSwic291cmNlcyI6WyIuLi8uLi9zcmMvUG9pbnRlclR5cGUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztJQUFZQSxXQUFXLEdBQUFDLE9BQUEsQ0FBQUQsV0FBQSxhQUFYQSxXQUFXO0VBQVhBLFdBQVcsQ0FBWEEsV0FBVztFQUFYQSxXQUFXLENBQVhBLFdBQVc7RUFBWEEsV0FBVyxDQUFYQSxXQUFXO0VBQVhBLFdBQVcsQ0FBWEEsV0FBVztFQUFYQSxXQUFXLENBQVhBLFdBQVc7RUFBQSxPQUFYQSxXQUFXO0FBQUEiLCJpZ25vcmVMaXN0IjpbXX0=

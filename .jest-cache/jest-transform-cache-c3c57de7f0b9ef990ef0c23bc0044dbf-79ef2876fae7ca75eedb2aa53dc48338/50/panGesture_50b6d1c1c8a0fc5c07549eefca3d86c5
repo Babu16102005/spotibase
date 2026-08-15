@@ -1,0 +1,172 @@
+d7b24083f3a465fbd79b3e8324bcafd5
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _superPropGet2 = _interopRequireDefault(require("@babel/runtime/helpers/superPropGet"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.PanGesture = void 0;
+var _gesture = require("./gesture");
+var _worklet_6591024890621_init_data = {
+  code: "function changeEventCalculator_reactNativeGestureHandler_panGestureJs1(current,previous){let changePayload;if(previous===undefined){changePayload={changeX:current.translationX,changeY:current.translationY};}else{changePayload={changeX:current.translationX-previous.translationX,changeY:current.translationY-previous.translationY};}return{...current,...changePayload};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/panGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"changeEventCalculator_reactNativeGestureHandler_panGestureJs1\",\"current\",\"previous\",\"changePayload\",\"undefined\",\"changeX\",\"translationX\",\"changeY\",\"translationY\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/panGesture.js\"],\"mappings\":\"AAOA,SAAAA,6DAAkDA,CAAAC,OAAA,CAAAC,QAAA,EAGhD,GAAI,CAAAC,aAAa,CACjB,GAAID,QAAQ,GAAKE,SAAS,CAAE,CAC1BD,aAAa,CAAG,CACdE,OAAO,CAAEJ,OAAO,CAACK,YAAY,CAC7BC,OAAO,CAAEN,OAAO,CAACO,YACnB,CAAC,CACH,CAAC,IAAM,CACLL,aAAa,CAAG,CACdE,OAAO,CAAEJ,OAAO,CAACK,YAAY,CAAGJ,QAAQ,CAACI,YAAY,CACrDC,OAAO,CAAEN,OAAO,CAACO,YAAY,CAAGN,QAAQ,CAACM,YAC3C,CAAC,CACH,CACA,MAAO,CACL,GAAGP,OAAO,CACV,GAAGE,aACL,CAAC,CACH\",\"ignoreList\":[]}"
+};
+var changeEventCalculator = function changeEventCalculator_reactNativeGestureHandler_panGestureJs1Factory(_ref) {
+  var _worklet_6591024890621_init_data = _ref._worklet_6591024890621_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var changeEventCalculator = function (current, previous) {
+    var changePayload;
+    if (previous === undefined) {
+      changePayload = {
+        changeX: current.translationX,
+        changeY: current.translationY
+      };
+    } else {
+      changePayload = {
+        changeX: current.translationX - previous.translationX,
+        changeY: current.translationY - previous.translationY
+      };
+    }
+    return Object.assign({}, current, changePayload);
+  };
+  changeEventCalculator.__closure = {};
+  changeEventCalculator.__workletHash = 6591024890621;
+  changeEventCalculator.__pluginVersion = "0.10.1";
+  changeEventCalculator.__initData = _worklet_6591024890621_init_data;
+  changeEventCalculator.__stackDetails = _e;
+  return changeEventCalculator;
+}({
+  _worklet_6591024890621_init_data
+});
+var PanGesture = function (_gesture$ContinousBas) {
+  function PanGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, PanGesture);
+    _this = (0, _callSuper2.default)(this, PanGesture);
+    _this.config = {};
+    _this.handlerName = 'PanGestureHandler';
+    return _this;
+  }
+  (0, _inherits2.default)(PanGesture, _gesture$ContinousBas);
+  return (0, _createClass2.default)(PanGesture, [{
+    key: "activeOffsetY",
+    value: function activeOffsetY(offset) {
+      if (Array.isArray(offset)) {
+        this.config.activeOffsetYStart = offset[0];
+        this.config.activeOffsetYEnd = offset[1];
+      } else if (offset < 0) {
+        this.config.activeOffsetYStart = offset;
+      } else {
+        this.config.activeOffsetYEnd = offset;
+      }
+      return this;
+    }
+  }, {
+    key: "activeOffsetX",
+    value: function activeOffsetX(offset) {
+      if (Array.isArray(offset)) {
+        this.config.activeOffsetXStart = offset[0];
+        this.config.activeOffsetXEnd = offset[1];
+      } else if (offset < 0) {
+        this.config.activeOffsetXStart = offset;
+      } else {
+        this.config.activeOffsetXEnd = offset;
+      }
+      return this;
+    }
+  }, {
+    key: "failOffsetY",
+    value: function failOffsetY(offset) {
+      if (Array.isArray(offset)) {
+        this.config.failOffsetYStart = offset[0];
+        this.config.failOffsetYEnd = offset[1];
+      } else if (offset < 0) {
+        this.config.failOffsetYStart = offset;
+      } else {
+        this.config.failOffsetYEnd = offset;
+      }
+      return this;
+    }
+  }, {
+    key: "failOffsetX",
+    value: function failOffsetX(offset) {
+      if (Array.isArray(offset)) {
+        this.config.failOffsetXStart = offset[0];
+        this.config.failOffsetXEnd = offset[1];
+      } else if (offset < 0) {
+        this.config.failOffsetXStart = offset;
+      } else {
+        this.config.failOffsetXEnd = offset;
+      }
+      return this;
+    }
+  }, {
+    key: "minPointers",
+    value: function minPointers(_minPointers) {
+      this.config.minPointers = _minPointers;
+      return this;
+    }
+  }, {
+    key: "maxPointers",
+    value: function maxPointers(_maxPointers) {
+      this.config.maxPointers = _maxPointers;
+      return this;
+    }
+  }, {
+    key: "minDistance",
+    value: function minDistance(distance) {
+      this.config.minDist = distance;
+      return this;
+    }
+  }, {
+    key: "minVelocity",
+    value: function minVelocity(velocity) {
+      this.config.minVelocity = velocity;
+      return this;
+    }
+  }, {
+    key: "minVelocityX",
+    value: function minVelocityX(velocity) {
+      this.config.minVelocityX = velocity;
+      return this;
+    }
+  }, {
+    key: "minVelocityY",
+    value: function minVelocityY(velocity) {
+      this.config.minVelocityY = velocity;
+      return this;
+    }
+  }, {
+    key: "averageTouches",
+    value: function averageTouches(value) {
+      this.config.avgTouches = value;
+      return this;
+    }
+  }, {
+    key: "enableTrackpadTwoFingerGesture",
+    value: function enableTrackpadTwoFingerGesture(value) {
+      this.config.enableTrackpadTwoFingerGesture = value;
+      return this;
+    }
+  }, {
+    key: "activateAfterLongPress",
+    value: function activateAfterLongPress(duration) {
+      this.config.activateAfterLongPress = duration;
+      return this;
+    }
+  }, {
+    key: "onChange",
+    value: function onChange(callback) {
+      this.handlers.changeEventCalculator = changeEventCalculator;
+      return (0, _superPropGet2.default)(PanGesture, "onChange", this, 3)([callback]);
+    }
+  }]);
+}(_gesture.ContinousBaseGesture);
+exports.PanGesture = PanGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJfd29ya2xldF82NTkxMDI0ODkwNjIxX2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsImNoYW5nZUV2ZW50Q2FsY3VsYXRvciIsImNoYW5nZUV2ZW50Q2FsY3VsYXRvcl9yZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX3Bhbkdlc3R1cmVKczFGYWN0b3J5IiwiX3JlZiIsIl9lIiwiZ2xvYmFsIiwiRXJyb3IiLCJjdXJyZW50IiwicHJldmlvdXMiLCJjaGFuZ2VQYXlsb2FkIiwidW5kZWZpbmVkIiwiY2hhbmdlWCIsInRyYW5zbGF0aW9uWCIsImNoYW5nZVkiLCJ0cmFuc2xhdGlvblkiLCJPYmplY3QiLCJhc3NpZ24iLCJfX2Nsb3N1cmUiLCJfX3dvcmtsZXRIYXNoIiwiX19wbHVnaW5WZXJzaW9uIiwiX19pbml0RGF0YSIsIl9fc3RhY2tEZXRhaWxzIiwiUGFuR2VzdHVyZSIsIl9nZXN0dXJlJENvbnRpbm91c0JhcyIsImNvbnN0cnVjdG9yIiwiX3RoaXMiLCJfY2xhc3NDYWxsQ2hlY2syIiwiZGVmYXVsdCIsIl9jYWxsU3VwZXIyIiwiY29uZmlnIiwiaGFuZGxlck5hbWUiLCJfaW5oZXJpdHMyIiwiX2NyZWF0ZUNsYXNzMiIsImtleSIsInZhbHVlIiwiYWN0aXZlT2Zmc2V0WSIsIm9mZnNldCIsIkFycmF5IiwiaXNBcnJheSIsImFjdGl2ZU9mZnNldFlTdGFydCIsImFjdGl2ZU9mZnNldFlFbmQiLCJhY3RpdmVPZmZzZXRYIiwiYWN0aXZlT2Zmc2V0WFN0YXJ0IiwiYWN0aXZlT2Zmc2V0WEVuZCIsImZhaWxPZmZzZXRZIiwiZmFpbE9mZnNldFlTdGFydCIsImZhaWxPZmZzZXRZRW5kIiwiZmFpbE9mZnNldFgiLCJmYWlsT2Zmc2V0WFN0YXJ0IiwiZmFpbE9mZnNldFhFbmQiLCJtaW5Qb2ludGVycyIsIm1heFBvaW50ZXJzIiwibWluRGlzdGFuY2UiLCJkaXN0YW5jZSIsIm1pbkRpc3QiLCJtaW5WZWxvY2l0eSIsInZlbG9jaXR5IiwibWluVmVsb2NpdHlYIiwibWluVmVsb2NpdHlZIiwiYXZlcmFnZVRvdWNoZXMiLCJhdmdUb3VjaGVzIiwiZW5hYmxlVHJhY2twYWRUd29GaW5nZXJHZXN0dXJlIiwiYWN0aXZhdGVBZnRlckxvbmdQcmVzcyIsImR1cmF0aW9uIiwib25DaGFuZ2UiLCJjYWxsYmFjayIsImhhbmRsZXJzIiwiX3N1cGVyUHJvcEdldDIiLCJDb250aW5vdXNCYXNlR2VzdHVyZSIsImV4cG9ydHMiXSwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvaGFuZGxlcnMvZ2VzdHVyZXMvcGFuR2VzdHVyZS50cyJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7O0FBQUEsSUFBQUEsUUFBQSxHQUFBQyxPQUFBO0FBQUEsSUFBQUMsZ0NBQUE7RUFBQUMsSUFBQTtFQUFBQyxRQUFBO0VBQUFDLFNBQUE7QUFBQTtBQUFBLElBQUFDLHFCQUFBLEdBVUEsU0FBQUMscUVBQUFDLElBQUE7RUFBQSxJQUFBTixnQ0FBQSxHQUFBTSxJQUFBLENBQUFOLGdDQUFBO0VBQUEsSUFBQU8sRUFBQSxRQUFBQyxNQUFBLENBQUFDLEtBQUE7RUFBQSxJQUFBTCxxQkFBQSxZQUFBQSxDQUNFTSxPQUEwRCxFQUMxREMsUUFBNEQsRUFDNUQ7SUFFQSxJQUFJQyxhQUEyQztJQUMvQyxJQUFJRCxRQUFRLEtBQUtFLFNBQVMsRUFBRTtNQUMxQkQsYUFBYSxHQUFHO1FBQ2RFLE9BQU8sRUFBRUosT0FBTyxDQUFDSyxZQUFZO1FBQzdCQyxPQUFPLEVBQUVOLE9BQU8sQ0FBQ087TUFDbkIsQ0FBQztJQUNILENBQUMsTUFBTTtNQUNMTCxhQUFhLEdBQUc7UUFDZEUsT0FBTyxFQUFFSixPQUFPLENBQUNLLFlBQVksR0FBR0osUUFBUSxDQUFDSSxZQUFZO1FBQ3JEQyxPQUFPLEVBQUVOLE9BQU8sQ0FBQ08sWUFBWSxHQUFHTixRQUFRLENBQUNNO01BQzNDLENBQUM7SUFDSDtJQUVBLE9BQUFD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

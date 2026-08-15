@@ -1,0 +1,46 @@
+4a58be6131e699833c18a40bbded7002
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.LongPressGesture = void 0;
+var _gesture = require("./gesture");
+var LongPressGesture = function (_gesture$BaseGesture) {
+  function LongPressGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, LongPressGesture);
+    _this = (0, _callSuper2.default)(this, LongPressGesture);
+    _this.config = {};
+    _this.handlerName = 'LongPressGestureHandler';
+    _this.shouldCancelWhenOutside(true);
+    return _this;
+  }
+  (0, _inherits2.default)(LongPressGesture, _gesture$BaseGesture);
+  return (0, _createClass2.default)(LongPressGesture, [{
+    key: "minDuration",
+    value: function minDuration(duration) {
+      this.config.minDurationMs = duration;
+      return this;
+    }
+  }, {
+    key: "maxDistance",
+    value: function maxDistance(distance) {
+      this.config.maxDist = distance;
+      return this;
+    }
+  }, {
+    key: "numberOfPointers",
+    value: function numberOfPointers(pointers) {
+      this.config.numberOfPointers = pointers;
+      return this;
+    }
+  }]);
+}(_gesture.BaseGesture);
+exports.LongPressGesture = LongPressGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJMb25nUHJlc3NHZXN0dXJlIiwiX2dlc3R1cmUkQmFzZUdlc3R1cmUiLCJjb25zdHJ1Y3RvciIsIl90aGlzIiwiX2NsYXNzQ2FsbENoZWNrMiIsImRlZmF1bHQiLCJfY2FsbFN1cGVyMiIsImNvbmZpZyIsImhhbmRsZXJOYW1lIiwic2hvdWxkQ2FuY2VsV2hlbk91dHNpZGUiLCJfaW5oZXJpdHMyIiwiX2NyZWF0ZUNsYXNzMiIsImtleSIsInZhbHVlIiwibWluRHVyYXRpb24iLCJkdXJhdGlvbiIsIm1pbkR1cmF0aW9uTXMiLCJtYXhEaXN0YW5jZSIsImRpc3RhbmNlIiwibWF4RGlzdCIsIm51bWJlck9mUG9pbnRlcnMiLCJwb2ludGVycyIsIkJhc2VHZXN0dXJlIiwiZXhwb3J0cyJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9oYW5kbGVycy9nZXN0dXJlcy9sb25nUHJlc3NHZXN0dXJlLnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7OztBQUFBLElBQUFBLFFBQUEsR0FBQUMsT0FBQTtBQUFBLElBSWFDLGdCQUFnQixhQUFBQyxvQkFBQTtFQUczQixTQUFBQyxpQkFBQSxFQUFjO0lBQUEsSUFBQUMsS0FBQTtJQUFBLElBQUFDLGdCQUFBLENBQUFDLE9BQUEsUUFBQUwsZ0JBQUE7SUFDWkcsS0FBQSxPQUFBRyxXQUFBLENBQUFELE9BQUEsUUFBQUwsZ0JBQUE7SUFBT0csS0FBQSxDQUhGSSxNQUFNLEdBQStDLENBQUMsQ0FBQztJQUs1REosS0FBQSxDQUFLSyxXQUFXLEdBQUcseUJBQXlCO0lBQzVDTCxLQUFBLENBQUtNLHVCQUF1QixDQUFDLElBQUksQ0FBQztJQUFBLE9BQUFOLEtBQUE7RUFDcEM7RUFBQSxJQUFBTyxVQUFBLENBQUFMLE9BQUEsRUFBQUwsZ0JBQUEsRUFBQUMsb0JBQUE7RUFBQSxXQUFBVSxhQUFBLENBQUFOLE9BQUEsRUFBQUwsZ0JBQUE7SUFBQVksR0FBQTtJQUFBQyxLQUFBLEVBT0EsU0FBQUMsV0FBV0EsQ0FBQ0MsUUFBZ0IsRUFBRTtNQUM1QixJQUFJLENBQUNSLE1BQU0sQ0FBQ1MsYUFBYSxHQUFHRCxRQUFRO01BQ3BDLE9BQU8sSUFBSTtJQUNiO0VBQUE7SUFBQUgsR0FBQTtJQUFBQyxLQUFBLEVBT0EsU0FBQUksV0FBV0EsQ0FBQ0MsUUFBZ0IsRUFBRTtNQUM1QixJQUFJLENBQUNYLE1BQU0sQ0FBQ1ksT0FBTyxHQUFHRCxRQUFRO01BQzlCLE9BQU8sSUFBSTtJQUNiO0VBQUE7SUFBQU4sR0FBQTtJQUFBQyxLQUFBLEVBTUEsU0FBQU8sZ0JBQWdCQSxDQUFDQyxRQUFnQixFQUFFO01BQ2pDLElBQUksQ0FBQ2QsTUFBTSxDQUFDYSxnQkFBZ0IsR0FBR0MsUUFBUTtNQUN2QyxPQUFPLElBQUk7SUFDYjtFQUFBO0FBQUEsRUFyQ29DdkIsUUFBQSxDQUFBd0IsV0FBVztBQXNDaERDLE9BQUEsQ0FBQXZCLGdCQUFBLEdBQUFBLGdCQUFBIiwiaWdub3JlTGlzdCI6W119

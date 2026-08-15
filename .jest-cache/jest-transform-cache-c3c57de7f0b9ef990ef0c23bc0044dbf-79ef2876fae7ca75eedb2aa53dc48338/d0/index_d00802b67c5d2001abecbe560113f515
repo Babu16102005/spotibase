@@ -1,0 +1,14 @@
+59a1cf6bcba1bcae7b11af676d9d6400
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+Object.defineProperty(exports, "withDecay", {
+  enumerable: true,
+  get: function () {
+    return _decay.withDecay;
+  }
+});
+var _decay = require("./decay");
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImVudW1lcmFibGUiLCJnZXQiLCJfZGVjYXkiLCJ3aXRoRGVjYXkiLCJyZXF1aXJlIl0sInNvdXJjZXMiOlsiaW5kZXgudHMiXSwic291cmNlc0NvbnRlbnQiOlsiJ3VzZSBzdHJpY3QnO1xuZXhwb3J0IHR5cGUgeyBXaXRoRGVjYXlDb25maWcgfSBmcm9tICcuL2RlY2F5JztcbmV4cG9ydCB7IHdpdGhEZWNheSB9IGZyb20gJy4vZGVjYXknO1xuZXhwb3J0IHR5cGUgeyBEZWNheUFuaW1hdGlvbiB9IGZyb20gJy4vdXRpbHMnO1xuIl0sIm1hcHBpbmdzIjoiQUFBQSxZQUFZOztBQUFDQSxNQUFBLENBQUFDLGNBQUEsQ0FBQUMsT0FBQTtFQUFBQyxLQUFBO0FBQUE7QUFBQUgsTUFBQSxDQUFBQyxjQUFBLENBQUFDLE9BQUE7RUFBQUUsVUFBQTtFQUFBQyxHQUFBLFdBQUFBLENBQUE7SUFBQSxPQUFBQyxNQUFBLENBQUFDLFNBQUE7RUFBQTtBQUFBO0FBRWIsSUFBQUQsTUFBQSxHQUFBRSxPQUFBIiwiaWdub3JlTGlzdCI6W119

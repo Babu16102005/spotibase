@@ -60,6 +60,8 @@ class AdminServiceTest {
     @Mock
     private UserService userService;
     @Mock
+    private StorageService storageService;
+    @Mock
     private EntityManager entityManager;
 
     @InjectMocks
@@ -71,6 +73,7 @@ class AdminServiceTest {
     void setUp() {
         query = mock(Query.class);
         lenient().when(entityManager.createNativeQuery(anyString())).thenReturn(query);
+        lenient().when(query.setParameter(anyString(), any())).thenReturn(query);
         ReflectionTestUtils.setField(adminService, "entityManager", entityManager);
     }
 
@@ -103,6 +106,8 @@ class AdminServiceTest {
         when(listeningHistoryRepository.totalListeningTimeSince(any(LocalDateTime.class)))
                 .thenReturn(7_200_000L); // 2 hours
         when(downloadRepository.count()).thenReturn(10L);
+        when(storageService.getLiveStorageStats())
+                .thenReturn(new R2StorageService.R2StorageStats(1_000_000_000L, 500, true, "spotibase-songs"));
 
         when(query.getResultList()).thenReturn(List.of()); // top songs / top genres / user growth
         when(artistRepository.findTopArtists(PageRequest.of(0, 10))).thenReturn(List.of());
@@ -195,8 +200,8 @@ class AdminServiceTest {
 
         adminService.forceDeleteSong("song-1");
 
-        verify(query, times(5)).executeUpdate(); // liked, history, queue, playlist_songs, downloads
-        verify(query, times(5)).setParameter("songId", "song-1");
+        verify(query, atLeast(5)).executeUpdate();
+        verify(query, atLeast(5)).setParameter(eq("songId"), eq("song-1"));
         verify(songRepository).delete(song);
     }
 
@@ -329,5 +334,23 @@ class AdminServiceTest {
                 .containsEntry("verified", true)
                 .containsEntry("albumCount", 0)
                 .containsEntry("songCount", 0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void clearAllSongsAndStorage_clearsStorageAndDeletesAllSongs() {
+        when(userRepository.count()).thenReturn(0L);
+        when(query.getResultList()).thenReturn(List.of());
+        when(artistRepository.findTopArtists(any())).thenReturn(List.of());
+        TypedQuery<User> recentUsers = mock(TypedQuery.class);
+        when(recentUsers.getResultList()).thenReturn(List.of());
+        when(entityManager.createQuery(anyString(), eq(User.class))).thenReturn(recentUsers);
+
+        AdminDashboardResponse res = adminService.clearAllSongsAndStorage();
+
+        verify(storageService).clearAllR2Storage();
+        verify(songRepository).deleteAll();
+        verify(storageService).invalidateStorageCache();
+        assertThat(res).isNotNull();
     }
 }

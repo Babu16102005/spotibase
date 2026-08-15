@@ -10,11 +10,14 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ListeningHistoryRepository extends JpaRepository<ListeningHistory, String> {
 
     List<ListeningHistory> findByUserIdOrderByPlayedAtDesc(String userId, Pageable pageable);
+
+    Optional<ListeningHistory> findFirstByUserIdAndSongIdOrderByPlayedAtDesc(String userId, String songId);
 
     @Query("SELECT lh FROM ListeningHistory lh WHERE lh.user.id = :userId ORDER BY lh.playedAt DESC")
     List<ListeningHistory> findRecentByUserId(@Param("userId") String userId, Pageable pageable);

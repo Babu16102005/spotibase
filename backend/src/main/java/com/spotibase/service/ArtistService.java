@@ -227,4 +227,13 @@ public class ArtistService {
         }
         return artists;
     }
+
+    @Transactional(readOnly = true)
+    public List<ArtistResponse> getArtistsByIds(List<String> ids, String userId) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        List<Artist> artists = artistRepository.findAllById(ids);
+        return artists.stream()
+                .map(artist -> toArtistResponse(artist, userId))
+                .collect(Collectors.toList());
+    }
 }

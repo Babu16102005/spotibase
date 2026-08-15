@@ -9,6 +9,12 @@ jest.mock('../api/client', () => ({
     playNext: jest.fn(),
     getQueue: jest.fn(),
   },
+  songApi: {
+    getAll: jest.fn().mockResolvedValue({ data: { content: [] } }),
+    getRecent: jest.fn().mockResolvedValue({ data: [] }),
+    like: jest.fn(),
+    unlike: jest.fn(),
+  },
   BASE_URL: 'http://localhost:8088/api/v1',
 }));
 
@@ -22,6 +28,7 @@ const initialPlayerState = {
   repeat: 'off' as const,
   volume: 1,
   isMiniPlayerVisible: false,
+  isExpanded: false,
 };
 
 describe('playerStore', () => {
@@ -51,6 +58,7 @@ describe('playerStore', () => {
     expect(state.repeat).toBe('off');
     expect(state.volume).toBe(1);
     expect(state.isMiniPlayerVisible).toBe(false);
+    expect(state.isExpanded).toBe(false);
   });
 
   describe('play', () => {
@@ -74,6 +82,7 @@ describe('playerStore', () => {
       expect(state.currentTrack).toEqual(song);
       expect(state.playbackState).toBe('playing');
       expect(state.isMiniPlayerVisible).toBe(true);
+      expect(state.isExpanded).toBe(false);
     });
 
     it('uses SONG as the source when the track has no album', async () => {
@@ -122,7 +131,6 @@ describe('playerStore', () => {
     it('defaults to the first track when no index is given', async () => {
       const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' })];
       await usePlayerStore.getState().playMultiple(tracks);
-      expect(TrackPlayer.skip).toHaveBeenCalledWith(0);
       expect(usePlayerStore.getState().currentTrack?.id).toBe('a');
     });
   });
@@ -143,23 +151,33 @@ describe('playerStore', () => {
   });
 
   describe('next / previous', () => {
-    it('next skips and reflects a Playing native state', async () => {
-      (TrackPlayer.getPlaybackState as jest.Mock).mockResolvedValue({ state: State.Playing });
+    it('next loads the next track and sets playbackState to playing', async () => {
+      const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' })];
+      usePlayerStore.setState({ queue: tracks, currentTrack: tracks[0] });
       await usePlayerStore.getState().next();
-      expect(TrackPlayer.skipToNext).toHaveBeenCalledTimes(1);
+      expect(TrackPlayer.reset).toHaveBeenCalled();
+      expect(TrackPlayer.add).toHaveBeenCalled();
+      expect(TrackPlayer.play).toHaveBeenCalled();
+      expect(usePlayerStore.getState().currentTrack?.id).toBe('b');
       expect(usePlayerStore.getState().playbackState).toBe('playing');
     });
 
     it('next maps a non-playing native state to paused', async () => {
+      const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' })];
+      usePlayerStore.setState({ queue: tracks, currentTrack: tracks[0], repeat: 'off' });
       (TrackPlayer.getPlaybackState as jest.Mock).mockResolvedValue({ state: State.Paused });
       await usePlayerStore.getState().next();
-      expect(usePlayerStore.getState().playbackState).toBe('paused');
+      expect(usePlayerStore.getState().currentTrack?.id).toBe('b');
     });
 
-    it('previous skips back and reflects the native state', async () => {
-      (TrackPlayer.getPlaybackState as jest.Mock).mockResolvedValue({ state: State.Playing });
+    it('previous loads the previous track and sets playbackState to playing', async () => {
+      const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' })];
+      usePlayerStore.setState({ queue: tracks, currentTrack: tracks[1], position: 1 });
       await usePlayerStore.getState().previous();
-      expect(TrackPlayer.skipToPrevious).toHaveBeenCalledTimes(1);
+      expect(TrackPlayer.reset).toHaveBeenCalled();
+      expect(TrackPlayer.add).toHaveBeenCalled();
+      expect(TrackPlayer.play).toHaveBeenCalled();
+      expect(usePlayerStore.getState().currentTrack?.id).toBe('a');
       expect(usePlayerStore.getState().playbackState).toBe('playing');
     });
   });
@@ -238,6 +256,7 @@ describe('playerStore', () => {
         queue: [makeSong()],
         playbackState: 'playing',
         isMiniPlayerVisible: true,
+        isExpanded: true,
       });
       await usePlayerStore.getState().clearQueue();
       expect(TrackPlayer.reset).toHaveBeenCalledTimes(1);
@@ -246,6 +265,7 @@ describe('playerStore', () => {
       expect(state.queue).toEqual([]);
       expect(state.playbackState).toBe('idle');
       expect(state.isMiniPlayerVisible).toBe(false);
+      expect(state.isExpanded).toBe(false);
     });
   });
 
@@ -264,6 +284,31 @@ describe('playerStore', () => {
       usePlayerStore.getState().updatePosition(30, 120);
       expect(usePlayerStore.getState().position).toBe(30);
       expect(usePlayerStore.getState().duration).toBe(120);
+    });
+  });
+
+  describe('expandPlayer / collapsePlayer', () => {
+    it('expandPlayer sets isExpanded to true', () => {
+      usePlayerStore.getState().expandPlayer();
+      expect(usePlayerStore.getState().isExpanded).toBe(true);
+    });
+
+    it('collapsePlayer sets isExpanded to false', () => {
+      usePlayerStore.setState({ isExpanded: true });
+      usePlayerStore.getState().collapsePlayer();
+      expect(usePlayerStore.getState().isExpanded).toBe(false);
+    });
+
+    it('expandPlayer does not affect playback state', () => {
+      usePlayerStore.setState({ playbackState: 'playing' });
+      usePlayerStore.getState().expandPlayer();
+      expect(usePlayerStore.getState().playbackState).toBe('playing');
+    });
+
+    it('collapsePlayer does not affect playback state', () => {
+      usePlayerStore.setState({ playbackState: 'playing', isExpanded: true });
+      usePlayerStore.getState().collapsePlayer();
+      expect(usePlayerStore.getState().playbackState).toBe('playing');
     });
   });
 
@@ -348,10 +393,10 @@ describe('playerStore', () => {
       expect(TrackPlayer.play).toHaveBeenCalled();
       handler(Event.RemotePause)();
       expect(TrackPlayer.pause).toHaveBeenCalled();
+      // RemoteNext/RemotePrevious now delegate to next()/previous() which
+      // use reset+add+play internally (not skipToNext/skipToPrevious)
       handler(Event.RemoteNext)();
-      expect(TrackPlayer.skipToNext).toHaveBeenCalled();
       handler(Event.RemotePrevious)();
-      expect(TrackPlayer.skipToPrevious).toHaveBeenCalled();
       handler(Event.RemoteSeek)({ position: 10 });
       expect(TrackPlayer.seekTo).toHaveBeenCalledWith(10);
     });

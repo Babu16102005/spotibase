@@ -1,0 +1,31 @@
+2a3cccea24a579fe52b6c70ca01a39a5
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.createShareable = createShareable;
+var _guardImplementation = require("../guardImplementation");
+var _workletFunction = require("../workletFunction.js");
+var _NativeWorklets = require("../WorkletsModule/NativeWorklets");
+var _serializable = require("./serializable");
+function createShareable(hostRuntimeId, initial, config) {
+  var _ref = config || {},
+    hostDecorator = _ref.hostDecorator,
+    guestDecorator = _ref.guestDecorator,
+    initSynchronously = _ref.initSynchronously;
+  if (__DEV__) {
+    if (hostDecorator && !(0, _workletFunction.isWorkletFunction)(hostDecorator)) {
+      throw new Error('[Worklets] hostDecorator must be a worklet function');
+    }
+    if (guestDecorator && !(0, _workletFunction.isWorkletFunction)(guestDecorator)) {
+      throw new Error('[Worklets] guestDecorator must be a worklet function');
+    }
+  }
+  var shareableRef = _NativeWorklets.WorkletsModule.createShareable(hostRuntimeId, (0, _serializable.createSerializable)(initial), !!initSynchronously, (0, _serializable.createSerializable)(hostDecorator), (0, _serializable.createSerializable)(guestDecorator));
+  return globalThis.__shareableGuestUnpacker(hostRuntimeId, shareableRef, guestDecorator);
+}
+if (__DEV__ && !globalThis._WORKLETS_BUNDLE_MODE_ENABLED) {
+  (0, _guardImplementation.addNoBundleModeGuardImplementation)(createShareable);
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImNyZWF0ZVNoYXJlYWJsZSIsIl9ndWFyZEltcGxlbWVudGF0aW9uIiwicmVxdWlyZSIsIl93b3JrbGV0RnVuY3Rpb24iLCJfTmF0aXZlV29ya2xldHMiLCJfc2VyaWFsaXphYmxlIiwiaG9zdFJ1bnRpbWVJZCIsImluaXRpYWwiLCJjb25maWciLCJfcmVmIiwiaG9zdERlY29yYXRvciIsImd1ZXN0RGVjb3JhdG9yIiwiaW5pdFN5bmNocm9ub3VzbHkiLCJfX0RFVl9fIiwiaXNXb3JrbGV0RnVuY3Rpb24iLCJFcnJvciIsInNoYXJlYWJsZVJlZiIsIldvcmtsZXRzTW9kdWxlIiwiY3JlYXRlU2VyaWFsaXphYmxlIiwiZ2xvYmFsVGhpcyIsIl9fc2hhcmVhYmxlR3Vlc3RVbnBhY2tlciIsIl9XT1JLTEVUU19CVU5ETEVfTU9ERV9FTkFCTEVEIiwiYWRkTm9CdW5kbGVNb2RlR3VhcmRJbXBsZW1lbnRhdGlvbiJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9tZW1vcnkvc2hhcmVhYmxlLm5hdGl2ZS50cyJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTs7QUFBQUEsTUFBQSxDQUFBQyxjQUFBLENBQUFDLE9BQUE7RUFBQUMsS0FBQTtBQUFBO0FBQUFELE9BQUEsQ0FBQUUsZUFBQSxHQUFBQSxlQUFBO0FBRVosSUFBQUMsb0JBQUEsR0FBQUMsT0FBQTtBQUNBLElBQUFDLGdCQUFBLEdBQUFELE9BQUE7QUFDQSxJQUFBRSxlQUFBLEdBQUFGLE9BQUE7QUFDQSxJQUFBRyxhQUFBLEdBQUFILE9BQUE7QUF5Qk8sU0FBU0YsZUFBZUEsQ0FLN0JNLGFBQXFCLEVBQ3JCQyxPQUFlLEVBQ2ZDLE1BQWlFLEVBQ2I7RUFDcEQsSUFBQUMsSUFBQSxHQUE2REQsTUFBTSxJQUFJLENBQUMsQ0FBQztJQUFqRUUsYUFBYSxHQUFBRCxJQUFBLENBQWJDLGFBQWE7SUFBRUMsY0FBYyxHQUFBRixJQUFBLENBQWRFLGNBQWM7SUFBRUMsaUJBQUEsR0FBQUgsSUFBQSxDQUFBRyxpQkFBQTtFQUN2QyxJQUFJQyxPQUFPLEVBQUU7SUFDWCxJQUFJSCxhQUFhLElBQUksQ0FBQyxJQUFBSSxrQ0FBaUIsRUFBQ0osYUFBYSxDQUFDLEVBQUU7TUFDdEQsTUFBTSxJQUFJSyxLQUFLLENBQUMscURBQXFELENBQUM7SUFDeEU7SUFDQSxJQUFJSixjQUFjLElBQUksQ0FBQyxJQUFBRyxrQ0FBaUIsRUFBQ0gsY0FBYyxDQUFDLEVBQUU7TUFDeEQsTUFBTSxJQUFJSSxLQUFLLENBQUMsc0RBQXNELENBQUM7SUFDekU7RUFDRjtFQUVBLElBQU1DLFlBQVksR0FBR0MsOEJBQWMsQ0FBQ2pCLGVBQWUsQ0FDakRNLGFBQWEsRUFDYixJQUFBWSxnQ0FBa0IsRUFBQ1gsT0FBTyxDQUFDLEVBQzNCLENBQUMsQ0FBQ0ssaUJBQWlCLEVBQ25CLElBQUFNLGdDQUFrQixFQUFDUixhQUFhLENBQUMsRUFDakMsSUFBQVEsZ0NBQWtCLEVBQUNQLGNBQWMsQ0FDbkMsQ0FBQztFQUVELE9BQU9RLFVBQVUsQ0FBQ0Msd0JBQXdCLENBQ3hDZCxhQUFhLEVBQ2JVLFlBQVksRUFDWkwsY0FDRixDQUFDO0FBQ0g7QUFFQSxJQUFJRSxPQUFPLElBQUksQ0FBQ00sVUFBVSxDQUFDRSw2QkFBNkIsRUFBRTtFQUN4RCxJQUFBQyx1REFBa0MsRUFBQ3RCLGVBQWUsQ0FBQztBQUNyRCIsImlnbm9yZUxpc3QiOltdfQ==

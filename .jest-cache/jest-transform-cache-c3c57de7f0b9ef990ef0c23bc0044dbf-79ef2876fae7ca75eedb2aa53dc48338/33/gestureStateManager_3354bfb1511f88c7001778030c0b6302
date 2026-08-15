@@ -1,0 +1,224 @@
+aac396a3d2ec23d7db9a2a1270a641e4
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.GestureStateManager = void 0;
+var _reanimatedWrapper = require("./reanimatedWrapper");
+var _State = require("../../State");
+var _utils = require("../../utils");
+var warningMessage = (0, _utils.tagMessage)('react-native-reanimated is required in order to use synchronous state management');
+var REANIMATED_AVAILABLE = _reanimatedWrapper.Reanimated?.useSharedValue !== undefined;
+var setGestureState = _reanimatedWrapper.Reanimated?.setGestureState;
+var _worklet_16638993217539_init_data = {
+  code: "function reactNativeGestureHandler_gestureStateManagerJs1(){const{REANIMATED_AVAILABLE,setGestureState,handlerTag,_State,warningMessage}=this.__closure;if(REANIMATED_AVAILABLE){setGestureState(handlerTag,_State.State.BEGAN);}else{console.warn(warningMessage);}}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js",
+  sourceMap: "{\"version\":3,\"names\":[\"reactNativeGestureHandler_gestureStateManagerJs1\",\"REANIMATED_AVAILABLE\",\"setGestureState\",\"handlerTag\",\"_State\",\"warningMessage\",\"__closure\",\"State\",\"BEGAN\",\"console\",\"warn\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js\"],\"mappings\":\"AAoBW,SAAAA,gDAAMA,CAAA,QAAAC,oBAAA,CAAAC,eAAA,CAAAC,UAAA,CAAAC,MAAA,CAAAC,cAAA,OAAAC,SAAA,CAGX,GAAIL,oBAAoB,CAAE,CAGxBC,eAAe,CAACC,UAAU,CAAEC,MAAM,CAACG,KAAK,CAACC,KAAK,CAAC,CACjD,CAAC,IAAM,CACLC,OAAO,CAACC,IAAI,CAACL,cAAc,CAAC,CAC9B,CACF\",\"ignoreList\":[]}"
+};
+var _worklet_1720879549187_init_data = {
+  code: "function reactNativeGestureHandler_gestureStateManagerJs2(){const{REANIMATED_AVAILABLE,setGestureState,handlerTag,_State,warningMessage}=this.__closure;if(REANIMATED_AVAILABLE){setGestureState(handlerTag,_State.State.ACTIVE);}else{console.warn(warningMessage);}}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js",
+  sourceMap: "{\"version\":3,\"names\":[\"reactNativeGestureHandler_gestureStateManagerJs2\",\"REANIMATED_AVAILABLE\",\"setGestureState\",\"handlerTag\",\"_State\",\"warningMessage\",\"__closure\",\"State\",\"ACTIVE\",\"console\",\"warn\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js\"],\"mappings\":\"AA+Bc,SAAAA,gDAAMA,CAAA,QAAAC,oBAAA,CAAAC,eAAA,CAAAC,UAAA,CAAAC,MAAA,CAAAC,cAAA,OAAAC,SAAA,CAGd,GAAIL,oBAAoB,CAAE,CAGxBC,eAAe,CAACC,UAAU,CAAEC,MAAM,CAACG,KAAK,CAACC,MAAM,CAAC,CAClD,CAAC,IAAM,CACLC,OAAO,CAACC,IAAI,CAACL,cAAc,CAAC,CAC9B,CACF\",\"ignoreList\":[]}"
+};
+var _worklet_14272471393005_init_data = {
+  code: "function reactNativeGestureHandler_gestureStateManagerJs3(){const{REANIMATED_AVAILABLE,setGestureState,handlerTag,_State,warningMessage}=this.__closure;if(REANIMATED_AVAILABLE){setGestureState(handlerTag,_State.State.FAILED);}else{console.warn(warningMessage);}}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js",
+  sourceMap: "{\"version\":3,\"names\":[\"reactNativeGestureHandler_gestureStateManagerJs3\",\"REANIMATED_AVAILABLE\",\"setGestureState\",\"handlerTag\",\"_State\",\"warningMessage\",\"__closure\",\"State\",\"FAILED\",\"console\",\"warn\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js\"],\"mappings\":\"AA0CU,SAAAA,gDAAMA,CAAA,QAAAC,oBAAA,CAAAC,eAAA,CAAAC,UAAA,CAAAC,MAAA,CAAAC,cAAA,OAAAC,SAAA,CAGV,GAAIL,oBAAoB,CAAE,CAGxBC,eAAe,CAACC,UAAU,CAAEC,MAAM,CAACG,KAAK,CAACC,MAAM,CAAC,CAClD,CAAC,IAAM,CACLC,OAAO,CAACC,IAAI,CAACL,cAAc,CAAC,CAC9B,CACF\",\"ignoreList\":[]}"
+};
+var _worklet_12498278281542_init_data = {
+  code: "function reactNativeGestureHandler_gestureStateManagerJs4(){const{REANIMATED_AVAILABLE,setGestureState,handlerTag,_State,warningMessage}=this.__closure;if(REANIMATED_AVAILABLE){setGestureState(handlerTag,_State.State.END);}else{console.warn(warningMessage);}}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js",
+  sourceMap: "{\"version\":3,\"names\":[\"reactNativeGestureHandler_gestureStateManagerJs4\",\"REANIMATED_AVAILABLE\",\"setGestureState\",\"handlerTag\",\"_State\",\"warningMessage\",\"__closure\",\"State\",\"END\",\"console\",\"warn\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js\"],\"mappings\":\"AAqDS,SAAAA,gDAAMA,CAAA,QAAAC,oBAAA,CAAAC,eAAA,CAAAC,UAAA,CAAAC,MAAA,CAAAC,cAAA,OAAAC,SAAA,CAGT,GAAIL,oBAAoB,CAAE,CAGxBC,eAAe,CAACC,UAAU,CAAEC,MAAM,CAACG,KAAK,CAACC,GAAG,CAAC,CAC/C,CAAC,IAAM,CACLC,OAAO,CAACC,IAAI,CAACL,cAAc,CAAC,CAC9B,CACF\",\"ignoreList\":[]}"
+};
+var _worklet_8204672892442_init_data = {
+  code: "function create_reactNativeGestureHandler_gestureStateManagerJs5(handlerTag){const{_worklet_16638993217539_init_data,REANIMATED_AVAILABLE,setGestureState,_State,warningMessage,_worklet_1720879549187_init_data,_worklet_14272471393005_init_data,_worklet_12498278281542_init_data}=this.__closure;return{handlerTag:handlerTag,begin:function create_reactNativeGestureHandler_gestureStateManagerJs5({_worklet_16638993217539_init_data:_worklet_16638993217539_init_data,REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage}){const _e=[new global.Error(),-6,-27];const reactNativeGestureHandler_gestureStateManagerJs1=function(){if(REANIMATED_AVAILABLE){setGestureState(handlerTag,_State.State.BEGAN);}else{console.warn(warningMessage);}};reactNativeGestureHandler_gestureStateManagerJs1.__closure={REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage};reactNativeGestureHandler_gestureStateManagerJs1.__workletHash=16638993217539;reactNativeGestureHandler_gestureStateManagerJs1.__pluginVersion=\"0.10.1\";reactNativeGestureHandler_gestureStateManagerJs1.__initData=_worklet_16638993217539_init_data;reactNativeGestureHandler_gestureStateManagerJs1.__stackDetails=_e;return reactNativeGestureHandler_gestureStateManagerJs1;}({_worklet_16638993217539_init_data:_worklet_16638993217539_init_data,REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage}),activate:function reactNativeGestureHandler_gestureStateManagerJs2Factory({_worklet_1720879549187_init_data:_worklet_1720879549187_init_data,REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage}){const _e=[new global.Error(),-6,-27];const reactNativeGestureHandler_gestureStateManagerJs2=function(){if(REANIMATED_AVAILABLE){setGestureState(handlerTag,_State.State.ACTIVE);}else{console.warn(warningMessage);}};reactNativeGestureHandler_gestureStateManagerJs2.__closure={REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage};reactNativeGestureHandler_gestureStateManagerJs2.__workletHash=1720879549187;reactNativeGestureHandler_gestureStateManagerJs2.__pluginVersion=\"0.10.1\";reactNativeGestureHandler_gestureStateManagerJs2.__initData=_worklet_1720879549187_init_data;reactNativeGestureHandler_gestureStateManagerJs2.__stackDetails=_e;return reactNativeGestureHandler_gestureStateManagerJs2;}({_worklet_1720879549187_init_data:_worklet_1720879549187_init_data,REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage}),fail:function reactNativeGestureHandler_gestureStateManagerJs3Factory({_worklet_14272471393005_init_data:_worklet_14272471393005_init_data,REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage}){const _e=[new global.Error(),-6,-27];const reactNativeGestureHandler_gestureStateManagerJs3=function(){if(REANIMATED_AVAILABLE){setGestureState(handlerTag,_State.State.FAILED);}else{console.warn(warningMessage);}};reactNativeGestureHandler_gestureStateManagerJs3.__closure={REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage};reactNativeGestureHandler_gestureStateManagerJs3.__workletHash=14272471393005;reactNativeGestureHandler_gestureStateManagerJs3.__pluginVersion=\"0.10.1\";reactNativeGestureHandler_gestureStateManagerJs3.__initData=_worklet_14272471393005_init_data;reactNativeGestureHandler_gestureStateManagerJs3.__stackDetails=_e;return reactNativeGestureHandler_gestureStateManagerJs3;}({_worklet_14272471393005_init_data:_worklet_14272471393005_init_data,REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage}),end:function reactNativeGestureHandler_gestureStateManagerJs4Factory({_worklet_12498278281542_init_data:_worklet_12498278281542_init_data,REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage}){const _e=[new global.Error(),-6,-27];const reactNativeGestureHandler_gestureStateManagerJs4=function(){if(REANIMATED_AVAILABLE){setGestureState(handlerTag,_State.State.END);}else{console.warn(warningMessage);}};reactNativeGestureHandler_gestureStateManagerJs4.__closure={REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage};reactNativeGestureHandler_gestureStateManagerJs4.__workletHash=12498278281542;reactNativeGestureHandler_gestureStateManagerJs4.__pluginVersion=\"0.10.1\";reactNativeGestureHandler_gestureStateManagerJs4.__initData=_worklet_12498278281542_init_data;reactNativeGestureHandler_gestureStateManagerJs4.__stackDetails=_e;return reactNativeGestureHandler_gestureStateManagerJs4;}({_worklet_12498278281542_init_data:_worklet_12498278281542_init_data,REANIMATED_AVAILABLE:REANIMATED_AVAILABLE,setGestureState:setGestureState,handlerTag:handlerTag,_State:_State,warningMessage:warningMessage})};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js",
+  sourceMap: "{\"version\":3,\"names\":[\"create_reactNativeGestureHandler_gestureStateManagerJs5\",\"handlerTag\",\"_worklet_16638993217539_init_data\",\"REANIMATED_AVAILABLE\",\"setGestureState\",\"_State\",\"warningMessage\",\"_worklet_1720879549187_init_data\",\"_worklet_14272471393005_init_data\",\"_worklet_12498278281542_init_data\",\"__closure\",\"begin\",\"reactNativeGestureHandler_gestureStateManagerJs1Factory\",\"_e\",\"global\",\"Error\",\"reactNativeGestureHandler_gestureStateManagerJs1\",\"State\",\"BEGAN\",\"console\",\"warn\",\"__workletHash\",\"__pluginVersion\",\"__initData\",\"__stackDetails\",\"activate\",\"reactNativeGestureHandler_gestureStateManagerJs2Factory\",\"reactNativeGestureHandler_gestureStateManagerJs2\",\"ACTIVE\",\"fail\",\"reactNativeGestureHandler_gestureStateManagerJs3Factory\",\"reactNativeGestureHandler_gestureStateManagerJs3\",\"FAILED\",\"end\",\"reactNativeGestureHandler_gestureStateManagerJs4Factory\",\"reactNativeGestureHandler_gestureStateManagerJs4\",\"END\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/gestureStateManager.js\"],\"mappings\":\"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\",\"ignoreList\":[]}"
+};
+var create = function create_reactNativeGestureHandler_gestureStateManagerJs5Factory(_ref) {
+  var _worklet_8204672892442_init_data = _ref._worklet_8204672892442_init_data,
+    _worklet_16638993217539_init_data = _ref._worklet_16638993217539_init_data,
+    REANIMATED_AVAILABLE = _ref.REANIMATED_AVAILABLE,
+    setGestureState = _ref.setGestureState,
+    _State = _ref._State,
+    warningMessage = _ref.warningMessage,
+    _worklet_1720879549187_init_data = _ref._worklet_1720879549187_init_data,
+    _worklet_14272471393005_init_data = _ref._worklet_14272471393005_init_data,
+    _worklet_12498278281542_init_data = _ref._worklet_12498278281542_init_data;
+  var _e = [new global.Error(), -9, -27];
+  var create = function (handlerTag) {
+    return {
+      handlerTag,
+      begin: function reactNativeGestureHandler_gestureStateManagerJs1Factory(_ref2) {
+        var _worklet_16638993217539_init_data = _ref2._worklet_16638993217539_init_data,
+          REANIMATED_AVAILABLE = _ref2.REANIMATED_AVAILABLE,
+          setGestureState = _ref2.setGestureState,
+          handlerTag = _ref2.handlerTag,
+          _State = _ref2._State,
+          warningMessage = _ref2.warningMessage;
+        var _e = [new global.Error(), -6, -27];
+        var reactNativeGestureHandler_gestureStateManagerJs1 = function () {
+          if (REANIMATED_AVAILABLE) {
+            setGestureState(handlerTag, _State.State.BEGAN);
+          } else {
+            console.warn(warningMessage);
+          }
+        };
+        reactNativeGestureHandler_gestureStateManagerJs1.__closure = {
+          REANIMATED_AVAILABLE,
+          setGestureState,
+          handlerTag,
+          _State,
+          warningMessage
+        };
+        reactNativeGestureHandler_gestureStateManagerJs1.__workletHash = 16638993217539;
+        reactNativeGestureHandler_gestureStateManagerJs1.__pluginVersion = "0.10.1";
+        reactNativeGestureHandler_gestureStateManagerJs1.__initData = _worklet_16638993217539_init_data;
+        reactNativeGestureHandler_gestureStateManagerJs1.__stackDetails = _e;
+        return reactNativeGestureHandler_gestureStateManagerJs1;
+      }({
+        _worklet_16638993217539_init_data,
+        REANIMATED_AVAILABLE,
+        setGestureState,
+        handlerTag,
+        _State,
+        warningMessage
+      }),
+      activate: function reactNativeGestureHandler_gestureStateManagerJs2Factory(_ref3) {
+        var _worklet_1720879549187_init_data = _ref3._worklet_1720879549187_init_data,
+          REANIMATED_AVAILABLE = _ref3.REANIMATED_AVAILABLE,
+          setGestureState = _ref3.setGestureState,
+          handlerTag = _ref3.handlerTag,
+          _State = _ref3._State,
+          warningMessage = _ref3.warningMessage;
+        var _e = [new global.Error(), -6, -27];
+        var reactNativeGestureHandler_gestureStateManagerJs2 = function () {
+          if (REANIMATED_AVAILABLE) {
+            setGestureState(handlerTag, _State.State.ACTIVE);
+          } else {
+            console.warn(warningMessage);
+          }
+        };
+        reactNativeGestureHandler_gestureStateManagerJs2.__closure = {
+          REANIMATED_AVAILABLE,
+          setGestureState,
+          handlerTag,
+          _State,
+          warningMessage
+        };
+        reactNativeGestureHandler_gestureStateManagerJs2.__workletHash = 1720879549187;
+        reactNativeGestureHandler_gestureStateManagerJs2.__pluginVersion = "0.10.1";
+        reactNativeGestureHandler_gestureStateManagerJs2.__initData = _worklet_1720879549187_init_data;
+        reactNativeGestureHandler_gestureStateManagerJs2.__stackDetails = _e;
+        return reactNativeGestureHandler_gestureStateManagerJs2;
+      }({
+        _worklet_1720879549187_init_data,
+        REANIMATED_AVAILABLE,
+        setGestureState,
+        handlerTag,
+        _State,
+        warningMessage
+      }),
+      fail: function reactNativeGestureHandler_gestureStateManagerJs3Factory(_ref4) {
+        var _worklet_14272471393005_init_data = _ref4._worklet_14272471393005_init_data,
+          REANIMATED_AVAILABLE = _ref4.REANIMATED_AVAILABLE,
+          setGestureState = _ref4.setGestureState,
+          handlerTag = _ref4.handlerTag,
+          _State = _ref4._State,
+          warningMessage = _ref4.warningMessage;
+        var _e = [new global.Error(), -6, -27];
+        var reactNativeGestureHandler_gestureStateManagerJs3 = function () {
+          if (REANIMATED_AVAILABLE) {
+            setGestureState(handlerTag, _State.State.FAILED);
+          } else {
+            console.warn(warningMessage);
+          }
+        };
+        reactNativeGestureHandler_gestureStateManagerJs3.__closure = {
+          REANIMATED_AVAILABLE,
+          setGestureState,
+          handlerTag,
+          _State,
+          warningMessage
+        };
+        reactNativeGestureHandler_gestureStateManagerJs3.__workletHash = 14272471393005;
+        reactNativeGestureHandler_gestureStateManagerJs3.__pluginVersion = "0.10.1";
+        reactNativeGestureHandler_gestureStateManagerJs3.__initData = _worklet_14272471393005_init_data;
+        reactNativeGestureHandler_gestureStateManagerJs3.__stackDetails = _e;
+        return reactNativeGestureHandler_gestureStateManagerJs3;
+      }({
+        _worklet_14272471393005_init_data,
+        REANIMATED_AVAILABLE,
+        setGestureState,
+        handlerTag,
+        _State,
+        warningMessage
+      }),
+      end: function reactNativeGestureHandler_gestureStateManagerJs4Factory(_ref5) {
+        var _worklet_12498278281542_init_data = _ref5._worklet_12498278281542_init_data,
+          REANIMATED_AVAILABLE = _ref5.REANIMATED_AVAILABLE,
+          setGestureState = _ref5.setGestureState,
+          handlerTag = _ref5.handlerTag,
+          _State = _ref5._State,
+          warningMessage = _ref5.warningMessage;
+        var _e = [new global.Error(), -6, -27];
+        var reactNativeGestureHandler_gestureStateManagerJs4 = function () {
+          if (REANIMATED_AVAILABLE) {
+            setGestureState(handlerTag, _State.State.END);
+          } else {
+            console.warn(warningMessage);
+          }
+        };
+        reactNativeGestureHandler_gestureStateManagerJs4.__closure = {
+          REANIMATED_AVAILABLE,
+          setGestureState,
+          handlerTag,
+          _State,
+          warningMessage
+        };
+        reactNativeGestureHandler_gestureStateManagerJs4.__workletHash = 12498278281542;
+        reactNativeGestureHandler_gestureStateManagerJs4.__pluginVersion = "0.10.1";
+        reactNativeGestureHandler_gestureStateManagerJs4.__initData = _worklet_12498278281542_init_data;
+        reactNativeGestureHandler_gestureStateManagerJs4.__stackDetails = _e;
+        return reactNativeGestureHandler_gestureStateManagerJs4;
+      }({
+        _worklet_12498278281542_init_data,
+        REANIMATED_AVAILABLE,
+        setGestureState,
+        handlerTag,
+        _State,
+        warningMessage
+      })
+    };
+  };
+  create.__closure = {
+    _worklet_16638993217539_init_data,
+    REANIMATED_AVAILABLE,
+    setGestureState,
+    _State,
+    warningMessage,
+    _worklet_1720879549187_init_data,
+    _worklet_14272471393005_init_data,
+    _worklet_12498278281542_init_data
+  };
+  create.__workletHash = 8204672892442;
+  create.__pluginVersion = "0.10.1";
+  create.__initData = _worklet_8204672892442_init_data;
+  create.__stackDetails = _e;
+  return create;
+}({
+  _worklet_8204672892442_init_data,
+  _worklet_16638993217539_init_data,
+  REANIMATED_AVAILABLE,
+  setGestureState,
+  _State,
+  warningMessage,
+  _worklet_1720879549187_init_data,
+  _worklet_14272471393005_init_data,
+  _worklet_12498278281542_init_data
+});
+var GestureStateManager = exports.GestureStateManager = {
+  create
+};
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfcmVhbmltYXRlZFdyYXBwZXIiLCJyZXF1aXJlIiwiX1N0YXRlIiwiX3V0aWxzIiwid2FybmluZ01lc3NhZ2UiLCJ0YWdNZXNzYWdlIiwiUkVBTklNQVRFRF9BVkFJTEFCTEUiLCJSZWFuaW1hdGVkIiwidXNlU2hhcmVkVmFsdWUiLCJ1bmRlZmluZWQiLCJzZXRHZXN0dXJlU3RhdGUiLCJfd29ya2xldF8xNjYzODk5MzIxNzUzOV9pbml0X2RhdGEiLCJjb2RlIiwibG9jYXRpb24iLCJzb3VyY2VNYXAiLCJfd29ya2xldF8xNzIwODc5NTQ5MTg3X2luaXRfZGF0YSIsIl93b3JrbGV0XzE0MjcyNDcxMzkzMDA1X2luaXRfZGF0YSIsIl93b3JrbGV0XzEyNDk4Mjc4MjgxNTQyX2luaXRfZGF0YSIsIl93b3JrbGV0XzgyMDQ2NzI4OTI0NDJfaW5pdF9kYXRhIiwiY3JlYXRlIiwiY3JlYXRlX3JlYWN0TmF0aXZlR2VzdHVyZUhhbmRsZXJfZ2VzdHVyZVN0YXRlTWFuYWdlckpzNUZhY3RvcnkiLCJfcmVmIiwiX2UiLCJnbG9iYWwiLCJFcnJvciIsImhhbmRsZXJUYWciLCJiZWdpbiIsIl9yZWYyIiwicmVhY3ROYXRpdmVHZXN0dXJlSGFuZGxlcl9nZXN0dXJlU3RhdGVNYW5hZ2VySnMxIiwiU3RhdGUiLCJCRUdBTiIsImNvbnNvbGUiLCJ3YXJuIiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyIsImFjdGl2YXRlIiwiX3JlZjMiLCJyZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX2dlc3R1cmVTdGF0ZU1hbmFnZXJKczIiLCJBQ1RJVkUiLCJmYWlsIiwiX3JlZjQiLCJyZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX2dlc3R1cmVTdGF0ZU1hbmFnZXJKczMiLCJGQUlMRUQiLCJlbmQiLCJfcmVmNSIsInJlYWN0TmF0aXZlR2VzdHVyZUhhbmRsZXJfZ2VzdHVyZVN0YXRlTWFuYWdlckpzNCIsIkVORCIsIkdlc3R1cmVTdGF0ZU1hbmFnZXIiLCJleHBvcnRzIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL2hhbmRsZXJzL2dlc3R1cmVzL2dlc3R1cmVTdGF0ZU1hbmFnZXIudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztBQUFBLElBQUFBLGtCQUFBLEdBQUFDLE9BQUE7QUFDQSxJQUFBQyxNQUFBLEdBQUFELE9BQUE7QUFDQSxJQUFBRSxNQUFBLEdBQUFGLE9BQUE7QUFXQSxJQUFNRyxjQUFjLEdBQUcsSUFBQUQsTUFBQSxDQUFBRSxVQUFVLEVBQy9CLGtGQUNGLENBQUM7QUFJRCxJQUFNQyxvQkFBb0IsR0FBR0Msa0JBQUEsQ0FBQUEsVUFBVSxFQUFFQyxjQUFjLEtBQUtDLFNBQVM7QUFDckUsSUFBTUMsZUFBZSxHQUFHSCxrQkFBQSxDQUFBQSxVQUFVLEVBQUVHLGVBQWU7QUFBQSxJQUFBQyxpQ0FBQTtFQUFBQyxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBQUEsSUFBQUMsZ0NBQUE7RUFBQUgsSUFBQTtFQUFBQyxRQUFBO0VBQUFDLFNBQUE7QUFBQTtBQUFBLElBQUFFLGlDQUFBO0VBQUFKLElBQUE7RUFBQUMsUUFBQTtFQUFBQyxTQUFBO0FBQUE7QUFBQSxJQUFBRyxpQ0FBQTtFQUFBTCxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBQUEsSUFBQUksZ0NBQUE7RUFBQU4sSUFBQTtFQUFBQyxRQUFBO0VBQUFDLFNBQUE7QUFBQTtBQUFBLElBQUFLLE1BQUEsR0FFbkQsU0FBQUMsK0RBQUFDLElBQUE7RUFBQSxJQUFBSCxnQ0FBQSxHQUFBRyxJQUFBLENBQUFILGdDQUFBO0lBQUFQLGlDQUFBLEdBQUFVLElBQUEsQ0FBQVYsaUNBQUE7SUFPVUwsb0JBQW9CLEdBQUFlLElBQUEsQ0FBcEJmLG9CQUFvQjtJQUd0QkksZUFBZSxHQUFBVyxJQUFBLENBQWZYLGVBQWU7SUFBY1IsTUFBQSxHQUFBbUIsSUFBQSxDQUFB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

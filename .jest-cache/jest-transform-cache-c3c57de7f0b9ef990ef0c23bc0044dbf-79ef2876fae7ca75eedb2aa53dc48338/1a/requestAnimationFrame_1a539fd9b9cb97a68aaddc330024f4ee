@@ -1,0 +1,85 @@
+8b37353a7d75e79db3f3ee0248e5f297
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.setupRequestAnimationFrame = void 0;
+var _worklet_10994360721729_init_data = {
+  code: "function setupRequestAnimationFrame_reactNativeWorklets_requestAnimationFrameJs1(){const callMicrotasks=globalThis.__callMicrotasks;let queuedCallbacks=[];let queuedCallbacksBegin=0;let queuedCallbacksEnd=0;let flushedCallbacks=queuedCallbacks;let flushedCallbacksBegin=0;let flushedCallbacksEnd=0;let queuedFinalizers=[];function executeQueue(timestamp){flushedCallbacks=queuedCallbacks;queuedCallbacks=[];flushedCallbacksBegin=queuedCallbacksBegin;flushedCallbacksEnd=queuedCallbacksEnd;queuedCallbacksBegin=queuedCallbacksEnd;for(const callback of flushedCallbacks){callback(timestamp);}flushedCallbacksBegin=flushedCallbacksEnd;callMicrotasks();const finalizers=queuedFinalizers;queuedFinalizers=[];for(const finalizer of finalizers){finalizer();}}function requestAnimationFrame(callback){const handle=queuedCallbacksEnd++;queuedCallbacks.push(callback);return handle;}function cancelAnimationFrame(handle){if(handle<flushedCallbacksBegin||handle>=queuedCallbacksEnd){return;}if(handle<flushedCallbacksEnd){flushedCallbacks[handle-flushedCallbacksBegin]=function(){};}else{queuedCallbacks[handle-queuedCallbacksBegin]=function(){};}}function nativeFlushQueue(timestamp){flushQueue(timestamp);globalThis.__nativeRequestAnimationFrame(nativeFlushQueue);}function flushQueue(timestamp){globalThis.__frameTimestamp=timestamp;executeQueue(timestamp);globalThis.__frameTimestamp=undefined;}globalThis.requestAnimationFrame=requestAnimationFrame;globalThis.cancelAnimationFrame=cancelAnimationFrame;globalThis.requestAnimationFrameFinalizer=function(callback){queuedFinalizers.push(callback);};globalThis.__nativeRequestAnimationFrame(nativeFlushQueue);globalThis.__flushAnimationFrame=function(eventTimestamp){flushQueue(eventTimestamp);};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runLoop/uiRuntime/requestAnimationFrame.js",
+  sourceMap: "{\"version\":3,\"names\":[\"setupRequestAnimationFrame_reactNativeWorklets_requestAnimationFrameJs1\",\"callMicrotasks\",\"globalThis\",\"__callMicrotasks\",\"queuedCallbacks\",\"queuedCallbacksBegin\",\"queuedCallbacksEnd\",\"flushedCallbacks\",\"flushedCallbacksBegin\",\"flushedCallbacksEnd\",\"queuedFinalizers\",\"executeQueue\",\"timestamp\",\"callback\",\"finalizers\",\"finalizer\",\"requestAnimationFrame\",\"handle\",\"push\",\"cancelAnimationFrame\",\"nativeFlushQueue\",\"flushQueue\",\"__nativeRequestAnimationFrame\",\"__frameTimestamp\",\"undefined\",\"requestAnimationFrameFinalizer\",\"__flushAnimationFrame\",\"eventTimestamp\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runLoop/uiRuntime/requestAnimationFrame.js\"],\"mappings\":\"AAEO,SAAAA,uEAAsCA,CAAA,EAG3C,KAAM,CAAAC,cAAc,CAAGC,UAAU,CAACC,gBAAgB,CAClD,GAAI,CAAAC,eAAe,CAAG,EAAE,CACxB,GAAI,CAAAC,oBAAoB,CAAG,CAAC,CAC5B,GAAI,CAAAC,kBAAkB,CAAG,CAAC,CAC1B,GAAI,CAAAC,gBAAgB,CAAGH,eAAe,CACtC,GAAI,CAAAI,qBAAqB,CAAG,CAAC,CAC7B,GAAI,CAAAC,mBAAmB,CAAG,CAAC,CAC3B,GAAI,CAAAC,gBAAgB,CAAG,EAAE,CACzB,QAAS,CAAAC,YAAYA,CAACC,SAAS,CAAE,CAC/BL,gBAAgB,CAAGH,eAAe,CAClCA,eAAe,CAAG,EAAE,CACpBI,qBAAqB,CAAGH,oBAAoB,CAC5CI,mBAAmB,CAAGH,kBAAkB,CACxCD,oBAAoB,CAAGC,kBAAkB,CACzC,IAAK,KAAM,CAAAO,QAAQ,GAAI,CAAAN,gBAAgB,CAAE,CACvCM,QAAQ,CAACD,SAAS,CAAC,CACrB,CACAJ,qBAAqB,CAAGC,mBAAmB,CAC3CR,cAAc,CAAC,CAAC,CAChB,KAAM,CAAAa,UAAU,CAAGJ,gBAAgB,CACnCA,gBAAgB,CAAG,EAAE,CACrB,IAAK,KAAM,CAAAK,SAAS,GAAI,CAAAD,UAAU,CAAE,CAClCC,SAAS,CAAC,CAAC,CACb,CACF,CACA,QAAS,CAAAC,qBAAqBA,CAACH,QAAQ,CAAE,CACvC,KAAM,CAAAI,MAAM,CAAGX,kBAAkB,EAAE,CACnCF,eAAe,CAACc,IAAI,CAACL,QAAQ,CAAC,CAC9B,MAAO,CAAAI,MAAM,CACf,CACA,QAAS,CAAAE,oBAAoBA,CAACF,MAAM,CAAE,CACpC,GAAIA,MAAM,CAAGT,qBAAqB,EAAIS,MAAM,EAAIX,kBAAkB,CAAE,CAClE,OACF,CACA,GAAIW,MAAM,CAAGR,mBAAmB,CAAE,CAChCF,gBAAgB,CAACU,MAAM,CAAGT,qBAAqB,CAAC,CAAG,UAAM,CAAC,CAAC,CAC7D,CAAC,IAAM,CACLJ,eAAe,CAACa,MAAM,CAAGZ,oBAAoB,CAAC,CAAG,UAAM,CAAC,CAAC,CAC3D,CACF,CACA,QAAS,CAAAe,gBAAgBA,CAACR,SAAS,CAAE,CACnCS,UAAU,CAACT,SAAS,CAAC,CAGrBV,UAAU,CAACoB,6BAA6B,CAACF,gBAAgB,CAAC,CAC5D,CACA,QAAS,CAAAC,UAAUA,CAACT,SAAS,CAAE,CAC7BV,UAAU,CAACqB,gBAAgB,CAAGX,SAAS,CACvCD,YAAY,CAACC,SAAS,CAAC,CACvBV,UAAU,CAACqB,gBAAgB,CAAGC,SAAS,CACzC,CACAtB,UAAU,CAACc,qBAAqB,CAAGA,qBAAqB,CACxDd,UAAU,CAACiB,oBAAoB,CAAGA,oBAAoB,CACtDjB,UAAU,CAACuB,8BAA8B,CAAG,SAAAZ,QAAQ,CAAI,CACtDH,gBAAgB,CAACQ,IAAI,CAACL,QAAQ,CAAC,CACjC,CAAC,CAGDX,UAAU,CAACoB,6BAA6B,CAACF,gBAAgB,CAAC,CAG1DlB,UAAU,CAACwB,qBAAqB,CAAG,SAAAC,cAAc,CAAI,CACnDN,UAAU,CAACM,cAAc,CAAC,CAC5B,CAAC,CACH\",\"ignoreList\":[]}"
+};
+var setupRequestAnimationFrame = exports.setupRequestAnimationFrame = function setupRequestAnimationFrame_reactNativeWorklets_requestAnimationFrameJs1Factory(_ref) {
+  var _worklet_10994360721729_init_data = _ref._worklet_10994360721729_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var setupRequestAnimationFrame = function () {
+    var callMicrotasks = globalThis.__callMicrotasks;
+    var queuedCallbacks = [];
+    var queuedCallbacksBegin = 0;
+    var queuedCallbacksEnd = 0;
+    var flushedCallbacks = queuedCallbacks;
+    var flushedCallbacksBegin = 0;
+    var flushedCallbacksEnd = 0;
+    var queuedFinalizers = [];
+    function executeQueue(timestamp) {
+      flushedCallbacks = queuedCallbacks;
+      queuedCallbacks = [];
+      flushedCallbacksBegin = queuedCallbacksBegin;
+      flushedCallbacksEnd = queuedCallbacksEnd;
+      queuedCallbacksBegin = queuedCallbacksEnd;
+      for (var callback of flushedCallbacks) {
+        callback(timestamp);
+      }
+      flushedCallbacksBegin = flushedCallbacksEnd;
+      callMicrotasks();
+      var finalizers = queuedFinalizers;
+      queuedFinalizers = [];
+      for (var finalizer of finalizers) {
+        finalizer();
+      }
+    }
+    function requestAnimationFrame(callback) {
+      var handle = queuedCallbacksEnd++;
+      queuedCallbacks.push(callback);
+      return handle;
+    }
+    function cancelAnimationFrame(handle) {
+      if (handle < flushedCallbacksBegin || handle >= queuedCallbacksEnd) {
+        return;
+      }
+      if (handle < flushedCallbacksEnd) {
+        flushedCallbacks[handle - flushedCallbacksBegin] = () => {};
+      } else {
+        queuedCallbacks[handle - queuedCallbacksBegin] = () => {};
+      }
+    }
+    function nativeFlushQueue(timestamp) {
+      flushQueue(timestamp);
+      globalThis.__nativeRequestAnimationFrame(nativeFlushQueue);
+    }
+    function flushQueue(timestamp) {
+      globalThis.__frameTimestamp = timestamp;
+      executeQueue(timestamp);
+      globalThis.__frameTimestamp = undefined;
+    }
+    globalThis.requestAnimationFrame = requestAnimationFrame;
+    globalThis.cancelAnimationFrame = cancelAnimationFrame;
+    globalThis.requestAnimationFrameFinalizer = callback => {
+      queuedFinalizers.push(callback);
+    };
+    globalThis.__nativeRequestAnimationFrame(nativeFlushQueue);
+    globalThis.__flushAnimationFrame = eventTimestamp => {
+      flushQueue(eventTimestamp);
+    };
+  };
+  setupRequestAnimationFrame.__closure = {};
+  setupRequestAnimationFrame.__workletHash = 10994360721729;
+  setupRequestAnimationFrame.__pluginVersion = "0.10.1";
+  setupRequestAnimationFrame.__initData = _worklet_10994360721729_init_data;
+  setupRequestAnimationFrame.__stackDetails = _e;
+  return setupRequestAnimationFrame;
+}({
+  _worklet_10994360721729_init_data
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsInNldHVwUmVxdWVzdEFuaW1hdGlvbkZyYW1lIiwiX3dvcmtsZXRfMTA5OTQzNjA3MjE3MjlfaW5pdF9kYXRhIiwiY29kZSIsImxvY2F0aW9uIiwic291cmNlTWFwIiwic2V0dXBSZXF1ZXN0QW5pbWF0aW9uRnJhbWVfcmVhY3ROYXRpdmVXb3JrbGV0c19yZXF1ZXN0QW5pbWF0aW9uRnJhbWVKczFGYWN0b3J5IiwiX3JlZiIsIl9lIiwiZ2xvYmFsIiwiRXJyb3IiLCJjYWxsTWljcm90YXNrcyIsImdsb2JhbFRoaXMiLCJfX2NhbGxNaWNyb3Rhc2tzIiwicXVldWVkQ2FsbGJhY2tzIiwicXVldWVkQ2FsbGJhY2tzQmVnaW4iLCJxdWV1ZWRDYWxsYmFja3NFbmQiLCJmbHVzaGVkQ2FsbGJhY2tzIiwiZmx1c2hlZENhbGxiYWNrc0JlZ2luIiwiZmx1c2hlZENhbGxiYWNrc0VuZCIsInF1ZXVlZEZpbmFsaXplcnMiLCJleGVjdXRlUXVldWUiLCJ0aW1lc3RhbXAiLCJjYWxsYmFjayIsImZpbmFsaXplcnMiLCJmaW5hbGl6ZXIiLCJyZXF1ZXN0QW5pbWF0aW9uRnJhbWUiLCJoYW5kbGUiLCJwdXNoIiwiY2FuY2VsQW5pbWF0aW9uRnJhbWUiLCJuYXRpdmVGbHVzaFF1ZXVlIiwiZmx1c2hRdWV1ZSIsIl9fbmF0aXZlUmVxdWVzdEFuaW1hdGlvbkZyYW1lIiwiX19mcmFtZVRpbWVzdGFtcCIsInVuZGVmaW5lZCIsInJlcXVlc3RBbmltYXRpb25GcmFtZUZpbmFsaXplciIsIl9fZmx1c2hBbmltYXRpb25GcmFtZSIsImV2ZW50VGltZXN0YW1wIiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9ydW5Mb29wL3VpUnVudGltZS9yZXF1ZXN0QW5pbWF0aW9u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

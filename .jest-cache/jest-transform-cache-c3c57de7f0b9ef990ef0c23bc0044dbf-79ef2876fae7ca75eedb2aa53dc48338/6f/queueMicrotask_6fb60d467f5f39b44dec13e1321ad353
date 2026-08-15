@@ -1,0 +1,38 @@
+d66ca6a5ae2a055635a343904444fbb5
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.setupQueueMicrotask = void 0;
+var _taskQueue = require("./taskQueue.js");
+var _worklet_67582599291_init_data = {
+  code: "function setupQueueMicrotask_reactNativeWorklets_queueMicrotaskJs1(){const{pushMicrotask}=this.__closure;globalThis.queueMicrotask=function(callback,...args){pushMicrotask(function(){return callback(...args);});};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runLoop/workletRuntime/queueMicrotask.js",
+  sourceMap: "{\"version\":3,\"names\":[\"setupQueueMicrotask_reactNativeWorklets_queueMicrotaskJs1\",\"pushMicrotask\",\"__closure\",\"globalThis\",\"queueMicrotask\",\"callback\",\"args\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runLoop/workletRuntime/queueMicrotask.js\"],\"mappings\":\"AAGO,SAAAA,yDAA+BA,CAAA,QAAAC,aAAA,OAAAC,SAAA,CAGpCC,UAAU,CAACC,cAAc,CAAG,SAAUC,QAAQ,CAAE,GAAGC,IAAI,CAAE,CACvDL,aAAa,CAAC,iBAAM,CAAAI,QAAQ,CAAC,GAAGC,IAAI,CAAC,GAAC,CACxC,CAAC,CACH\",\"ignoreList\":[]}"
+};
+var setupQueueMicrotask = exports.setupQueueMicrotask = function setupQueueMicrotask_reactNativeWorklets_queueMicrotaskJs1Factory(_ref) {
+  var _worklet_67582599291_init_data = _ref._worklet_67582599291_init_data,
+    pushMicrotask = _ref.pushMicrotask;
+  var _e = [new global.Error(), -2, -27];
+  var setupQueueMicrotask = function () {
+    globalThis.queueMicrotask = function (callback) {
+      for (var _len = arguments.length, args = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+        args[_key - 1] = arguments[_key];
+      }
+      pushMicrotask(() => callback(...args));
+    };
+  };
+  setupQueueMicrotask.__closure = {
+    pushMicrotask
+  };
+  setupQueueMicrotask.__workletHash = 67582599291;
+  setupQueueMicrotask.__pluginVersion = "0.10.1";
+  setupQueueMicrotask.__initData = _worklet_67582599291_init_data;
+  setupQueueMicrotask.__stackDetails = _e;
+  return setupQueueMicrotask;
+}({
+  _worklet_67582599291_init_data,
+  pushMicrotask: _taskQueue.pushMicrotask
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsInNldHVwUXVldWVNaWNyb3Rhc2siLCJfdGFza1F1ZXVlIiwicmVxdWlyZSIsIl93b3JrbGV0XzY3NTgyNTk5MjkxX2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsInNldHVwUXVldWVNaWNyb3Rhc2tfcmVhY3ROYXRpdmVXb3JrbGV0c19xdWV1ZU1pY3JvdGFza0pzMUZhY3RvcnkiLCJfcmVmIiwicHVzaE1pY3JvdGFzayIsIl9lIiwiZ2xvYmFsIiwiRXJyb3IiLCJnbG9iYWxUaGlzIiwicXVldWVNaWNyb3Rhc2siLCJjYWxsYmFjayIsIl9sZW4iLCJhcmd1bWVudHMiLCJsZW5ndGgiLCJhcmdzIiwiQXJyYXkiLCJfa2V5IiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9ydW5Mb29wL3dvcmtsZXRSdW50aW1lL3F1ZXVlTWljcm90YXNrLnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiQUFBQSxZQUFZOztBQUFBQSxNQUFBLENBQUFDLGNBQUEsQ0FBQUMsT0FBQTtFQUFBQyxLQUFBO0FBQUE7QUFBQUQsT0FBQSxDQUFBRSxtQkFBQTtBQUVaLElBQUFDLFVBQUEsR0FBQUMsT0FBQTtBQUEyQyxJQUFBQyw4QkFBQTtFQUFBQyxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBQUEsSUFBQU4sbUJBQUEsR0FBQUYsT0FBQSxDQUFBRSxtQkFBQSxHQUVwQyxTQUFBTyxpRUFBQUMsSUFBQTtFQUFBLElBQUFMLDhCQUFBLEdBQUFLLElBQUEsQ0FBQUwsOEJBQUE7SUFNSE0sYUFBYSxHQUFBRCxJQUFBLENBQWJDLGFBQWE7RUFBQSxJQUFBQyxFQUFBLFFBQUFDLE1BQUEsQ0FBQUMsS0FBQTtFQUFBLElBQUFaLG1CQUFBLFlBQUFBLENBQUEsRUFOcUI7SUFFcENhLFVBQVUsQ0FBQ0MsY0FBYyxHQUFHLFVBQzFCQyxRQUFzQyxFQUV0QztNQUFBLFNBQUFDLElBQUEsR0FBQUMsU0FBQSxDQUFBQyxNQUFBLEVBREdDLElBQWUsT0FBQUMsS0FBQSxDQUFBSixJQUFBLE9BQUFBLElBQUEsV0FBQUssSUFBQSxNQUFBQSxJQUFBLEdBQUFMLElBQUEsRUFBQUssSUFBQTtRQUFmRixJQUFlLENBQUFFLElBQUEsUUFBQUosU0FBQSxDQUFBSSxJQUFBO01BQUE7TUFFbEJaLGFBQWEsQ0FBQyxNQUFNTSxRQUFRLENBQUMsR0FBR0ksSUFBSSxDQUFDLENBQUM7SUFDeEMsQ0FBMEI7RUFDNUI7RUFBQW5CLG1CQUFBLENBQUFzQixTQUFBO0lBRkliO0VBQWE7RUFBQVQsbUJBQUEsQ0FBQXVCLGFBQUE7RUFBQXZCLG1CQUFBLENBQUF3QixlQUFBO0VBQUF4QixtQkFBQSxDQUFBeUIsVUFBQSxHQUFBdEIsOEJBQUE7RUFBQUgsbUJBQUEsQ0FBQTBCLGNBQUEsR0FBQWhCLEVBQUE7RUFBQSxPQUFBVixtQkFBQTtBQUFBLENBTlY7RUFBQUcsOEJBQUE7RUFNSE0sYUFBYSxFQUFiQTtBQUFhIiwiaWdub3JlTGlzdCI6W119

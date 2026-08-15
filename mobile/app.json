@@ -6,6 +6,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/word.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#09090b"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.spotibase.app",
@@ -52,11 +57,20 @@
       }
     },
     "plugins": [
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/word.png",
+          "imageWidth": 280,
+          "resizeMode": "contain",
+          "backgroundColor": "#09090b",
+          "dark": {
+            "image": "./assets/word.png",
+            "backgroundColor": "#09090b"
+          }
+        }
+      ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    },
     "extra": {
       "eas": {
         "projectId": "spotibase"

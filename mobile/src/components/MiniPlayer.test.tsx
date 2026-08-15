@@ -7,6 +7,7 @@ import { makeSong } from '../test/fixtures';
 
 jest.mock('../api/client', () => ({
   queueApi: { addToQueue: jest.fn() },
+  songApi: { like: jest.fn(), unlike: jest.fn() },
 }));
 
 const initialPlayerState = {
@@ -19,6 +20,7 @@ const initialPlayerState = {
   repeat: 'off' as const,
   volume: 1,
   isMiniPlayerVisible: false,
+  isExpanded: false,
 };
 
 describe('MiniPlayer', () => {
@@ -45,42 +47,80 @@ describe('MiniPlayer', () => {
     expect(getByText('The Weeknd')).toBeTruthy();
   });
 
-  it('shows the pause glyph while playing and the play glyph while paused', () => {
+  it('shows the pause button while playing and the play button while paused', () => {
     usePlayerStore.setState({ currentTrack: makeSong(), playbackState: 'playing' });
     const first = render(<MiniPlayer />);
-    expect(first.getByText('\u23F8')).toBeTruthy(); // pause
-    expect(first.queryByText('\u25B6')).toBeNull(); // play
+    expect(first.getByLabelText('Pause')).toBeTruthy();
+    expect(first.queryByLabelText('Play')).toBeNull();
 
     first.unmount();
     usePlayerStore.setState({ currentTrack: makeSong(), playbackState: 'paused' });
     const second = render(<MiniPlayer />);
-    expect(second.getByText('\u25B6')).toBeTruthy();
-    expect(second.queryByText('\u23F8')).toBeNull();
+    expect(second.getByLabelText('Play')).toBeTruthy();
+    expect(second.queryByLabelText('Pause')).toBeNull();
   });
 
   it('toggles playback when the play button is pressed', async () => {
     usePlayerStore.setState({ currentTrack: makeSong(), playbackState: 'paused' });
     (TrackPlayer.getPlaybackState as jest.Mock).mockResolvedValue({ state: State.Paused });
 
-    const { getByText } = render(<MiniPlayer />);
-    fireEvent.press(getByText('\u25B6'));
+    const { getByLabelText } = render(<MiniPlayer />);
+    fireEvent.press(getByLabelText('Play'));
     await act(async () => {});
 
     expect(TrackPlayer.play).toHaveBeenCalledTimes(1);
     expect(usePlayerStore.getState().playbackState).toBe('playing');
-    expect(getByText('\u23F8')).toBeTruthy();
+    expect(getByLabelText('Pause')).toBeTruthy();
   });
 
   it('pauses when the button is pressed while playing', async () => {
     usePlayerStore.setState({ currentTrack: makeSong(), playbackState: 'playing' });
     (TrackPlayer.getPlaybackState as jest.Mock).mockResolvedValue({ state: State.Playing });
 
-    const { getByText } = render(<MiniPlayer />);
-    fireEvent.press(getByText('\u23F8'));
+    const { getByLabelText } = render(<MiniPlayer />);
+    fireEvent.press(getByLabelText('Pause'));
     await act(async () => {});
 
     expect(TrackPlayer.pause).toHaveBeenCalledTimes(1);
     expect(usePlayerStore.getState().playbackState).toBe('paused');
-    expect(getByText('\u25B6')).toBeTruthy();
+    expect(getByLabelText('Play')).toBeTruthy();
+  });
+
+  it('shows like button and toggles like state', async () => {
+    const song = makeSong({ liked: false });
+    usePlayerStore.setState({ currentTrack: song, playbackState: 'playing' });
+
+    const { getByLabelText, queryByLabelText } = render(<MiniPlayer />);
+
+    expect(getByLabelText('Like song')).toBeTruthy();
+    expect(queryByLabelText('Unlike song')).toBeNull();
+
+    fireEvent.press(getByLabelText('Like song'));
+    await act(async () => {});
+
+    expect(getByLabelText('Unlike song')).toBeTruthy();
+  });
+
+  it('shows next button and calls next on press', async () => {
+    const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' })];
+    usePlayerStore.setState({ currentTrack: tracks[0], queue: tracks, playbackState: 'playing' });
+
+    const { getByLabelText } = render(<MiniPlayer />);
+    fireEvent.press(getByLabelText('Next'));
+    await act(async () => {});
+
+    // next() now navigates via reset+add+play (not skipToNext)
+    expect(TrackPlayer.reset).toHaveBeenCalled();
+    expect(TrackPlayer.play).toHaveBeenCalled();
+  });
+
+  it('calls expandPlayer when expand button is pressed', () => {
+    usePlayerStore.setState({ currentTrack: makeSong(), playbackState: 'playing' });
+    const expandSpy = jest.spyOn(usePlayerStore.getState(), 'expandPlayer');
+
+    const { getByLabelText } = render(<MiniPlayer />);
+    fireEvent.press(getByLabelText('Expand player'));
+
+    expect(expandSpy).toHaveBeenCalledTimes(1);
   });
 });

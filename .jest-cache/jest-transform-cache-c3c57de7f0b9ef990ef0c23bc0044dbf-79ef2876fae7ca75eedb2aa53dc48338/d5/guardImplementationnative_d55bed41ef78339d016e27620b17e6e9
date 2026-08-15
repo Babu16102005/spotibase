@@ -1,0 +1,42 @@
+a611e3a61a97ccf9562b62c44cc2c65d
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.addGuardImplementation = addGuardImplementation;
+exports.addNoBundleModeGuardImplementation = addNoBundleModeGuardImplementation;
+var _serializable = require("./memory/serializable");
+var _serializableMappingCache = require("./memory/serializableMappingCache");
+var _worklet_7740335448818_init_data = {
+  code: "function guardImplementation_reactNativeWorklets_guardImplementationNativeJs1(){const{errorMessage}=this.__closure;throw new Error(\"[Worklets] \"+errorMessage);}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/guardImplementation.native.js",
+  sourceMap: "{\"version\":3,\"names\":[\"guardImplementation_reactNativeWorklets_guardImplementationNativeJs1\",\"errorMessage\",\"__closure\",\"Error\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/guardImplementation.native.js\"],\"mappings\":\"AAK+C,SAAAA,oEAA+BA,CAAA,QAAAC,YAAA,OAAAC,SAAA,CAG1E,KAAM,IAAI,CAAAC,KAAK,eAAeF,YAAc,CAAC,CAC/C\",\"ignoreList\":[]}"
+};
+function addGuardImplementation(fn, errorMessage) {
+  var serializableGuard = (0, _serializable.createSerializable)(function guardImplementation_reactNativeWorklets_guardImplementationNativeJs1Factory(_ref) {
+    var _worklet_7740335448818_init_data = _ref._worklet_7740335448818_init_data,
+      errorMessage = _ref.errorMessage;
+    var _e = [new global.Error(), -2, -27];
+    var guardImplementation = function () {
+      throw new Error(`[Worklets] ${errorMessage}`);
+    };
+    guardImplementation.__closure = {
+      errorMessage
+    };
+    guardImplementation.__workletHash = 7740335448818;
+    guardImplementation.__pluginVersion = "0.10.1";
+    guardImplementation.__initData = _worklet_7740335448818_init_data;
+    guardImplementation.__stackDetails = _e;
+    return guardImplementation;
+  }({
+    _worklet_7740335448818_init_data,
+    errorMessage
+  }));
+  _serializableMappingCache.serializableMappingCache.set(fn, serializableGuard);
+}
+function addNoBundleModeGuardImplementation(fn) {
+  var name = fn.name;
+  addGuardImplementation(fn, `${name} cannot be called on Worklet Runtimes outside of the Bundle Mode.`);
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImFkZEd1YXJkSW1wbGVtZW50YXRpb24iLCJhZGROb0J1bmRsZU1vZGVHdWFyZEltcGxlbWVudGF0aW9uIiwiX3NlcmlhbGl6YWJsZSIsInJlcXVpcmUiLCJfc2VyaWFsaXphYmxlTWFwcGluZ0NhY2hlIiwiX3dvcmtsZXRfNzc0MDMzNTQ0ODgxOF9pbml0X2RhdGEiLCJjb2RlIiwibG9jYXRpb24iLCJzb3VyY2VNYXAiLCJmbiIsImVycm9yTWVzc2FnZSIsInNlcmlhbGl6YWJsZUd1YXJkIiwiY3JlYXRlU2VyaWFsaXphYmxlIiwiZ3VhcmRJbXBsZW1lbnRhdGlvbl9yZWFjdE5hdGl2ZVdvcmtsZXRzX2d1YXJkSW1wbGVtZW50YXRpb25OYXRpdmVKczFGYWN0b3J5IiwiX3JlZiIsIl9lIiwiZ2xvYmFsIiwiRXJyb3IiLCJndWFyZEltcGxlbWVudGF0aW9uIiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyIsInNlcmlhbGl6YWJsZU1hcHBpbmdDYWNoZSIsInNldCIsIm5hbWUiXSwic291cmNlcyI6WyIuLi8uLi9zcmMvZ3VhcmRJbXBsZW1lbnRhdGlvbi5uYXRpdmUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7O0FBQUFBLE1BQUEsQ0FBQUMsY0FBQSxDQUFBQyxPQUFBO0VBQUFDLEtBQUE7QUFBQTtBQUFBRCxPQUFBLENBQUFFLHNCQUFBLEdBQUFBLHNCQUFBO0FBQUFGLE9BQUEsQ0FBQUcsa0NBQUEsR0FBQUEsa0NBQUE7QUFFWixJQUFBQyxhQUFBLEdBQUFDLE9BQUE7QUFDQSxJQUFBQyx5QkFBQSxHQUFBRCxPQUFBO0FBQTRFLElBQUFFLGdDQUFBO0VBQUFDLElBQUE7RUFBQUMsUUFBQTtFQUFBQyxTQUFBO0FBQUE7QUFFckUsU0FBU1Isc0JBQXNCQSxDQUNwQ1MsRUFBOEIsRUFDOUJDLFlBQW9CLEVBQ2Q7RUFDTixJQUFNQyxpQkFBaUIsR0FBRyxJQUFBQyxnQ0FBa0IsRUFBQyxTQUFBQyw0RUFBQUMsSUFBQTtJQUFBLElBQUFULGdDQUFBLEdBQUFTLElBQUEsQ0FBQVQsZ0NBQUE7TUFFYkssWUFBWSxHQUFBSSxJQUFBLENBQVpKLFlBQVk7SUFBQSxJQUFBSyxFQUFBLFFBQUFDLE1BQUEsQ0FBQUMsS0FBQTtJQUFBLElBQUFDLG1CQUFBLFlBQUFBLENBQUEsRUFGZ0M7TUFFMUUsTUFBTSxJQUFJRCxLQUFLLENBQUMsY0FBY1AsWUFBWSxFQUFFLENBQUM7SUFDL0MsQ0FBQztJQUFBUSxtQkFBQSxDQUFBQyxTQUFBO01BRCtCVDtJQUFZO0lBQUFRLG1CQUFBLENBQUFFLGFBQUE7SUFBQUYsbUJBQUEsQ0FBQUcsZUFBQTtJQUFBSCxtQkFBQSxDQUFBSSxVQUFBLEdBQUFqQixnQ0FBQTtJQUFBYSxtQkFBQSxDQUFBSyxjQUFBLEdBQUFSLEVBQUE7SUFBQSxPQUFBRyxtQkFBQTtFQUFBLENBRkM7SUFBQWIsZ0NBQUE7SUFFYks7RUFBWSxFQUMzQyxDQUFDO0VBQ0ZjLGtEQUF3QixDQUFDQyxHQUFHLENBQUNoQixFQUFFLEVBQUVFLGlCQUFpQixDQUFDO0FBQ3JEO0FBRU8sU0FBU1Ysa0NBQWtDQSxDQUNoRFEsRUFBOEIsRUFDeEI7RUFDTixJQUFNaUIsSUFBSSxHQUFHakIsRUFBRSxDQUFDaUIsSUFBSTtFQUVwQjFCLHNCQUFzQixDQUNwQlMsRUFBRSxFQUNGLEdBQUdpQixJQUFJLG1FQUNULENBQUM7QUFDSCIsImlnbm9yZUxpc3QiOltdfQ==

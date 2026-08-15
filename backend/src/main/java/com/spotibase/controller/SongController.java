@@ -1,5 +1,6 @@
 package com.spotibase.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spotibase.dto.request.CreateSongRequest;
 import com.spotibase.dto.response.PagedResponse;
 import com.spotibase.dto.response.SongResponse;
@@ -7,12 +8,14 @@ import com.spotibase.entity.Song;
 import com.spotibase.security.CurrentUser;
 import com.spotibase.security.CustomUserDetails;
 import com.spotibase.service.LikeService;
+import com.spotibase.service.R2StorageService;
 import com.spotibase.service.SongService;
 import com.spotibase.service.StorageService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.PageRequest;
@@ -42,6 +45,8 @@ public class SongController {
     private final SongService songService;
     private final LikeService likeService;
     private final StorageService storageService;
+    private final R2StorageService r2StorageService;
+    private final ObjectMapper objectMapper;
 
     @GetMapping
     public ResponseEntity<PagedResponse<SongResponse>> getAllSongs(
@@ -91,6 +96,34 @@ public class SongController {
         return ResponseEntity.status(HttpStatus.CREATED).body(songService.createSong(request, audioFile, coverFile));
     }
 
+    /**
+     * Bulk upload: one or more audio files (multipart parts named "files") plus
+     * an optional JSON array (part named "requests", aligned to files by index).
+     * Metadata is auto-parsed from each file's audio tags (FLAC/MP3/WAV...) when
+     * the client does not provide it. Files are stored unchanged, so FLAC stays
+     * FLAC and is streamed with Range support.
+     */
+    @PostMapping(value = "/bulk", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ARTIST') or hasRole('ADMIN')")
+    public ResponseEntity<List<SongResponse>> createSongsBulk(
+            @RequestParam("files") List<MultipartFile> files,
+            @RequestPart(value = "requests", required = false) String requestsJson) {
+        log.info("Bulk create songs: {} files", files != null ? files.size() : 0);
+        List<CreateSongRequest> requests = parseRequests(requestsJson);
+        return ResponseEntity.status(HttpStatus.CREATED).body(songService.createSongsBulk(files, requests));
+    }
+
+    private List<CreateSongRequest> parseRequests(String requestsJson) {
+        if (requestsJson == null || requestsJson.isBlank()) {
+            return new java.util.ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(requestsJson, new com.fasterxml.jackson.core.type.TypeReference<List<CreateSongRequest>>() {});
+        } catch (IOException e) {
+            throw new com.spotibase.exception.BadRequestException("Invalid bulk upload metadata: " + e.getMessage());
+        }
+    }
+
     @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ARTIST') or hasRole('ADMIN')")
     public ResponseEntity<SongResponse> updateSong(@PathVariable String id,
@@ -121,26 +154,32 @@ public class SongController {
     public ResponseEntity<List<SongResponse>> getTrendingSongs(@CurrentUser CustomUserDetails user,
                                                                 @RequestParam(defaultValue = "20") int limit) {
         log.info("Get trending songs, limit: {}", limit);
-        return ResponseEntity.ok(songService.getTrendingSongs(user.getId(), limit));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(songService.getTrendingSongs(userId, limit));
     }
 
     @GetMapping("/new-releases")
     public ResponseEntity<List<SongResponse>> getNewReleases(@CurrentUser CustomUserDetails user,
                                                               @RequestParam(defaultValue = "20") int limit) {
         log.info("Get new releases, limit: {}", limit);
-        return ResponseEntity.ok(songService.getNewReleases(user.getId(), limit));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(songService.getNewReleases(userId, limit));
     }
 
     @GetMapping("/featured")
     public ResponseEntity<List<SongResponse>> getFeaturedSongs(@CurrentUser CustomUserDetails user,
                                                                 @RequestParam(defaultValue = "20") int limit) {
         log.info("Get featured songs, limit: {}", limit);
-        return ResponseEntity.ok(songService.getFeaturedSongs(user.getId(), limit));
+        String userId = user != null ? user.getId() : null;
+        return ResponseEntity.ok(songService.getFeaturedSongs(userId, limit));
     }
 
     @PostMapping("/{id}/like")
     public ResponseEntity<Void> likeSong(@CurrentUser CustomUserDetails user,
                                           @PathVariable String id) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         log.info("User {} likes song {}", user.getId(), id);
         likeService.likeSong(user.getId(), id);
         return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -149,6 +188,9 @@ public class SongController {
     @DeleteMapping("/{id}/like")
     public ResponseEntity<Void> unlikeSong(@CurrentUser CustomUserDetails user,
                                             @PathVariable String id) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         log.info("User {} unlikes song {}", user.getId(), id);
         likeService.unlikeSong(user.getId(), id);
         return ResponseEntity.noContent().build();
@@ -158,38 +200,74 @@ public class SongController {
     public ResponseEntity<?> streamSong(@PathVariable String id,
                                         HttpServletRequest request,
                                         Authentication authentication) {
+        boolean headRequest = "HEAD".equalsIgnoreCase(request.getMethod());
         String userId = authentication != null && authentication.getPrincipal() instanceof CustomUserDetails cd ? cd.getId() : "anonymous";
-        log.info("Stream song: {} for user: {}", id, userId);
-        songService.incrementPlayCount(id);
-        
+        log.info("{} stream song: {} for user: {}", request.getMethod(), id, userId);
+        if (!headRequest) {
+            songService.incrementPlayCount(id);
+            if (!"anonymous".equals(userId)) {
+                songService.recordPlayback(userId, id, "STREAM");
+            }
+        }
+
         Song song = songService.getSongEntityById(id);
         String fileUrl = song.getFileUrl();
-        
+
         if (fileUrl == null || fileUrl.isBlank()) {
             return ResponseEntity.notFound().build();
         }
-        
-        // If using R2 with public URL, redirect with Range support
+
+        // R2: proxy the bytes through the backend so browsers get Range
+        // support AND CORS headers. r2.dev public URLs do not send CORS
+        // headers, so a direct redirect is unusable from the web client.
         if (fileUrl.contains("r2.cloudflarestorage.com") || fileUrl.contains("r2.dev")) {
-            return handleR2Streaming(fileUrl, request);
+            return handleR2Streaming(song, fileUrl, request);
         }
-        
+
         // For Supabase Storage, generate signed URL with Range support
         String signedUrl = storageService.getSignedUrl(extractSupabasePath(fileUrl), 3600);
         return handleSignedUrlStreaming(signedUrl, request);
     }
-    
-    private ResponseEntity<Void> handleR2Streaming(String fileUrl, HttpServletRequest request) {
+
+    private ResponseEntity<?> handleR2Streaming(Song song, String fileUrl, HttpServletRequest request) {
+        String key = r2StorageService.resolveKey(fileUrl);
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept-Ranges", "bytes");
-        headers.setContentType(MediaType.parseMediaType("audio/mpeg"));
         headers.set("Cache-Control", "public, max-age=31536000");
-        // Redirect to the CDN - R2 supports Range requests natively and avoids proxy buffering
-        headers.setLocation(URI.create(fileUrl));
-        return ResponseEntity.status(HttpStatus.FOUND).headers(headers).build();
+
+        if ("HEAD".equalsIgnoreCase(request.getMethod())) {
+            R2StorageService.R2ObjectInfo info = r2StorageService.headObject(key);
+            headers.setContentType(MediaType.parseMediaType(resolveContentType(song, info.contentType())));
+            headers.setContentLength(info.size());
+            return ResponseEntity.status(HttpStatus.OK).headers(headers).build();
+        }
+
+        String rangeHeader = request.getHeader("Range");
+        R2StorageService.R2ObjectStream os = r2StorageService.readRange(key, rangeHeader);
+        headers.setContentType(MediaType.parseMediaType(resolveContentType(song, os.contentType())));
+        headers.setContentLength(os.end() - os.start() + 1);
+        headers.set("Content-Range", "bytes " + os.start() + "-" + os.end() + "/" + os.objectSize());
+        HttpStatus status = os.isPartial() ? HttpStatus.PARTIAL_CONTENT : HttpStatus.OK;
+        return ResponseEntity.status(status).headers(headers).body(new InputStreamResource(os.stream()));
     }
-    
-    private ResponseEntity<Resource> handleSignedUrlStreaming(String signedUrl, HttpServletRequest request) {
+
+    private String resolveContentType(Song song, String fallback) {
+        String format = song.getFileFormat();
+        if (format != null) {
+            switch (format.toUpperCase()) {
+                case "FLAC": return "audio/flac";
+                case "MP3": return "audio/mpeg";
+                case "WAV": return "audio/wav";
+                case "M4A": return "audio/mp4";
+                case "OGG": return "audio/ogg";
+                case "AAC": return "audio/aac";
+                default: break;
+            }
+        }
+        return fallback != null ? fallback : "application/octet-stream";
+    }
+
+    private ResponseEntity<Void> handleSignedUrlStreaming(String signedUrl, HttpServletRequest request) {
         String rangeHeader = request.getHeader("Range");
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept-Ranges", "bytes");

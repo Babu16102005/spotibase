@@ -1,0 +1,56 @@
+ee2635769e114bbb2f984152c47a84d1
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.setupSetTimeout = void 0;
+var _worklet_13189021700798_init_data = {
+  code: "function setupSetTimeout_reactNativeWorklets_setTimeoutPolyfillJs1(){const timeoutHandleToRafHandle=new Map();const setTimeoutPolyfill=function(callback,delay=0,...args){const start=performance.now();let timeoutHandle=0;const rafCallback=function(){const now=performance.now();if(now-start>=delay){callback(...args);timeoutHandleToRafHandle.delete(timeoutHandle);}else{const rafHandle=requestAnimationFrame(rafCallback);timeoutHandleToRafHandle.set(timeoutHandle,rafHandle);}};timeoutHandle=requestAnimationFrame(rafCallback);timeoutHandleToRafHandle.set(timeoutHandle,timeoutHandle);return timeoutHandle;};const clearTimeoutPolyfill=function(timeoutHandle){const rafHandle=timeoutHandleToRafHandle.get(timeoutHandle);timeoutHandleToRafHandle.delete(timeoutHandle);cancelAnimationFrame(rafHandle);};globalThis.setTimeout=setTimeoutPolyfill;globalThis.clearTimeout=clearTimeoutPolyfill;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runLoop/uiRuntime/setTimeoutPolyfill.js",
+  sourceMap: "{\"version\":3,\"names\":[\"setupSetTimeout_reactNativeWorklets_setTimeoutPolyfillJs1\",\"timeoutHandleToRafHandle\",\"Map\",\"setTimeoutPolyfill\",\"callback\",\"delay\",\"args\",\"start\",\"performance\",\"now\",\"timeoutHandle\",\"rafCallback\",\"delete\",\"rafHandle\",\"requestAnimationFrame\",\"set\",\"clearTimeoutPolyfill\",\"get\",\"cancelAnimationFrame\",\"globalThis\",\"setTimeout\",\"clearTimeout\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-worklets/lib/module/runLoop/uiRuntime/setTimeoutPolyfill.js\"],\"mappings\":\"AAEO,SAAAA,yDAA2BA,CAAA,EAGhC,KAAM,CAAAC,wBAAwB,CAAG,GAAI,CAAAC,GAAG,CAAC,CAAC,CAC1C,KAAM,CAAAC,kBAAkB,CAAG,QAAAA,CAACC,QAAQ,CAAEC,KAAK,CAAG,CAAC,CAAE,GAAGC,IAAI,CAAK,CAC3D,KAAM,CAAAC,KAAK,CAAGC,WAAW,CAACC,GAAG,CAAC,CAAC,CAC/B,GAAI,CAAAC,aAAa,CAAG,CAAC,CACrB,KAAM,CAAAC,WAAW,CAAG,QAAAA,CAAA,CAAM,CACxB,KAAM,CAAAF,GAAG,CAAGD,WAAW,CAACC,GAAG,CAAC,CAAC,CAC7B,GAAIA,GAAG,CAAGF,KAAK,EAAIF,KAAK,CAAE,CACxBD,QAAQ,CAAC,GAAGE,IAAI,CAAC,CACjBL,wBAAwB,CAACW,MAAM,CAACF,aAAa,CAAC,CAChD,CAAC,IAAM,CACL,KAAM,CAAAG,SAAS,CAAGC,qBAAqB,CAACH,WAAW,CAAC,CACpDV,wBAAwB,CAACc,GAAG,CAACL,aAAa,CAAEG,SAAS,CAAC,CACxD,CACF,CAAC,CACDH,aAAa,CAAGI,qBAAqB,CAACH,WAAW,CAAC,CAClDV,wBAAwB,CAACc,GAAG,CAACL,aAAa,CAAEA,aAAa,CAAC,CAC1D,MAAO,CAAAA,aAAa,CACtB,CAAC,CACD,KAAM,CAAAM,oBAAoB,CAAG,QAAAA,CAAAN,aAAa,CAAI,CAC5C,KAAM,CAAAG,SAAS,CAAGZ,wBAAwB,CAACgB,GAAG,CAACP,aAAa,CAAC,CAC7DT,wBAAwB,CAACW,MAAM,CAACF,aAAa,CAAC,CAC9CQ,oBAAoB,CAACL,SAAS,CAAC,CACjC,CAAC,CACDM,UAAU,CAACC,UAAU,CAAGjB,kBAAkB,CAC1CgB,UAAU,CAACE,YAAY,CAAGL,oBAAoB,CAChD\",\"ignoreList\":[]}"
+};
+var setupSetTimeout = exports.setupSetTimeout = function setupSetTimeout_reactNativeWorklets_setTimeoutPolyfillJs1Factory(_ref) {
+  var _worklet_13189021700798_init_data = _ref._worklet_13189021700798_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var setupSetTimeout = function () {
+    var timeoutHandleToRafHandle = new Map();
+    var setTimeoutPolyfill = function (callback) {
+      var delay = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+      for (var _len = arguments.length, args = new Array(_len > 2 ? _len - 2 : 0), _key = 2; _key < _len; _key++) {
+        args[_key - 2] = arguments[_key];
+      }
+      var start = performance.now();
+      var timeoutHandle = 0;
+      var rafCallback = () => {
+        var now = performance.now();
+        if (now - start >= delay) {
+          callback(...args);
+          timeoutHandleToRafHandle.delete(timeoutHandle);
+        } else {
+          var rafHandle = requestAnimationFrame(rafCallback);
+          timeoutHandleToRafHandle.set(timeoutHandle, rafHandle);
+        }
+      };
+      timeoutHandle = requestAnimationFrame(rafCallback);
+      timeoutHandleToRafHandle.set(timeoutHandle, timeoutHandle);
+      return timeoutHandle;
+    };
+    var clearTimeoutPolyfill = timeoutHandle => {
+      var rafHandle = timeoutHandleToRafHandle.get(timeoutHandle);
+      timeoutHandleToRafHandle.delete(timeoutHandle);
+      cancelAnimationFrame(rafHandle);
+    };
+    globalThis.setTimeout = setTimeoutPolyfill;
+    globalThis.clearTimeout = clearTimeoutPolyfill;
+  };
+  setupSetTimeout.__closure = {};
+  setupSetTimeout.__workletHash = 13189021700798;
+  setupSetTimeout.__pluginVersion = "0.10.1";
+  setupSetTimeout.__initData = _worklet_13189021700798_init_data;
+  setupSetTimeout.__stackDetails = _e;
+  return setupSetTimeout;
+}({
+  _worklet_13189021700798_init_data
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsInNldHVwU2V0VGltZW91dCIsIl93b3JrbGV0XzEzMTg5MDIxNzAwNzk4X2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsInNldHVwU2V0VGltZW91dF9yZWFjdE5hdGl2ZVdvcmtsZXRzX3NldFRpbWVvdXRQb2x5ZmlsbEpzMUZhY3RvcnkiLCJfcmVmIiwiX2UiLCJnbG9iYWwiLCJFcnJvciIsInRpbWVvdXRIYW5kbGVUb1JhZkhhbmRsZSIsIk1hcCIsInNldFRpbWVvdXRQb2x5ZmlsbCIsImNhbGxiYWNrIiwiZGVsYXkiLCJhcmd1bWVudHMiLCJsZW5ndGgiLCJ1bmRlZmluZWQiLCJfbGVuIiwiYXJncyIsIkFycmF5IiwiX2tleSIsInN0YXJ0IiwicGVyZm9ybWFuY2UiLCJub3ciLCJ0aW1lb3V0SGFuZGxlIiwicmFmQ2FsbGJhY2siLCJkZWxldGUiLCJyYWZIYW5kbGUiLCJyZXF1ZXN0QW5pbWF0aW9uRnJhbWUiLCJzZXQiLCJjbGVhclRpbWVvdXRQb2x5ZmlsbCIsImdldCIsImNhbmNlbEFuaW1hdGlvbkZyYW1lIiwiZ2xvYmFsVGhpcyIsInNldFRpbWVvdXQiLCJjbGVhclRpbWVvdXQiLCJfX2Nsb3N1cmUiLCJfX3dvcmtsZXRIYXNoIiwiX19wbHVnaW5WZXJzaW9uIiwiX19pbml0RGF0YSIsIl9fc3RhY2tEZXRhaWxzIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL3J1bkxvb3AvdWlSdW50aW1lL3NldFRpbWVvdXRQb2x5ZmlsbC50cyJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTs7QUFBQUEsTUFBQSxDQUFBQyxjQUFBLENBQUFDLE9BQUE7RUFBQUMsS0FBQTtBQUFBO0FBQUFELE9BQUEsQ0FBQUUsZUFBQTtBQUFBLElBQUFDLGlDQUFBO0VBQUFDLElBQUE7RUFBQUMsUUFBQTtFQUFBQyxTQUFBO0FB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

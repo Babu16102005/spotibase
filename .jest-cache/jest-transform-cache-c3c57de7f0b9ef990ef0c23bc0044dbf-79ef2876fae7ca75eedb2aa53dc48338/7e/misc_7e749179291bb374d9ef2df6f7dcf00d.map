@@ -1,0 +1,1 @@
+{"version":3,"names":["Object","defineProperty","exports","value","ANIMATION_NAME_PREFIX"],"sources":["misc.ts"],"sourcesContent":["'use strict';\nexport const ANIMATION_NAME_PREFIX = 'REA-CSS-';\n"],"mappings":"AAAA,YAAY;;AAACA,MAAA,CAAAC,cAAA,CAAAC,OAAA;EAAAC,KAAA;AAAA;AAAAD,OAAA,CAAAE,qBAAA;AACN,IAAMA,qBAAqB,GAAAF,OAAA,CAAAE,qBAAA,GAAG,UAAU","ignoreList":[]}

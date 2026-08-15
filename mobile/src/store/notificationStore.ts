@@ -30,8 +30,17 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   error: null,
 
   fetchNotifications: async (page = 0) => {
+    const authState = useAuthStore.getState();
+    if (!authState.isAuthenticated || !authState.user) {
+      set({ isLoading: false });
+      return;
+    }
     set({ isLoading: true, error: null });
     try {
+      if (!notificationApi || typeof notificationApi.getNotifications !== 'function') {
+        set({ isLoading: false });
+        return;
+      }
       const res = await notificationApi.getNotifications(page);
       const paged = res.data as PagedResponse<NotificationResponse>;
       set((state) => ({
@@ -42,16 +51,31 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         isLoading: false,
       }));
     } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      if (err?.response?.status !== 401 && err?.response?.status !== 403) {
+        set({ error: err.message, isLoading: false });
+      } else {
+        set({ isLoading: false });
+      }
     }
   },
 
   fetchUnreadCount: async () => {
+    const authState = useAuthStore.getState();
+    if (!authState.isAuthenticated || !authState.user) {
+      return;
+    }
     try {
+      if (!notificationApi || typeof notificationApi.getUnreadCount !== 'function') {
+        return;
+      }
       const res = await notificationApi.getUnreadCount();
-      set({ unreadCount: res.data.count });
-    } catch (err) {
-      console.error('Failed to fetch unread count:', err);
+      if (res?.data) {
+        set({ unreadCount: res.data.count });
+      }
+    } catch (err: any) {
+      if (err?.response?.status !== 401 && err?.response?.status !== 403) {
+        console.error('Failed to fetch unread count:', err);
+      }
     }
   },
 

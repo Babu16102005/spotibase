@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -328,27 +329,81 @@ public class RecommendationService {
     public HomeResponse getHomeSections(String userId) {
         List<HomeResponse.Section> sections = new ArrayList<>();
 
-        if (userId != null) {
-            sections.add(buildContinueListeningSection(userId));
-            sections.add(buildRecentlyPlayedSection(userId));
+        try {
+            if (userId != null) {
+                sections.add(buildContinueListeningSection(userId));
+            }
+        } catch (Exception e) {
+            log.error("Failed to build continue listening section: {}", e.getMessage());
         }
 
-        sections.add(buildTrendingSection());
-        sections.add(buildNewReleasesSection(userId));
-        sections.add(buildFeaturedAlbumsSection(userId));
-        sections.add(buildFeaturedArtistsSection());
-        sections.add(buildFeaturedPlaylistsSection());
-
-        if (userId != null) {
-            sections.add(buildMadeForYouSection(userId));
-            sections.add(buildDailyMixesSection(userId));
+        try {
+            if (userId != null) {
+                sections.add(buildRecentlyPlayedSection(userId));
+            }
+        } catch (Exception e) {
+            log.error("Failed to build recently played section: {}", e.getMessage());
         }
 
-        sections.add(buildPopularGenresSection());
+        try {
+            sections.add(buildTrendingSection());
+        } catch (Exception e) {
+            log.error("Failed to build trending section: {}", e.getMessage());
+        }
+
+        try {
+            sections.add(buildNewReleasesSection(userId));
+        } catch (Exception e) {
+            log.error("Failed to build new releases section: {}", e.getMessage());
+        }
+
+        try {
+            sections.add(buildFeaturedAlbumsSection(userId));
+        } catch (Exception e) {
+            log.error("Failed to build featured albums section: {}", e.getMessage());
+        }
+
+        try {
+            sections.add(buildFeaturedArtistsSection());
+        } catch (Exception e) {
+            log.error("Failed to build featured artists section: {}", e.getMessage());
+        }
+
+        try {
+            sections.add(buildFeaturedPlaylistsSection());
+        } catch (Exception e) {
+            log.error("Failed to build featured playlists section: {}", e.getMessage());
+        }
+
+        try {
+            if (userId != null) {
+                sections.add(buildMadeForYouSection(userId));
+            }
+        } catch (Exception e) {
+            log.error("Failed to build made for you section: {}", e.getMessage());
+        }
+
+        try {
+            if (userId != null) {
+                sections.add(buildDailyMixesSection(userId));
+            }
+        } catch (Exception e) {
+            log.error("Failed to build daily mixes section: {}", e.getMessage());
+        }
+
+        try {
+            sections.add(buildPopularGenresSection());
+        } catch (Exception e) {
+            log.error("Failed to build popular genres section: {}", e.getMessage());
+        }
+
+        List<HomeResponse.Section> filteredSections = sections.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
         return HomeResponse.builder()
                 .greeting(getGreeting())
-                .sections(sections)
+                .sections(filteredSections)
                 .build();
     }
 
@@ -360,21 +415,19 @@ public class RecommendationService {
     }
 
     private HomeResponse.Section buildContinueListeningSection(String userId) {
+        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
         List<RecentlyPlayed> recentItems = recentlyPlayedRepository
-                .findByUserIdOrderByPlayedAtDesc(userId);
+                .findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(userId, sevenDaysAgo);
 
-        List<SongResponse> songs = recentItems.stream()
+        List<String> songIds = recentItems.stream()
                 .filter(rp -> "SONG".equals(rp.getItemType()))
                 .limit(10)
-                .map(rp -> {
-                    try {
-                        return songService.getSongById(rp.getItemId(), userId);
-                    } catch (Exception e) {
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
+                .map(RecentlyPlayed::getItemId)
                 .collect(Collectors.toList());
+
+        List<SongResponse> songs = songIds.isEmpty()
+                ? Collections.emptyList()
+                : songService.getSongsByIds(songIds, userId);
 
         return HomeResponse.Section.builder()
                 .id("continue-listening")
@@ -386,26 +439,57 @@ public class RecommendationService {
     }
 
     private HomeResponse.Section buildRecentlyPlayedSection(String userId) {
+        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
         List<RecentlyPlayed> recentItems = recentlyPlayedRepository
-                .findByUserIdOrderByPlayedAtDesc(userId);
+                .findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(userId, sevenDaysAgo);
 
-        List<Object> items = recentItems.stream()
+        List<RecentlyPlayed> limitedItems = recentItems.stream()
                 .limit(10)
-                .map(rp -> {
-                    try {
-                        return switch (rp.getItemType()) {
-                            case "SONG" -> songService.getSongById(rp.getItemId(), userId);
-                            case "ALBUM" -> albumService.getAlbumById(rp.getItemId(), userId);
-                            case "ARTIST" -> artistService.getArtistById(rp.getItemId(), userId);
-                            case "PLAYLIST" -> playlistService.getPlaylistById(rp.getItemId(), userId);
-                            default -> null;
-                        };
-                    } catch (Exception e) {
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+
+        List<String> songIds = new ArrayList<>();
+        List<String> albumIds = new ArrayList<>();
+        List<String> artistIds = new ArrayList<>();
+        List<String> playlistIds = new ArrayList<>();
+
+        for (RecentlyPlayed rp : limitedItems) {
+            switch (rp.getItemType()) {
+                case "SONG" -> songIds.add(rp.getItemId());
+                case "ALBUM" -> albumIds.add(rp.getItemId());
+                case "ARTIST" -> artistIds.add(rp.getItemId());
+                case "PLAYLIST" -> playlistIds.add(rp.getItemId());
+            }
+        }
+
+        Map<String, SongResponse> songMap = songIds.isEmpty() ? Collections.emptyMap() :
+                songService.getSongsByIds(songIds, userId).stream()
+                        .collect(Collectors.toMap(SongResponse::getId, s -> s));
+
+        Map<String, AlbumResponse> albumMap = albumIds.isEmpty() ? Collections.emptyMap() :
+                albumService.getAlbumsByIds(albumIds, userId).stream()
+                        .collect(Collectors.toMap(AlbumResponse::getId, a -> a));
+
+        Map<String, ArtistResponse> artistMap = artistIds.isEmpty() ? Collections.emptyMap() :
+                artistService.getArtistsByIds(artistIds, userId).stream()
+                        .collect(Collectors.toMap(ArtistResponse::getId, a -> a));
+
+        Map<String, PlaylistResponse> playlistMap = playlistIds.isEmpty() ? Collections.emptyMap() :
+                playlistService.getPlaylistsByIds(playlistIds, userId).stream()
+                        .collect(Collectors.toMap(PlaylistResponse::getId, p -> p));
+
+        List<Object> items = new ArrayList<>();
+        for (RecentlyPlayed rp : limitedItems) {
+            Object item = null;
+            switch (rp.getItemType()) {
+                case "SONG" -> item = songMap.get(rp.getItemId());
+                case "ALBUM" -> item = albumMap.get(rp.getItemId());
+                case "ARTIST" -> item = artistMap.get(rp.getItemId());
+                case "PLAYLIST" -> item = playlistMap.get(rp.getItemId());
+            }
+            if (item != null) {
+                items.add(item);
+            }
+        }
 
         return HomeResponse.Section.builder()
                 .id("recently-played")
@@ -417,10 +501,7 @@ public class RecommendationService {
     }
 
     private HomeResponse.Section buildTrendingSection() {
-        List<Song> topSongs = songRepository.findTopSongs(PageRequest.of(0, 10));
-        List<SongResponse> songs = topSongs.stream()
-                .map(song -> songService.toSongResponse(song, null))
-                .collect(Collectors.toList());
+        List<SongResponse> songs = songService.getTrendingSongs(null, 10);
 
         return HomeResponse.Section.builder()
                 .id("trending")

@@ -1,0 +1,51 @@
+1f4d67902cda5e2626e79443baf743bd
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.findHandler = findHandler;
+exports.findHandlerByTestID = findHandlerByTestID;
+exports.findOldGestureHandler = findOldGestureHandler;
+exports.handlerIDToTag = void 0;
+exports.registerHandler = registerHandler;
+exports.registerOldGestureHandler = registerOldGestureHandler;
+exports.unregisterHandler = unregisterHandler;
+exports.unregisterOldGestureHandler = unregisterOldGestureHandler;
+var _utils = require("../utils");
+var handlerIDToTag = exports.handlerIDToTag = {};
+var gestures = new Map();
+var oldHandlers = new Map();
+var testIDs = new Map();
+function registerHandler(handlerTag, handler, testID) {
+  gestures.set(handlerTag, handler);
+  if ((0, _utils.isTestEnv)() && testID) {
+    testIDs.set(testID, handlerTag);
+  }
+}
+function registerOldGestureHandler(handlerTag, handler) {
+  oldHandlers.set(handlerTag, handler);
+}
+function unregisterOldGestureHandler(handlerTag) {
+  oldHandlers.delete(handlerTag);
+}
+function unregisterHandler(handlerTag, testID) {
+  gestures.delete(handlerTag);
+  if ((0, _utils.isTestEnv)() && testID) {
+    testIDs.delete(testID);
+  }
+}
+function findHandler(handlerTag) {
+  return gestures.get(handlerTag);
+}
+function findOldGestureHandler(handlerTag) {
+  return oldHandlers.get(handlerTag);
+}
+function findHandlerByTestID(testID) {
+  var handlerTag = testIDs.get(testID);
+  if (handlerTag !== undefined) {
+    return findHandler(handlerTag) ?? null;
+  }
+  return null;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfdXRpbHMiLCJyZXF1aXJlIiwiaGFuZGxlcklEVG9UYWciLCJleHBvcnRzIiwiZ2VzdHVyZXMiLCJNYXAiLCJvbGRIYW5kbGVycyIsInRlc3RJRHMiLCJyZWdpc3RlckhhbmRsZXIiLCJoYW5kbGVyVGFnIiwiaGFuZGxlciIsInRlc3RJRCIsInNldCIsImlzVGVzdEVudiIsInJlZ2lzdGVyT2xkR2VzdHVyZUhhbmRsZXIiLCJ1bnJlZ2lzdGVyT2xkR2VzdHVyZUhhbmRsZXIiLCJkZWxldGUiLCJ1bnJlZ2lzdGVySGFuZGxlciIsImZpbmRIYW5kbGVyIiwiZ2V0IiwiZmluZE9sZEdlc3R1cmVIYW5kbGVyIiwiZmluZEhhbmRsZXJCeVRlc3RJRCIsInVuZGVmaW5lZCJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9oYW5kbGVycy9oYW5kbGVyc1JlZ2lzdHJ5LnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7O0FBQUEsSUFBQUEsTUFBQSxHQUFBQyxPQUFBO0FBSU8sSUFBTUMsY0FBc0MsR0FBQUMsT0FBQSxDQUFBRCxjQUFBLEdBQUcsQ0FBQyxDQUFDO0FBQ3hELElBQU1FLFFBQVEsR0FBRyxJQUFJQyxHQUFHLENBQXNCLENBQUM7QUFDL0MsSUFBTUMsV0FBVyxHQUFHLElBQUlELEdBQUcsQ0FBa0MsQ0FBQztBQUM5RCxJQUFNRSxPQUFPLEdBQUcsSUFBSUYsR0FBRyxDQUFpQixDQUFDO0FBRWxDLFNBQVNHLGVBQWVBLENBQzdCQyxVQUFrQixFQUNsQkMsT0FBb0IsRUFDcEJDLE1BQWUsRUFDZjtFQUNBUCxRQUFRLENBQUNRLEdBQUcsQ0FBQ0gsVUFBVSxFQUFFQyxPQUFPLENBQUM7RUFDakMsSUFBSSxJQUFBVixNQUFBLENBQUFhLFNBQVMsRUFBQyxDQUFDLElBQUlGLE1BQU0sRUFBRTtJQUN6QkosT0FBTyxDQUFDSyxHQUFHLENBQUNELE1BQU0sRUFBRUYsVUFBVSxDQUFDO0VBQ2pDO0FBQ0Y7QUFFTyxTQUFTSyx5QkFBeUJBLENBQ3ZDTCxVQUFrQixFQUNsQkMsT0FBZ0MsRUFDaEM7RUFDQUosV0FBVyxDQUFDTSxHQUFHLENBQUNILFVBQVUsRUFBRUMsT0FBTyxDQUFDO0FBQ3RDO0FBRU8sU0FBU0ssMkJBQTJCQSxDQUFDTixVQUFrQixFQUFFO0VBQzlESCxXQUFXLENBQUNVLE1BQU0sQ0FBQ1AsVUFBVSxDQUFDO0FBQ2hDO0FBRU8sU0FBU1EsaUJBQWlCQSxDQUFDUixVQUFrQixFQUFFRSxNQUFlLEVBQUU7RUFDckVQLFFBQVEsQ0FBQ1ksTUFBTSxDQUFDUCxVQUFVLENBQUM7RUFDM0IsSUFBSSxJQUFBVCxNQUFBLENBQUFhLFNBQVMsRUFBQyxDQUFDLElBQUlGLE1BQU0sRUFBRTtJQUN6QkosT0FBTyxDQUFDUyxNQUFNLENBQUNMLE1BQU0sQ0FBQztFQUN4QjtBQUNGO0FBRU8sU0FBU08sV0FBV0EsQ0FBQ1QsVUFBa0IsRUFBRTtFQUM5QyxPQUFPTCxRQUFRLENBQUNlLEdBQUcsQ0FBQ1YsVUFBVSxDQUFDO0FBQ2pDO0FBRU8sU0FBU1cscUJBQXFCQSxDQUFDWCxVQUFrQixFQUFFO0VBQ3hELE9BQU9ILFdBQVcsQ0FBQ2EsR0FBRyxDQUFDVixVQUFVLENBQUM7QUFDcEM7QUFFTyxTQUFTWSxtQkFBbUJBLENBQUNWLE1BQWMsRUFBRTtFQUNsRCxJQUFNRixVQUFVLEdBQUdGLE9BQU8sQ0FBQ1ksR0FBRyxDQUFDUixNQUFNLENBQUM7RUFDdEMsSUFBSUYsVUFBVSxLQUFLYSxTQUFTLEVBQUU7SUFDNUIsT0FBT0osV0FBVyxDQUFDVCxVQUFVLENBQUMsSUFBSSxJQUFJO0VBQ3hDO0VBQ0EsT0FBTyxJQUFJO0FBQ2IiLCJpZ25vcmVMaXN0IjpbXX0=

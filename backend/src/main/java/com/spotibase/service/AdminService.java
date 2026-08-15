@@ -47,6 +47,10 @@ public class AdminService {
     private final ListeningHistoryRepository listeningHistoryRepository;
     private final DownloadRepository downloadRepository;
     private final UserService userService;
+    private final StorageService storageService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private OrphanStorageCleanupScheduler orphanStorageCleanupScheduler;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -65,6 +69,23 @@ public class AdminService {
         long totalListeningHours = totalListeningMs / 3600000;
         long totalDownloads = downloadRepository.count();
 
+        long totalStorageUsedBytes = 0L;
+        long r2ObjectCount = 0L;
+        String storageProvider = "Cloudflare R2 (Live Connected)";
+        if (storageService != null) {
+            try {
+                var stats = storageService.getLiveStorageStats();
+                totalStorageUsedBytes = stats.totalBytes();
+                r2ObjectCount = stats.objectCount();
+                storageProvider = stats.connected() ? "Cloudflare R2 (Live Connected)" : "Database Estimate";
+            } catch (Exception e) {
+                log.warn("Could not retrieve live total storage used bytes: {}", e.getMessage());
+            }
+        }
+        long maxStorageLimitBytes = 10L * 1024 * 1024 * 1024; // 10 GB
+        long maxStorageThresholdBytes = (long) (9.5 * 1024 * 1024 * 1024); // 9.5 GB
+        boolean storageLimitReached = totalStorageUsedBytes >= maxStorageThresholdBytes;
+
         return AdminDashboardResponse.builder()
                 .totalUsers(totalUsers)
                 .activeUsers(activeUsers)
@@ -74,6 +95,12 @@ public class AdminService {
                 .totalPlaylists(totalPlaylists)
                 .totalListeningHours(totalListeningHours)
                 .totalDownloads(totalDownloads)
+                .totalStorageUsedBytes(totalStorageUsedBytes)
+                .maxStorageLimitBytes(maxStorageLimitBytes)
+                .maxStorageThresholdBytes(maxStorageThresholdBytes)
+                .storageLimitReached(storageLimitReached)
+                .r2ObjectCount(r2ObjectCount)
+                .storageProvider(storageProvider)
                 .topSongs(getTopSongs(10))
                 .topArtists(getTopArtists(10))
                 .topGenres(getTopGenres(10))
@@ -129,33 +156,172 @@ public class AdminService {
         Song song = songRepository.findById(songId)
                 .orElseThrow(() -> new ResourceNotFoundException("Song", songId));
 
-        Query deleteLiked = entityManager.createNativeQuery(
-                "DELETE FROM liked_songs WHERE song_id = :songId");
-        deleteLiked.setParameter("songId", songId);
-        deleteLiked.executeUpdate();
+        // Delete audio and cover files from live Cloudflare R2 / Supabase storage
+        if (storageService != null) {
+            if (song.getFileUrl() != null && !song.getFileUrl().isBlank()) {
+                try {
+                    storageService.deleteFileByUrl(song.getFileUrl());
+                } catch (Exception e) {
+                    log.warn("Failed to delete audio file {}: {}", song.getFileUrl(), e.getMessage());
+                }
+            }
+            if (song.getCoverUrl() != null && !song.getCoverUrl().isBlank()) {
+                try {
+                    storageService.deleteFileByUrl(song.getCoverUrl());
+                } catch (Exception e) {
+                    log.warn("Failed to delete cover file {}: {}", song.getCoverUrl(), e.getMessage());
+                }
+            }
+            storageService.invalidateStorageCache();
+        }
 
-        Query deleteHistory = entityManager.createNativeQuery(
-                "DELETE FROM listening_history WHERE song_id = :songId");
-        deleteHistory.setParameter("songId", songId);
-        deleteHistory.executeUpdate();
+        try {
+            Query q1 = entityManager.createNativeQuery("DELETE FROM liked_songs WHERE song_id = :songId");
+            q1.setParameter("songId", songId);
+            q1.executeUpdate();
 
-        Query deleteQueue = entityManager.createNativeQuery(
-                "DELETE FROM queues WHERE song_id = :songId");
-        deleteQueue.setParameter("songId", songId);
-        deleteQueue.executeUpdate();
+            Query q2 = entityManager.createNativeQuery("DELETE FROM listening_history WHERE song_id = :songId");
+            q2.setParameter("songId", songId);
+            q2.executeUpdate();
 
-        Query deletePlaylistSongs = entityManager.createNativeQuery(
-                "DELETE FROM playlist_songs WHERE song_id = :songId");
-        deletePlaylistSongs.setParameter("songId", songId);
-        deletePlaylistSongs.executeUpdate();
+            Query q3 = entityManager.createNativeQuery("DELETE FROM queues WHERE song_id = :songId");
+            q3.setParameter("songId", songId);
+            q3.executeUpdate();
 
-        Query deleteDownloads = entityManager.createNativeQuery(
-                "DELETE FROM downloads WHERE song_id = :songId");
-        deleteDownloads.setParameter("songId", songId);
-        deleteDownloads.executeUpdate();
+            Query q4 = entityManager.createNativeQuery("DELETE FROM playlist_songs WHERE song_id = :songId");
+            q4.setParameter("songId", songId);
+            q4.executeUpdate();
+
+            Query q5 = entityManager.createNativeQuery("DELETE FROM downloads WHERE song_id = :songId");
+            q5.setParameter("songId", songId);
+            q5.executeUpdate();
+
+            Query q6 = entityManager.createNativeQuery("DELETE FROM song_contributing_artists WHERE song_id = :songId");
+            q6.setParameter("songId", songId);
+            q6.executeUpdate();
+
+            Query q7 = entityManager.createNativeQuery("DELETE FROM recently_played WHERE item_id = :songId AND item_type = 'SONG'");
+            q7.setParameter("songId", songId);
+            q7.executeUpdate();
+
+            if (song.getAlbum() != null) {
+                Query q8 = entityManager.createNativeQuery("UPDATE albums SET song_count = GREATEST(song_count - 1, 0) WHERE id = :albumId");
+                q8.setParameter("albumId", song.getAlbum().getId());
+                q8.executeUpdate();
+            }
+        } catch (Exception e) {
+            log.warn("Error cleaning up relations for song {}: {}", songId, e.getMessage());
+        }
 
         songRepository.delete(song);
-        log.info("Song {} force deleted by admin", songId);
+        log.info("Song {} force deleted by admin (storage files deleted & cache invalidated)", songId);
+    }
+
+    public AdminDashboardResponse syncStorage() {
+        if (orphanStorageCleanupScheduler != null) {
+            try {
+                orphanStorageCleanupScheduler.purgeOrphanedStorageObjects(true);
+            } catch (Exception e) {
+                log.warn("Could not purge orphaned storage objects during sync: {}", e.getMessage());
+            }
+        }
+        if (storageService != null) {
+            storageService.invalidateStorageCache();
+        }
+        return getDashboard();
+    }
+
+    @Transactional
+    public AdminDashboardResponse clearAllSongsAndStorage() {
+        // 1. Purge all physical objects from Cloudflare R2 / storage
+        try {
+            if (storageService != null) {
+                storageService.clearAllR2Storage();
+            }
+        } catch (Exception e) {
+            log.error("Error clearing R2 storage: {}", e.getMessage(), e);
+        }
+
+        // 2. Clear all relational database records referencing songs
+        try {
+            entityManager.createNativeQuery("DELETE FROM liked_songs").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM listening_history").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM queues").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM playlist_songs").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM downloads").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM song_contributing_artists").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM recently_played WHERE item_type = 'SONG'").executeUpdate();
+            entityManager.createNativeQuery("UPDATE albums SET song_count = 0, total_duration_ms = 0").executeUpdate();
+        } catch (Exception e) {
+            log.warn("Warning during table cleanup: {}", e.getMessage());
+        }
+
+        // 3. Delete all song entities
+        songRepository.deleteAll();
+
+        if (storageService != null) {
+            storageService.invalidateStorageCache();
+        }
+
+        log.info("ALL songs and Cloudflare R2 storage cleared to 0 MB");
+        return getDashboard();
+    }
+
+    public void forceDeletePlaylist(String playlistId) {
+        Playlist playlist = playlistRepository.findById(playlistId)
+                .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
+
+        Query deletePlaylistSongs = entityManager.createNativeQuery(
+                "DELETE FROM playlist_songs WHERE playlist_id = :playlistId");
+        deletePlaylistSongs.setParameter("playlistId", playlistId);
+        deletePlaylistSongs.executeUpdate();
+
+        Query deleteLikedPlaylists = entityManager.createNativeQuery(
+                "DELETE FROM liked_playlists WHERE playlist_id = :playlistId");
+        deleteLikedPlaylists.setParameter("playlistId", playlistId);
+        deleteLikedPlaylists.executeUpdate();
+
+        playlistRepository.delete(playlist);
+        log.info("Playlist {} force deleted by admin", playlistId);
+    }
+
+    public void forceDeleteAlbum(String albumId) {
+        com.spotibase.entity.Album album = albumRepository.findById(albumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Album", albumId));
+
+        Query updateSongs = entityManager.createNativeQuery(
+                "UPDATE songs SET album_id = NULL WHERE album_id = :albumId");
+        updateSongs.setParameter("albumId", albumId);
+        updateSongs.executeUpdate();
+
+        Query deleteLikedAlbums = entityManager.createNativeQuery(
+                "DELETE FROM liked_albums WHERE album_id = :albumId");
+        deleteLikedAlbums.setParameter("albumId", albumId);
+        deleteLikedAlbums.executeUpdate();
+
+        albumRepository.delete(album);
+        log.info("Album {} force deleted by admin", albumId);
+    }
+
+    public void forceDeleteArtist(String artistId) {
+        Artist artist = artistRepository.findById(artistId)
+                .orElseThrow(() -> new ResourceNotFoundException("Artist", artistId));
+
+        Query deleteFollowedArtists = entityManager.createNativeQuery(
+                "DELETE FROM followed_artists WHERE artist_id = :artistId");
+        deleteFollowedArtists.setParameter("artistId", artistId);
+        deleteFollowedArtists.executeUpdate();
+
+        artistRepository.delete(artist);
+        log.info("Artist {} force deleted by admin", artistId);
+    }
+
+    public void forceDeleteUser(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        user.setActive(false);
+        userRepository.save(user);
+        log.info("User {} deleted (deactivated) by admin", userId);
     }
 
     public void featureSong(String songId) {

@@ -81,16 +81,24 @@ public class SearchService {
     private List<SongResponse> searchSongs(String query, String language, Integer year,
                                             String genre, String sortBy, int page, int size, String userId) {
         String fullSql = """
-            SELECT s.id, ts_rank(s.fts_vector, plainto_tsquery('english', :query)) as rank
+            SELECT s.id,
+                   CASE WHEN s.fts_vector @@ plainto_tsquery('english', :query)
+                        THEN ts_rank(s.fts_vector, plainto_tsquery('english', :query))
+                        ELSE 0.1 END as rank
             FROM songs s
             LEFT JOIN artists a ON s.artist_id = a.id
             WHERE s.archived = false
-            AND s.fts_vector @@ plainto_tsquery('english', :query)
-            ORDER BY rank DESC
+            AND (
+                s.fts_vector @@ plainto_tsquery('english', :query)
+                OR s.name ILIKE :pattern
+                OR a.name ILIKE :pattern
+            )
+            ORDER BY rank DESC, s.created_at DESC
         """;
 
         Query q = entityManager.createNativeQuery(fullSql);
         q.setParameter("query", query);
+        q.setParameter("pattern", "%" + query + "%");
         q.setFirstResult(page * size);
         q.setMaxResults(size);
 

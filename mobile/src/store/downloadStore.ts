@@ -28,6 +28,8 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
   error: null,
 
   fetchDownloads: async () => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) return;
     set({ isLoading: true, error: null });
     try {
       const response = await downloadApi.getAll();
@@ -39,6 +41,8 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
   },
 
   fetchStats: async () => {
+    const { isAuthenticated } = useAuthStore.getState();
+    if (!isAuthenticated) return;
     try {
       const response = await downloadApi.getStats();
       set({ stats: response.data });

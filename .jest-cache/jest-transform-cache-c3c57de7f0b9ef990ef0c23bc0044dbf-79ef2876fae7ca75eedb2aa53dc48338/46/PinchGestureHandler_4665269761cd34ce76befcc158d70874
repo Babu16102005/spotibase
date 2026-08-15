@@ -1,0 +1,21 @@
+d789bef29cda71b02336a03bd2b3582b
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.pinchHandlerName = exports.PinchGestureHandler = void 0;
+var _createHandler = _interopRequireDefault(require("./createHandler"));
+var _gestureHandlerCommon = require("./gestureHandlerCommon");
+function _interopRequireDefault(e) {
+  return e && e.__esModule ? e : {
+    default: e
+  };
+}
+var pinchHandlerName = exports.pinchHandlerName = 'PinchGestureHandler';
+var PinchGestureHandler = exports.PinchGestureHandler = (0, _createHandler.default)({
+  name: pinchHandlerName,
+  allowedProps: _gestureHandlerCommon.baseGestureHandlerProps,
+  config: {}
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfY3JlYXRlSGFuZGxlciIsIl9pbnRlcm9wUmVxdWlyZURlZmF1bHQiLCJyZXF1aXJlIiwiX2dlc3R1cmVIYW5kbGVyQ29tbW9uIiwiZSIsIl9fZXNNb2R1bGUiLCJkZWZhdWx0IiwicGluY2hIYW5kbGVyTmFtZSIsImV4cG9ydHMiLCJQaW5jaEdlc3R1cmVIYW5kbGVyIiwibmFtZSIsImFsbG93ZWRQcm9wcyIsImJhc2VHZXN0dXJlSGFuZGxlclByb3BzIiwiY29uZmlnIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2hhbmRsZXJzL1BpbmNoR2VzdHVyZUhhbmRsZXIudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztBQUNBLElBQUFBLGNBQUEsR0FBQUMsc0JBQUEsQ0FBQUMsT0FBQTtBQUNBLElBQUFDLHFCQUFBLEdBQUFELE9BQUE7QUFHZ0MsU0FBQUQsdUJBQUFHLENBQUE7RUFBQSxPQUFBQSxDQUFBLElBQUFBLENBQUEsQ0FBQUMsVUFBQSxHQUFBRCxDQUFBO0lBQUFFLE9BQUEsRUFBQUY7RUFBQTtBQUFBO0FBUXpCLElBQU1HLGdCQUFnQixHQUFBQyxPQUFBLENBQUFELGdCQUFBLEdBQUcscUJBQXFCO0FBVzlDLElBQU1FLG1CQUFtQixHQUFBRCxPQUFBLENBQUFDLG1CQUFBLEdBQUcsSUFBQVQsY0FBQSxDQUFBTSxPQUFhLEVBRzlDO0VBQ0FJLElBQUksRUFBRUgsZ0JBQWdCO0VBQ3RCSSxZQUFZLEVBQUVDLHFCQUFBLENBQUFBLHVCQUF1QjtFQUNyQ0MsTUFBTSxFQUFFLENBQUM7QUFDWCxDQUFDLENBQUMiLCJpZ25vcmVMaXN0IjpbXX0=

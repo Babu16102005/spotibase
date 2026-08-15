@@ -1,0 +1,14 @@
+0dfbcea7cf90e55886c247d07cecb75c
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+Object.defineProperty(exports, "customDirectEventTypes", {
+  enumerable: true,
+  get: function () {
+    return _ReactNativeViewConfigRegistry.customDirectEventTypes;
+  }
+});
+var _ReactNativeViewConfigRegistry = require("react-native/Libraries/Renderer/shims/ReactNativeViewConfigRegistry");
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfUmVhY3ROYXRpdmVWaWV3Q29uZmlnUmVnaXN0cnkiLCJyZXF1aXJlIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2hhbmRsZXJzL2N1c3RvbURpcmVjdEV2ZW50VHlwZXMudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7O0FBQ0EsSUFBQUEsOEJBQUEsR0FBQUMsT0FBQSIsImlnbm9yZUxpc3QiOltdfQ==

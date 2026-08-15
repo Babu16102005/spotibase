@@ -5,23 +5,38 @@ import { useThemeStore } from '../../store';
 import { ArtistResponse, SongResponse, AlbumResponse } from '../../types';
 import SongCard from '../../components/SongCard';
 import AlbumCard from '../../components/AlbumCard';
-import { formatCount } from '../../utils';
+import { formatCount, coverSource } from '../../utils';
+import { DetailPageSkeleton } from '../../components/SkeletonLoader';
 
 const ArtistScreen = ({ route, navigation }: any) => {
   const [artist, setArtist] = useState<ArtistResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const { id } = route.params;
   const { theme } = useThemeStore();
 
   useEffect(() => {
-    artistApi.getById(id).then(r => setArtist(r.data)).catch(() => navigation?.goBack());
+    setLoading(true);
+    artistApi.getById(id)
+      .then(r => setArtist(r.data))
+      .catch(() => {
+        if (navigation?.canGoBack?.()) navigation.goBack();
+        else navigation?.navigate('Home');
+      })
+      .finally(() => setLoading(false));
   }, [id]);
 
-  if (!artist) return <View style={[styles.container, { backgroundColor: theme.colors.background }]} />;
+  if (loading || !artist) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <DetailPageSkeleton rows={3} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.header}>
-        <Image source={{ uri: artist.imageUrl || 'https://via.placeholder.com/200' }} style={[styles.image, { borderColor: theme.colors.border }]} />
+        <Image source={coverSource(artist.imageUrl)} style={[styles.image, { borderColor: theme.colors.border }]} />
         <Text style={[styles.name, { color: theme.colors.text }]}>{artist.name}</Text>
         <Text style={[styles.listeners, { color: theme.colors.textSecondary }]}>
           {formatCount(artist.monthlyListeners)} monthly listeners

@@ -1,0 +1,63 @@
+1d20f2b067166808eb56f78bb0f42260
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _superPropGet2 = _interopRequireDefault(require("@babel/runtime/helpers/superPropGet"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.RotationGesture = void 0;
+var _gesture = require("./gesture");
+var _worklet_3631609729009_init_data = {
+  code: "function changeEventCalculator_reactNativeGestureHandler_rotationGestureJs1(current,previous){let changePayload;if(previous===undefined){changePayload={rotationChange:current.rotation};}else{changePayload={rotationChange:current.rotation-previous.rotation};}return{...current,...changePayload};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/rotationGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"changeEventCalculator_reactNativeGestureHandler_rotationGestureJs1\",\"current\",\"previous\",\"changePayload\",\"undefined\",\"rotationChange\",\"rotation\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/rotationGesture.js\"],\"mappings\":\"AAOA,SAAAA,kEAAkDA,CAAAC,OAAA,CAAAC,QAAA,EAGhD,GAAI,CAAAC,aAAa,CACjB,GAAID,QAAQ,GAAKE,SAAS,CAAE,CAC1BD,aAAa,CAAG,CACdE,cAAc,CAAEJ,OAAO,CAACK,QAC1B,CAAC,CACH,CAAC,IAAM,CACLH,aAAa,CAAG,CACdE,cAAc,CAAEJ,OAAO,CAACK,QAAQ,CAAGJ,QAAQ,CAACI,QAC9C,CAAC,CACH,CACA,MAAO,CACL,GAAGL,OAAO,CACV,GAAGE,aACL,CAAC,CACH\",\"ignoreList\":[]}"
+};
+var changeEventCalculator = function changeEventCalculator_reactNativeGestureHandler_rotationGestureJs1Factory(_ref) {
+  var _worklet_3631609729009_init_data = _ref._worklet_3631609729009_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var changeEventCalculator = function (current, previous) {
+    var changePayload;
+    if (previous === undefined) {
+      changePayload = {
+        rotationChange: current.rotation
+      };
+    } else {
+      changePayload = {
+        rotationChange: current.rotation - previous.rotation
+      };
+    }
+    return Object.assign({}, current, changePayload);
+  };
+  changeEventCalculator.__closure = {};
+  changeEventCalculator.__workletHash = 3631609729009;
+  changeEventCalculator.__pluginVersion = "0.10.1";
+  changeEventCalculator.__initData = _worklet_3631609729009_init_data;
+  changeEventCalculator.__stackDetails = _e;
+  return changeEventCalculator;
+}({
+  _worklet_3631609729009_init_data
+});
+var RotationGesture = function (_gesture$ContinousBas) {
+  function RotationGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, RotationGesture);
+    _this = (0, _callSuper2.default)(this, RotationGesture);
+    _this.handlerName = 'RotationGestureHandler';
+    return _this;
+  }
+  (0, _inherits2.default)(RotationGesture, _gesture$ContinousBas);
+  return (0, _createClass2.default)(RotationGesture, [{
+    key: "onChange",
+    value: function onChange(callback) {
+      this.handlers.changeEventCalculator = changeEventCalculator;
+      return (0, _superPropGet2.default)(RotationGesture, "onChange", this, 3)([callback]);
+    }
+  }]);
+}(_gesture.ContinousBaseGesture);
+exports.RotationGesture = RotationGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJfd29ya2xldF8zNjMxNjA5NzI5MDA5X2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsImNoYW5nZUV2ZW50Q2FsY3VsYXRvciIsImNoYW5nZUV2ZW50Q2FsY3VsYXRvcl9yZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX3JvdGF0aW9uR2VzdHVyZUpzMUZhY3RvcnkiLCJfcmVmIiwiX2UiLCJnbG9iYWwiLCJFcnJvciIsImN1cnJlbnQiLCJwcmV2aW91cyIsImNoYW5nZVBheWxvYWQiLCJ1bmRlZmluZWQiLCJyb3RhdGlvbkNoYW5nZSIsInJvdGF0aW9uIiwiT2JqZWN0IiwiYXNzaWduIiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyIsIlJvdGF0aW9uR2VzdHVyZSIsIl9nZXN0dXJlJENvbnRpbm91c0JhcyIsImNvbnN0cnVjdG9yIiwiX3RoaXMiLCJfY2xhc3NDYWxsQ2hlY2syIiwiZGVmYXVsdCIsIl9jYWxsU3VwZXIyIiwiaGFuZGxlck5hbWUiLCJfaW5oZXJpdHMyIiwiX2NyZWF0ZUNsYXNzMiIsImtleSIsInZhbHVlIiwib25DaGFuZ2UiLCJjYWxsYmFjayIsImhhbmRsZXJzIiwiX3N1cGVyUHJvcEdldDIiLCJDb250aW5vdXNCYXNlR2VzdHVyZSIsImV4cG9ydHMiXSwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvaGFuZGxlcnMvZ2VzdHVyZXMvcm90YXRpb25HZXN0dXJlLnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7QUFBQSxJQUFBQSxRQUFBLEdBQUFDLE9BQUE7QUFBQSxJQUFBQyxnQ0FBQTtFQUFBQyxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBQUEsSUFBQUMscUJBQUEsR0FRQSxTQUFBQywwRUFBQUMsSUFBQTtFQUFBLElBQUFOLGdDQUFBLEdBQUFNLElBQUEsQ0FBQU4sZ0NBQUE7RUFBQSxJQUFBTyxFQUFBLFFBQUFDLE1BQUEsQ0FBQUMsS0FBQTtFQUFBLElBQUFMLHFCQUFBLFlBQUFBLENBQ0VNLE9BQStELEVBQy9EQyxRQUFpRSxFQUNqRTtJQUVBLElBQUlDLGFBQWdEO0lBQ3BELElBQUlELFFBQVEsS0FBS0UsU0FBUyxFQUFFO01BQzFCRCxhQUFhLEdBQUc7UUFDZEUsY0FBYyxFQUFFSixPQUFPLENBQUNLO01BQzFCLENBQUM7SUFDSCxDQUFDLE1BQU07TUFDTEgsYUFBYSxHQUFHO1FBQ2RFLGNBQWMsRUFBRUosT0FBTyxDQUFDSyxRQUFRLEdBQUdKLFFBQVEsQ0FBQ0k7TUFDOUMsQ0FBQztJQUNIO0lBRUEsT0FBQUMsTUFBQSxDQUFBQyxNQUFBLEtBQVlQLE9BQU8sRUFBS0UsYUFBQTtFQUMxQjtFQUFBUixxQkFBQSxDQUFBYyxTQUFBO0VBQUFkLHFCQUFBLENBQUFlLGFBQUE7RUFBQWYscUJBQUEsQ0FBQWdCLGVBQUE7RUFBQWhCLHFCQUFBLENBQUFpQixVQUFBLEdBQUFyQixnQ0FBQTtFQUFBSSxxQkFBQSxDQUFBa0IsY0FBQSxHQUFBZixFQUFBO0VBQUEsT0FBQUgscUJBQUE7QUFBQSxDQWpCQTtFQUFBSjtBQUFBO0FBQUEsSUFtQmF1QixlQUFlLGFBQUFDLHFCQUFBO0VBSTFCLFNBQUFDLGdCQUFBLEVBQWM7SUFBQSxJQUFBQyxLQUFBO0lBQUEsSUFBQUMsZ0JBQUEsQ0FBQUMsT0FBQSxRQUFBTCxlQUFBO0lBQ1pHLEtBQUEsT0FBQUcsV0FBQSxDQUFBRCxPQUFBLFFBQUFMLGVBQUE7SUFFQUcsS0FBQSxDQUFLSSxXQUFXLEdBQUcsd0JBQXdCO0lBQUEsT0FBQUosS0FBQTtFQUM3QztFQUFBLElBQUFLLFVBQUEsQ0FBQUgsT0FBQSxFQUFBTCxlQUFBLEVBQUFDLHFCQUFBO0VBQUEsV0FBQVEsYUFBQSxDQUFBSixPQUFBLEVBQUFMLGVBQUE7SUFBQVUsR0FBQTtJQUFBQyxLQUFBLEVBRUEsU0FBQUMsUUFBUUEsQ0FDTkMsUUFJUyxFQUNUO01BRUEsSUFBSSxDQUFDQyxRQUFRLENBQUNqQyxxQkFBcUIsR0FBR0EscUJBQXFCO01BQzNELFdBQUFrQyxjQUFBLENBQUFWLE9BQUEsRUFBQUwsZUFBQSx3QkFBc0JhLFFBQVE7SUFDaEM7RUFBQTtBQUFBLEVBcEJtQ3RDLFFBQUEsQ0FBQXlDLG9CQUFvQjtBQXFCeERDLE9BQUEsQ0FBQWpCLGVBQUEsR0FBQUEsZUFBQSIsImlnbm9yZUxpc3QiOltdfQ==

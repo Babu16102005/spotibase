@@ -20,14 +20,6 @@ public class UserSetting {
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     private User user;
 
-    @Column(length = 20)
-    @Builder.Default
-    private String streamingQuality = "HIGH"; // LOW, MEDIUM, HIGH, LOSSLESS
-
-    @Column(length = 20)
-    @Builder.Default
-    private String downloadQuality = "HIGH"; // LOW, MEDIUM, HIGH, LOSSLESS
-
     @Column(nullable = false)
     @Builder.Default
     private int crossfadeDuration = 0; // seconds

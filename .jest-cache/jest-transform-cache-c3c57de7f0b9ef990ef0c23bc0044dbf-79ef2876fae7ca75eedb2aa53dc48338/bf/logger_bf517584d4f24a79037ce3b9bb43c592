@@ -1,0 +1,204 @@
+374f97e93a7ebde3a9e30e70ad7ad241
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.updateLoggerConfig = exports.logger = exports.getLoggerConfig = exports.ReanimatedLogLevel = void 0;
+var PREFIX = '[Reanimated]';
+var DOCS_URL = 'https://docs.swmansion.com/react-native-reanimated/docs/debugging/logger-configuration';
+var DOCS_REFERENCE = `If you don't want to see this message, you can disable the \`strict\` mode. Refer to:\n${DOCS_URL} for more details.`;
+var ReanimatedLogLevel = exports.ReanimatedLogLevel = function (ReanimatedLogLevel) {
+  ReanimatedLogLevel[ReanimatedLogLevel["warn"] = 1] = "warn";
+  ReanimatedLogLevel[ReanimatedLogLevel["error"] = 2] = "error";
+  return ReanimatedLogLevel;
+}({});
+var _worklet_6312384914283_init_data = {
+  code: "function logToConsole_reactNativeReanimated_loggerTs1(data){const{ReanimatedLogLevel}=this.__closure;switch(data.level){case ReanimatedLogLevel.warn:console.warn(data.message);break;case ReanimatedLogLevel.error:console.error(data.message);break;}}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts",
+  sourceMap: "{\"version\":3,\"names\":[\"logToConsole_reactNativeReanimated_loggerTs1\",\"data\",\"ReanimatedLogLevel\",\"__closure\",\"level\",\"warn\",\"console\",\"message\",\"error\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts\"],\"mappings\":\"AA6BA,SAAAA,4CAAqCA,CAAAC,IAAA,QAAAC,kBAAA,OAAAC,SAAA,CAEnC,OAAQF,IAAI,CAACG,KAAK,EAChB,IAAK,CAAAF,kBAAkB,CAACG,IAAI,CAC1BC,OAAO,CAACD,IAAI,CAACJ,IAAI,CAACM,OAAO,CAAC,CAC1B,MACF,IAAK,CAAAL,kBAAkB,CAACM,KAAK,CAC3BF,OAAO,CAACE,KAAK,CAACP,IAAI,CAACM,OAAO,CAAC,CAC3B,MACJ,CACF\",\"ignoreList\":[]}"
+};
+var logToConsole = function logToConsole_reactNativeReanimated_loggerTs1Factory(_ref) {
+  var _worklet_6312384914283_init_data = _ref._worklet_6312384914283_init_data,
+    ReanimatedLogLevel = _ref.ReanimatedLogLevel;
+  var _e = [new global.Error(), -2, -27];
+  var logToConsole = function (data) {
+    switch (data.level) {
+      case ReanimatedLogLevel.warn:
+        console.warn(data.message);
+        break;
+      case ReanimatedLogLevel.error:
+        console.error(data.message);
+        break;
+    }
+  };
+  logToConsole.__closure = {
+    ReanimatedLogLevel
+  };
+  logToConsole.__workletHash = 6312384914283;
+  logToConsole.__pluginVersion = "0.10.1";
+  logToConsole.__initData = _worklet_6312384914283_init_data;
+  logToConsole.__stackDetails = _e;
+  return logToConsole;
+}({
+  _worklet_6312384914283_init_data,
+  ReanimatedLogLevel
+});
+var DEFAULT_LOGGER_CONFIG = {
+  logFunction: logToConsole,
+  level: ReanimatedLogLevel.warn,
+  strict: true
+};
+var _worklet_17385108954482_init_data = {
+  code: "function getLoggerConfig_reactNativeReanimated_loggerTs2(){const{DEFAULT_LOGGER_CONFIG}=this.__closure;if(!global.__reanimatedLoggerConfig){global.__reanimatedLoggerConfig=DEFAULT_LOGGER_CONFIG;}return global.__reanimatedLoggerConfig;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts",
+  sourceMap: "{\"version\":3,\"names\":[\"getLoggerConfig_reactNativeReanimated_loggerTs2\",\"DEFAULT_LOGGER_CONFIG\",\"__closure\",\"global\",\"__reanimatedLoggerConfig\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts\"],\"mappings\":\"AAoDO,SAAAA,+CAA2BA,CAAA,QAAAC,qBAAA,OAAAC,SAAA,CAEhC,GAAI,CAACC,MAAM,CAACC,wBAAwB,CAAE,CACpCD,MAAM,CAACC,wBAAwB,CAAGH,qBAAqB,CACzD,CACA,MAAO,CAAAE,MAAM,CAACC,wBAAwB,CACxC\",\"ignoreList\":[]}"
+};
+var getLoggerConfig = exports.getLoggerConfig = function getLoggerConfig_reactNativeReanimated_loggerTs2Factory(_ref2) {
+  var _worklet_17385108954482_init_data = _ref2._worklet_17385108954482_init_data,
+    DEFAULT_LOGGER_CONFIG = _ref2.DEFAULT_LOGGER_CONFIG;
+  var _e = [new global.Error(), -2, -27];
+  var getLoggerConfig = function () {
+    if (!global.__reanimatedLoggerConfig) {
+      global.__reanimatedLoggerConfig = DEFAULT_LOGGER_CONFIG;
+    }
+    return global.__reanimatedLoggerConfig;
+  };
+  getLoggerConfig.__closure = {
+    DEFAULT_LOGGER_CONFIG
+  };
+  getLoggerConfig.__workletHash = 17385108954482;
+  getLoggerConfig.__pluginVersion = "0.10.1";
+  getLoggerConfig.__initData = _worklet_17385108954482_init_data;
+  getLoggerConfig.__stackDetails = _e;
+  return getLoggerConfig;
+}({
+  _worklet_17385108954482_init_data,
+  DEFAULT_LOGGER_CONFIG
+});
+var _worklet_5490996513570_init_data = {
+  code: "function updateLoggerConfig_reactNativeReanimated_loggerTs3(currentConfig,options){const{DEFAULT_LOGGER_CONFIG}=this.__closure;var _options$level,_options$strict;global.__reanimatedLoggerConfig={...currentConfig,level:(_options$level=options===null||options===void 0?void 0:options.level)!==null&&_options$level!==void 0?_options$level:DEFAULT_LOGGER_CONFIG.level,strict:(_options$strict=options===null||options===void 0?void 0:options.strict)!==null&&_options$strict!==void 0?_options$strict:DEFAULT_LOGGER_CONFIG.strict};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts",
+  sourceMap: "{\"version\":3,\"names\":[\"updateLoggerConfig_reactNativeReanimated_loggerTs3\",\"currentConfig\",\"options\",\"DEFAULT_LOGGER_CONFIG\",\"__closure\",\"_options$level\",\"_options$strict\",\"global\",\"__reanimatedLoggerConfig\",\"level\",\"strict\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts\"],\"mappings\":\"AAsEO,SAAAA,kDAGLA,CAAAC,aAAA,CAAAC,OAAA,QAAAC,qBAAA,OAAAC,SAAA,KAAAC,cAAA,CAAAC,eAAA,CAEAC,MAAM,CAACC,wBAAwB,CAAG,CAChC,GAAGP,aAAa,CAEhBQ,KAAK,EAAAJ,cAAA,CAAEH,OAAO,SAAPA,OAAO,iBAAPA,OAAO,CAAEO,KAAK,UAAAJ,cAAA,UAAAA,cAAA,CAAIF,qBAAqB,CAACM,KAAK,CACpDC,MAAM,EAAAJ,eAAA,CAAEJ,OAAO,SAAPA,OAAO,iBAAPA,OAAO,CAAEQ,MAAM,UAAAJ,eAAA,UAAAA,eAAA,CAAIH,qBAAqB,CAACO,MACnD,CAAC,CACH\",\"ignoreList\":[]}"
+};
+var updateLoggerConfig = exports.updateLoggerConfig = function updateLoggerConfig_reactNativeReanimated_loggerTs3Factory(_ref3) {
+  var _worklet_5490996513570_init_data = _ref3._worklet_5490996513570_init_data,
+    DEFAULT_LOGGER_CONFIG = _ref3.DEFAULT_LOGGER_CONFIG;
+  var _e = [new global.Error(), -2, -27];
+  var updateLoggerConfig = function (currentConfig, options) {
+    global.__reanimatedLoggerConfig = Object.assign({}, currentConfig, {
+      level: options?.level ?? DEFAULT_LOGGER_CONFIG.level,
+      strict: options?.strict ?? DEFAULT_LOGGER_CONFIG.strict
+    });
+  };
+  updateLoggerConfig.__closure = {
+    DEFAULT_LOGGER_CONFIG
+  };
+  updateLoggerConfig.__workletHash = 5490996513570;
+  updateLoggerConfig.__pluginVersion = "0.10.1";
+  updateLoggerConfig.__initData = _worklet_5490996513570_init_data;
+  updateLoggerConfig.__stackDetails = _e;
+  return updateLoggerConfig;
+}({
+  _worklet_5490996513570_init_data,
+  DEFAULT_LOGGER_CONFIG
+});
+var _worklet_5752693848482_init_data = {
+  code: "function handleLog_reactNativeReanimated_loggerTs4(level,message,options){const{getLoggerConfig,DOCS_REFERENCE,PREFIX}=this.__closure;const config=getLoggerConfig();if(options.strict&&!config.strict||level<config.level){return;}if(options.strict){message+=\"\\n\\n\"+DOCS_REFERENCE;}config.logFunction({level:level,message:PREFIX+\" \"+message});}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts",
+  sourceMap: "{\"version\":3,\"names\":[\"handleLog_reactNativeReanimated_loggerTs4\",\"level\",\"message\",\"options\",\"getLoggerConfig\",\"DOCS_REFERENCE\",\"PREFIX\",\"__closure\",\"config\",\"strict\",\"logFunction\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts\"],\"mappings\":\"AAuFA,SAAAA,yCAIEA,CAAAC,KAAA,CAAAC,OAAA,CAAAC,OAAA,QAAAC,eAAA,CAAAC,cAAA,CAAAC,MAAA,OAAAC,SAAA,CAEA,KAAM,CAAAC,MAAM,CAAGJ,eAAe,CAAC,CAAC,CAChC,GAGGD,OAAO,CAACM,MAAM,EAAI,CAACD,MAAM,CAACC,MAAM,EAEjCR,KAAK,CAAGO,MAAM,CAACP,KAAK,CACpB,CACA,OACF,CAEA,GAAIE,OAAO,CAACM,MAAM,CAAE,CAClBP,OAAO,SAAWG,cAAgB,CACpC,CAEAG,MAAM,CAACE,WAAW,CAAC,CACjBT,KAAK,CAALA,KAAK,CACLC,OAAO,CAAKI,MAAM,KAAIJ,OACxB,CAAC,CAAC,CACJ\",\"ignoreList\":[]}"
+};
+var handleLog = function handleLog_reactNativeReanimated_loggerTs4Factory(_ref4) {
+  var _worklet_5752693848482_init_data = _ref4._worklet_5752693848482_init_data,
+    getLoggerConfig = _ref4.getLoggerConfig,
+    DOCS_REFERENCE = _ref4.DOCS_REFERENCE,
+    PREFIX = _ref4.PREFIX;
+  var _e = [new global.Error(), -4, -27];
+  var handleLog = function (level, message, options) {
+    var config = getLoggerConfig();
+    if (options.strict && !config.strict || level < config.level) {
+      return;
+    }
+    if (options.strict) {
+      message += `\n\n${DOCS_REFERENCE}`;
+    }
+    config.logFunction({
+      level,
+      message: `${PREFIX} ${message}`
+    });
+  };
+  handleLog.__closure = {
+    getLoggerConfig,
+    DOCS_REFERENCE,
+    PREFIX
+  };
+  handleLog.__workletHash = 5752693848482;
+  handleLog.__pluginVersion = "0.10.1";
+  handleLog.__initData = _worklet_5752693848482_init_data;
+  handleLog.__stackDetails = _e;
+  return handleLog;
+}({
+  _worklet_5752693848482_init_data,
+  getLoggerConfig,
+  DOCS_REFERENCE,
+  PREFIX
+});
+var _worklet_6673649854527_init_data = {
+  code: "function warn_reactNativeReanimated_loggerTs5(message,options={}){const{handleLog,ReanimatedLogLevel}=this.__closure;handleLog(ReanimatedLogLevel.warn,message,options);}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts",
+  sourceMap: "{\"version\":3,\"names\":[\"warn_reactNativeReanimated_loggerTs5\",\"message\",\"options\",\"handleLog\",\"ReanimatedLogLevel\",\"__closure\",\"warn\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts\"],\"mappings\":\"AAmHE,SAAAA,oCAAgDA,CAAAC,OAAA,CAAAC,OAAA,WAAAC,SAAA,CAAAC,kBAAA,OAAAC,SAAA,CAE9CF,SAAS,CAACC,kBAAkB,CAACE,IAAI,CAAEL,OAAO,CAAEC,OAAO,CAAC,CACtD\",\"ignoreList\":[]}"
+};
+var _worklet_12767741109980_init_data = {
+  code: "function error_reactNativeReanimated_loggerTs6(message,options={}){const{handleLog,ReanimatedLogLevel}=this.__closure;handleLog(ReanimatedLogLevel.error,message,options);}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts",
+  sourceMap: "{\"version\":3,\"names\":[\"error_reactNativeReanimated_loggerTs6\",\"message\",\"options\",\"handleLog\",\"ReanimatedLogLevel\",\"__closure\",\"error\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/common/logger.ts\"],\"mappings\":\"AAuHE,SAAAA,qCAAiDA,CAAAC,OAAA,CAAAC,OAAA,WAAAC,SAAA,CAAAC,kBAAA,OAAAC,SAAA,CAE/CF,SAAS,CAACC,kBAAkB,CAACE,KAAK,CAAEL,OAAO,CAAEC,OAAO,CAAC,CACvD\",\"ignoreList\":[]}"
+};
+var logger = exports.logger = {
+  warn: function warn_reactNativeReanimated_loggerTs5Factory(_ref5) {
+    var _worklet_6673649854527_init_data = _ref5._worklet_6673649854527_init_data,
+      handleLog = _ref5.handleLog,
+      ReanimatedLogLevel = _ref5.ReanimatedLogLevel;
+    var _e = [new global.Error(), -3, -27];
+    var warn = function (message) {
+      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      handleLog(ReanimatedLogLevel.warn, message, options);
+    };
+    warn.__closure = {
+      handleLog,
+      ReanimatedLogLevel
+    };
+    warn.__workletHash = 6673649854527;
+    warn.__pluginVersion = "0.10.1";
+    warn.__initData = _worklet_6673649854527_init_data;
+    warn.__stackDetails = _e;
+    return warn;
+  }({
+    _worklet_6673649854527_init_data,
+    handleLog,
+    ReanimatedLogLevel
+  }),
+  error: function error_reactNativeReanimated_loggerTs6Factory(_ref6) {
+    var _worklet_12767741109980_init_data = _ref6._worklet_12767741109980_init_data,
+      handleLog = _ref6.handleLog,
+      ReanimatedLogLevel = _ref6.ReanimatedLogLevel;
+    var _e = [new global.Error(), -3, -27];
+    var error = function (message) {
+      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+      handleLog(ReanimatedLogLevel.error, message, options);
+    };
+    error.__closure = {
+      handleLog,
+      ReanimatedLogLevel
+    };
+    error.__workletHash = 12767741109980;
+    error.__pluginVersion = "0.10.1";
+    error.__initData = _worklet_12767741109980_init_data;
+    error.__stackDetails = _e;
+    return error;
+  }({
+    _worklet_12767741109980_init_data,
+    handleLog,
+    ReanimatedLogLevel
+  })
+};
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsInVwZGF0ZUxvZ2dlckNvbmZpZyIsImxvZ2dlciIsImdldExvZ2dlckNvbmZpZyIsIlJlYW5pbWF0ZWRMb2dMZXZlbCIsIlBSRUZJWCIsIkRPQ1NfVVJMIiwiRE9DU19SRUZFUkVOQ0UiLCJfd29ya2xldF82MzEyMzg0OTE0MjgzX2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsImxvZ1RvQ29uc29sZSIsImxvZ1RvQ29uc29sZV9yZWFjdE5hdGl2ZVJlYW5pbWF0ZWRfbG9nZ2VyVHMxRmFjdG9yeSIsIl9yZWYiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwiZGF0YSIsImxldmVsIiwid2FybiIsImNvbnNvbGUiLCJtZXNzYWdlIiwiZXJyb3IiLCJfX2Nsb3N1cmUiLCJfX3dvcmtsZXRIYXNoIiwiX19wbHVnaW5WZXJzaW9uIiwiX19pbml0RGF0YSIsIl9fc3RhY2tEZXRhaWxzIiwiREVGQVVMVF9MT0dHRVJfQ09ORklHIiwibG9nRnVuY3Rpb24iLCJzdHJpY3QiLCJfd29ya2xldF8xNzM4NTEwODk1NDQ4Ml9pbml0X2RhdGEiLCJnZXRMb2dnZXJDb25maWdfcmVhY3ROYXRpdmVSZWFuaW1hdGVkX2xvZ2dlclRzMkZhY3RvcnkiLCJfcmVmMiIsIl9fcmVhbmltYXRlZExvZ2dlckNvbmZpZyIsIl93b3JrbGV0XzU0OTA5OTY1MTM1NzBfaW5pdF9kYXRhIiwidXBkYXRlTG9nZ2VyQ29uZmlnX3JlYWN0TmF0aXZlUmVhbmltYXRlZF9sb2dnZXJUczNGYWN0b3J5IiwiX3JlZjMiLCJjdXJyZW50Q29uZmlnIiwib3B0aW9ucyIsImFzc2lnbiIsIl93b3JrbGV0XzU3NTI2OTM4NDg0ODJfaW5pdF9kYXRhIiwiaGFuZGxlTG9nIiwiaGFuZGxlTG9nX3JlYWN0TmF0aXZlUmVhbmltYXRlZF9sb2dnZXJUczRGYWN0b3J5IiwiX3JlZjQiLCJjb25maWciLCJfd29ya2xldF82NjczNjQ5ODU0NTI3X2luaXRfZGF0YSIsIl93b3JrbGV0XzEyNzY3NzQxMTA5OTgwX2luaXRfZGF0YSIsIndhcm5fcmVhY3ROYXRpdmVSZWFuaW1hdGVkX2xvZ2dlclRzNUZhY3RvcnkiLCJfcmVmNSIsImFyZ3VtZW50cyIsImxlbmd0aCIsInVuZGVmaW5lZCIsImVycm9yX3JlYWN0TmF0aXZlUmVhbmltYXRlZF9sb2dnZXJUczZGYWN0b3J5IiwiX3JlZjYiXSwic291cmNlcyI6WyJsb2dnZXIudHMiXSwic291cmNlc0NvbnRlbnQiOlsiLyogZXNsaW50LWRpc2FibGUgcmVhbmltYXRlZC91c2UtbG9nZ2VyICovXG4ndXNlIHN0cmljdCc7XG5cbmNvbnN0IFBSRUZJWCA9ICdbUmVhbmltYXRlZF0nO1xuY29uc3QgRE9DU19VUkwgPVxuICAnaHR0cHM6Ly9kb2NzLnN3bWFuc2lvbi5jb20vcmVhY3QtbmF0aXZlLXJlYW5pbWF0ZWQvZG9jcy9kZWJ1Z2dpbmcvbG9nZ2VyLWNvbmZpZ3VyYXRpb24nO1xuY29uc3QgRE9DU19SRUZFUkVOQ0UgPSBgSWYgeW91IGRvbid0IHdhbnQgdG8gc2VlIHRoaXMgbWVzc2FnZSwgeW91IGNhbiBkaXNhYmxlIHRoZSBcXGBzdHJpY3RcXGAgbW9kZS4gUmVmZXIgdG86XFxuJHtET0NTX1VSTH0gZm9yIG1vcmUgZGV0YWlscy5gO1xuXG5leHBvcnQgZW51bSBSZWFuaW1hdGVkTG9nTGV2ZWwge1xuICB3YXJuID0gMSxcbiAgZXJyb3IgPSAyLFxufVxuXG50eXBlIExvZ0RhdGEgPSB7XG4gIGxldmVsOiBSZWFuaW1hdGVkTG9nTGV2ZWw7XG4gIG1lc3NhZ2U6IHN0cmluZztcbn07XG5cbnR5cGUgTG9nRnVuY3Rpb24gPSAoZGF0YTogTG9nRGF0YSkgPT4gdm9pZDtcblxuZXhwb3J0IHR5cGUgTG9nZ2VyQ29uZmlnID0ge1xuICBsZXZlbD86IFJlYW5pbWF0ZWRMb2dMZXZlbDtcbiAgc3RyaWN0PzogYm9vbGVhbjtcbn07XG5cbmV4cG9ydCB0eXBlIExvZ2dlckNvbmZpZ0ludGVybmFsID0ge1xuICBsb2dGdW5jdGlvbjogTG9nRnVuY3Rpb247XG59ICYgUmVxdWlyZWQ8TG9nZ2VyQ29uZmlnPjtcblxuZnVuY3Rpb24gbG9nVG9Db25zb2xlKGRhdGE6IExvZ0RhdGEpIHtcbiAgJ3dvcmtsZXQnO1xuICBzd2l0Y2ggKGRhdGEubGV2ZWwpIHtcbiAgICBjYXNlIFJlYW5pbWF0ZWRMb2dMZXZlbC53YXJuOlxuICAgICAgY29uc29sZS53YXJuKGRhdGEubWVzc2FnZSk7XG4gICAgICBicmVhaztcbiAgICBjYXNlIFJlYW5pbWF0ZWRMb2dMZXZlbC5lcnJvcjpcbiAgICAgIGNvbnNvbGUuZXJyb3IoZGF0YS5tZXNzYWdlKTtcbiAgICAgIGJyZWFrO1xuICB9XG59XG5cbmNvbnN0IERFRkFVTFRfTE9HR0VSX0NPTkZJRzogTG9nZ2VyQ29uZmlnSW50ZXJuYWwgPSB7XG4gIGxvZ0Z1bmN0aW9uOiBsb2dUb0NvbnNvbGUsXG4gIGxldmVsOiBSZWFuaW1hdGVkTG9nTGV2ZWwud2FybixcbiAgc3RyaWN0OiB0cnVlLFxufTtcblxuLyoqXG4gKiBDdXJyZW50IGxvZ2dlciBjb25maWcgZ2V0dGVyLlxuICpcbiAqIEByZXR1cm5zIFRoZSBjdXJyZW50IGxvZ2dlciBjb25maWd1cmF0aW9uIG9iamVjdC5cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIGdldExvZ2dlckNvbmZpZygpIHtcbiAgJ3dvcmtsZXQnO1xuICBpZiAoIWdsb2JhbC5fX3JlYW5pbWF0ZWRMb2dnZXJDb25maWcpIHtcbiAgICBnbG9iYWwuX19yZWFuaW1hdGVkTG9nZ2VyQ29uZmlnID0gREVGQVVMVF9MT0dHRVJfQ09ORklHO1xuICB9XG4gIHJldHVybiBnbG9iYWwuX19yZWFuaW1hdGVkTG9nZ2VyQ29uZmlnO1xufVxuXG4vKipcbiAqIFVwZGF0ZXMgbG9nZ2VyIGNvbmZpZ3VyYXRpb24uXG4gKlxuICogQHBhcmFtIGN1cnJlbnRDb25maWcgLSBUaGUgY3VycmVudCBsb2dnZXIgY29uZmlndXJhdGlvbiBvYmplY3QuXG4gKiBAcGFyYW0gb3B0aW9ucyAtIFRoZSBuZXcgbG9nZ2VyIGNvbmZpZ3VyYXRpb24gdG8gYXBwbHkuXG4gKlxuICogICAtIExldmVsOiBUaGUgbWluaW11bSBsb2cgbGV2ZWwgdG8gZGlzcGxheS5cbiAqICAgLSBTdHJpY3Q6IFdoZXRoZXIgdG8gbG9nIHdhcm5pbmdzIGFuZCBlcnJvcnMgdGhhdCBhcmUgbm90IHN0cmljdC4gRGVmYXVsdHMgdG9cbiAqICAgICBmYWxzZS5cbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHVwZGF0ZUxvZ2dlckNvbmZpZyhcbiAgY3VycmVudENvbmZpZzogTG9nZ2VyQ29uZmlnSW50ZXJuYWwsXG4gIG9wdGlvbnM/OiBQYXJ0aWFsPExvZ2dlckNvbmZpZz5cbikge1xuICAnd29ya2xldCc7XG4gIGdsb2JhbC5fX3JlYW5pbWF0ZWRMb2dnZXJDb25maWcgPSB7XG4gICAgLi4uY3VycmVudENvbmZpZyxcbiAgICAvLyBEb24ndCByZXVzZSBwcmV2aW91cyBsZXZlbCBhbmQgc3RyaWN0IHZhbHVlcyBmcm9tIHRoZSBjdXJyZW50IGNvbmZpZ1xuICAgIGxldmVsOiBvcHRpb25zPy5sZXZlbCA/PyBERUZBVUxUX0xPR0dFUl9DT05GSUcubGV2ZWwsXG4gICAgc3RyaWN0OiBvcHRpb25zPy5zdHJpY3QgPz8gREVGQVVMVF9MT0dHRVJfQ09ORklHLnN0cmljdCxcbiAgfTtcbn1cblxudHlwZSBMb2dPcHRpb25zID0ge1xuICBzdHJpY3Q/OiBib29sZWFuO1xufTtcblxuZnVuY3Rpb24gaGFuZGxlTG9nKFxuICBsZXZlbDogUmVhbmltYXRlZExvZ0xldmVsLFxuICBtZXNzYWdlOiBzdHJpbmcsXG4gIG9wdGlvbnM6IExvZ09wdGlvbnNcbikge1xuICAnd29ya2xldCc7XG4gIGNvbnN0IGNvbmZpZyA9IGdldExvZ2dlckNvbmZpZygpO1xuICBpZiAoXG4gICAgLy8gRG9uJ3QgbG9nIGlmIHRoZSBsb2cgaXMgbWFya2VkIGFzIHN0cmljdC1vbmx5IGFuZCB0aGUgY29uZmlnIGRvZXNuJ3RcbiAgICAvLyBlbmFibGUgc3RyaWN0IGxvZ2dpbmdcbiAgICAob3B0aW9ucy5zdHJpY3QgJiYgIWNvbmZpZy5zdHJpY3QpIHx8XG4gICAgLy8gRG9uJ3QgbG9nIGlmIHRoZSBsb2cgbGV2ZWwgaXMgYmVsb3cgdGhlIG1pbmltdW0gY29uZmlndXJlZCBsZXZlbFxuICAgIGxldmVsIDwgY29uZmlnLmxldmVsXG4gICkge1xuICAgIHJldHVybjtcbiAgfVxuXG4gIGlmIChvcHRpb25zLnN0cmljdCkge1xuICAgIG1lc3NhZ2UgKz0gYFxcblxcbiR7RE9DU19SRUZFUkVOQ0V9YDtcbiAgfVxuXG4gIGNvbmZpZy5sb2dGdW5jdGlvbih7XG4gICAgbGV2ZWwsXG4gICAgbWVzc2FnZTogYCR7UFJFRklYfSAke21lc3NhZ2V9YCxcbiAgfSk7XG59XG5cbmV4cG9ydCBjb25zdCBsb2dnZXIgPSB7XG4gIHdhcm4obWVzc2FnZTogc3RyaW5nLCBvcHRpb25zOiBMb2dPcHRpb25zID0ge30pIHtcbiAgICAnd29ya2xldCc7XG4gICAgaGFuZGxlTG9nKFJlYW5pbWF0ZWRMb2dMZXZlbC53YXJuLCBtZXNzYWdlLCBvcHRpb25zKTtcbiAgfSxcbiAgZXJyb3IobWVzc2FnZTogc3RyaW5nLCBvcHRpb25zOiBMb2dPcHRpb25zID0ge30pIHtcbiAgICAnd29ya2xldCc7XG4gICAgaGFuZGxlTG9nKFJlYW5pbWF0ZWRMb2dMZXZlbC5lcnJvciwgbWVzc2FnZSwgb3B0aW9ucyk7XG4gIH0sXG59O1xuIl0sIm1hcHBpbmdzIjoiQUFDQSxZQUFZOztBQUFDQSxNQUFBLENBQUFDLGNBQUEsQ0FBQUMsT0FBQTtFQUFBQyxLQUFBO0FBQUE7QUFBQUQsT0FBQSxDQUFBRSxrQkFBQSxHQUFBRixPQUFBLENBQUFHLE1BQUEsR0FBQUgsT0FBQSxDQUFBSSxlQUFBLEdBQUFKLE9BQUEsQ0FBQUssa0JBQUE7QUFFYixJQUFNQyxNQUFNLEdBQUcsY0FBYztBQUM3QixJQUFNQyxRQUFRLEdBQ1osd0ZBQXdGO0FBQzFGLElBQU1DLGNBQWMsR0FBRyww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

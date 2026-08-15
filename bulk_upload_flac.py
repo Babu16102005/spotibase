@@ -143,14 +143,14 @@ class SpotibaseAPI:
                 return albums[0]["id"]
         return None
     
-    # ---- Artist (uses @RequestParam, not @RequestPart) ----
+    # ---- Artist (uses @RequestParam with multipart/form-data) ----
     def create_artist(self, name: str, bio: str = "") -> Optional[str]:
         url = f"{self.base_url}/artists"
-        data = {"name": name}
+        # ArtistController consumes MULTIPART_FORM_DATA, so send fields as multipart parts
+        fields = [("name", (None, name))]
         if bio:
-            data["bio"] = bio
-        # Artist uses multipart/form-data with @RequestParam
-        resp = self.session.post(url, data=data)
+            fields.append(("bio", (None, bio)))
+        resp = self.session.post(url, files=fields)
         if resp.status_code == 201:
             return resp.json()["id"]
         elif resp.status_code == 409:

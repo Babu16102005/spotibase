@@ -1,0 +1,27 @@
+4e17565898dbfa6fa11d0e35098cc6ae
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+Object.defineProperty(exports, "ScreenTransition", {
+  enumerable: true,
+  get: function () {
+    return _presets.ScreenTransition;
+  }
+});
+Object.defineProperty(exports, "finishScreenTransition", {
+  enumerable: true,
+  get: function () {
+    return _animationManager.finishScreenTransition;
+  }
+});
+Object.defineProperty(exports, "startScreenTransition", {
+  enumerable: true,
+  get: function () {
+    return _animationManager.startScreenTransition;
+  }
+});
+var _animationManager = require("./animationManager");
+var _presets = require("./presets");
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImVudW1lcmFibGUiLCJnZXQiLCJfcHJlc2V0cyIsIlNjcmVlblRyYW5zaXRpb24iLCJfYW5pbWF0aW9uTWFuYWdlciIsImZpbmlzaFNjcmVlblRyYW5zaXRpb24iLCJzdGFydFNjcmVlblRyYW5zaXRpb24iLCJyZXF1aXJlIl0sInNvdXJjZXMiOlsiaW5kZXgudHMiXSwic291cmNlc0NvbnRlbnQiOlsiJ3VzZSBzdHJpY3QnO1xuXG5leHBvcnQge1xuICBmaW5pc2hTY3JlZW5UcmFuc2l0aW9uLFxuICBzdGFydFNjcmVlblRyYW5zaXRpb24sXG59IGZyb20gJy4vYW5pbWF0aW9uTWFuYWdlcic7XG5leHBvcnQgdHlwZSB7XG4gIEFuaW1hdGVkU2NyZWVuVHJhbnNpdGlvbixcbiAgR29CYWNrR2VzdHVyZSxcbiAgU2NyZWVuVHJhbnNpdGlvbkNvbmZpZyxcbn0gZnJvbSAnLi9jb21tb25UeXBlcyc7XG5leHBvcnQgeyBTY3JlZW5UcmFuc2l0aW9uIH0gZnJvbSAnLi9wcmVzZXRzJztcbiJdLCJtYXBwaW5ncyI6IkFBQUEsWUFBWTs7QUFBQ0EsTUFBQSxDQUFBQyxjQUFBLENBQUFDLE9BQUE7RUFBQUMsS0FBQTtBQUFBO0FBQUFILE1BQUEsQ0FBQUMsY0FBQSxDQUFBQyxPQUFBO0VBQUFFLFVBQUE7RUFBQUMsR0FBQSxXQUFBQSxDQUFBO0lBQUEsT0FBQUMsUUFBQSxDQUFBQyxnQkFBQTtFQUFBO0FBQUE7QUFBQVAsTUFBQSxDQUFBQyxjQUFBLENBQUFDLE9BQUE7RUFBQUUsVUFBQTtFQUFBQyxHQUFBLFdBQUFBLENBQUE7SUFBQSxPQUFBRyxpQkFBQSxDQUFBQyxzQkFBQTtFQUFBO0FBQUE7QUFBQVQsTUFBQSxDQUFBQyxjQUFBLENBQUFDLE9BQUE7RUFBQUUsVUFBQTtFQUFBQyxHQUFBLFdBQUFBLENBQUE7SUFBQSxPQUFBRyxpQkFBQSxDQUFBRSxxQkFBQTtFQUFBO0FBQUE7QUFFYixJQUFBRixpQkFBQSxHQUFBRyxPQUFBO0FBU0EsSUFBQUwsUUFBQSxHQUFBSyxPQUFBIiwiaWdub3JlTGlzdCI6W119

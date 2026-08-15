@@ -1,0 +1,1 @@
+{"version":3,"names":["module","exports"],"sources":["fileMock.js"],"sourcesContent":["/**\n * Stub for static asset imports (images/fonts) in Jest.\n */\nmodule.exports = 'test-file-stub';\n"],"mappings":"AAGAA,MAAM,CAACC,OAAO,GAAG,gBAAgB","ignoreList":[]}

@@ -1,0 +1,44 @@
+2b79bab25987ae9fcfe07d38e1e83c9d
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.Reanimated = void 0;
+var _utils = require("../../utils");
+var Reanimated = exports.Reanimated = void 0;
+try {
+  exports.Reanimated = Reanimated = require('react-native-reanimated');
+} catch (e) {
+  exports.Reanimated = Reanimated = undefined;
+}
+if (!Reanimated?.useSharedValue) {
+  exports.Reanimated = Reanimated = undefined;
+}
+var _worklet_17296919045754_init_data = {
+  code: "function reactNativeGestureHandler_reanimatedWrapperJs1(){const{_utils}=this.__closure;console.warn((0,_utils.tagMessage)('Please use newer version of react-native-reanimated in order to control state of the gestures.'));}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/reanimatedWrapper.js",
+  sourceMap: "{\"version\":3,\"names\":[\"reactNativeGestureHandler_reanimatedWrapperJs1\",\"_utils\",\"__closure\",\"console\",\"warn\",\"tagMessage\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/reanimatedWrapper.js\"],\"mappings\":\"AAsB+B,SAAAA,8CAAMA,CAAA,QAAAC,MAAA,OAAAC,SAAA,CAGjCC,OAAO,CAACC,IAAI,CAAC,CAAC,CAAC,CAAEH,MAAM,CAACI,UAAU,EAAE,gGAAgG,CAAC,CAAC,CACxI\",\"ignoreList\":[]}"
+};
+if (Reanimated !== undefined && !Reanimated.setGestureState) {
+  Reanimated.setGestureState = function reactNativeGestureHandler_reanimatedWrapperJs1Factory(_ref) {
+    var _worklet_17296919045754_init_data = _ref._worklet_17296919045754_init_data,
+      _utils = _ref._utils;
+    var _e = [new global.Error(), -2, -27];
+    var reactNativeGestureHandler_reanimatedWrapperJs1 = function () {
+      console.warn((0, _utils.tagMessage)('Please use newer version of react-native-reanimated in order to control state of the gestures.'));
+    };
+    reactNativeGestureHandler_reanimatedWrapperJs1.__closure = {
+      _utils
+    };
+    reactNativeGestureHandler_reanimatedWrapperJs1.__workletHash = 17296919045754;
+    reactNativeGestureHandler_reanimatedWrapperJs1.__pluginVersion = "0.10.1";
+    reactNativeGestureHandler_reanimatedWrapperJs1.__initData = _worklet_17296919045754_init_data;
+    reactNativeGestureHandler_reanimatedWrapperJs1.__stackDetails = _e;
+    return reactNativeGestureHandler_reanimatedWrapperJs1;
+  }({
+    _worklet_17296919045754_init_data,
+    _utils
+  });
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfdXRpbHMiLCJyZXF1aXJlIiwiUmVhbmltYXRlZCIsImV4cG9ydHMiLCJlIiwidW5kZWZpbmVkIiwidXNlU2hhcmVkVmFsdWUiLCJfd29ya2xldF8xNzI5NjkxOTA0NTc1NF9pbml0X2RhdGEiLCJjb2RlIiwibG9jYXRpb24iLCJzb3VyY2VNYXAiLCJzZXRHZXN0dXJlU3RhdGUiLCJyZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX3JlYW5pbWF0ZWRXcmFwcGVySnMxRmFjdG9yeSIsIl9yZWYiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwicmVhY3ROYXRpdmVHZXN0dXJlSGFuZGxlcl9yZWFuaW1hdGVkV3JhcHBlckpzMSIsImNvbnNvbGUiLCJ3YXJuIiwidGFnTWVzc2FnZSIsIl9fY2xvc3VyZSIsIl9fd29ya2xldEhhc2giLCJfX3BsdWdpblZlcnNpb24iLCJfX2luaXREYXRhIiwiX19zdGFja0RldGFpbHMiXSwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvaGFuZGxlcnMvZ2VzdHVyZXMvcmVhbmltYXRlZFdyYXBwZXIudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztBQUtBLElBQUFBLE1BQUEsR0FBQUMsT0FBQTtBQU1BLElBQUlDLFVBaUJTLEdBQUFDLE9BQUEsQ0FBQUQsVUFBQTtBQUViLElBQUk7RUFDRkMsT0FBQSxDQUFBRCxVQUFBLEdBQUFBLFVBQVUsR0FBR0QsT0FBTyxDQUFDLHlCQUF5QixDQUFDO0FBQ2pELENBQUMsQ0FBQyxPQUFPRyxDQUFDLEVBQUU7RUFHVkQsT0FBQSxDQUFBRCxVQUFBLEdBQUFBLFVBQVUsR0FBR0csU0FBUztBQUN4QjtBQUVBLElBQUksQ0FBQ0gsVUFBVSxFQUFFSSxjQUFjLEVBQUU7RUFHL0JILE9BQUEsQ0FBQUQsVUFBQSxHQUFBQSxVQUFVLEdBQUdHLFNBQVM7QUFDeEI7QUFBQSxJQUFBRSxpQ0FBQTtFQUFBQyxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBRUEsSUFBSVIsVUFBVSxLQUFLRyxTQUFTLElBQUksQ0FBQ0gsVUFBVSxDQUFDUyxlQUFlLEVBQUU7RUFFM0RULFVBQVUsQ0FBQ1MsZUFBZSxHQUFHLFNBQUFDLHNEQUFBQyxJQUFBO0lBQUEsSUFBQU4saUNBQUEsR0FBQU0sSUFBQSxDQUFBTixpQ0FBQTtNQUd6QlAsTUFBQSxHQUFBYSxJQUFBLENBQUFiLE1BQUE7SUFBQSxJQUFBYyxFQUFBLFFBQUFDLE1BQUEsQ0FBQUMsS0FBQTtJQUFBLElBQUFDLDhDQUFBLFlBQUFBLENBQUEsRUFIK0I7TUFFakNDLE9BQU8sQ0FBQ0MsSUFBSSxDQUNWLElBQUFuQixNQUFBLENBQUFvQixVQUFVLEVBQ1IsZ0dBQ0YsQ0FDRixDQUFDO0lBQ0gsQ0FBQztJQUFBSCw4Q0FBQSxDQUFBSSxTQUFBO01BSkdyQjtJQUFBO0lBQUFpQiw4Q0FBQSxDQUFBSyxhQUFBO0lBQUFMLDhDQUFBLENBQUFNLGVBQUE7SUFBQU4sOENBQUEsQ0FBQU8sVUFBQSxHQUFBakIsaUNBQUE7SUFBQVUsOENBQUEsQ0FBQVEsY0FBQSxHQUFBWCxFQUFBO0lBQUEsT0FBQUcsOENBQUE7RUFBQSxDQUh5QjtJQUFBVixpQ0FBQTtJQUd6QlA7RUFBQSxFQUlIO0FBQ0giLCJpZ25vcmVMaXN0IjpbXX0=

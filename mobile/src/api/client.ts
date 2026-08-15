@@ -22,15 +22,58 @@ import {
   AdminDashboardResponse,
   DownloadResponse,
   DownloadStatsResponse,
+  PickedSongFile,
+  BulkUploadEntry,
 } from '../types';
 import { getStorage } from '../utils';
+import Constants from 'expo-constants';
 
+const getDevHostIp = () => {
+  try {
+    const hostUri =
+      Constants.expoConfig?.hostUri ||
+      (Constants as any).manifest?.debuggerHost ||
+      (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
+    if (hostUri) {
+      const ip = hostUri.split(':')[0];
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') return ip;
+    }
+  } catch (e) {}
+  return null;
+};
+
+const getDefaultBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    const hostname = window.location.hostname || 'localhost';
+    return `http://${hostname}:8088/api/v1`;
+  }
+  const devIp = getDevHostIp();
+  if (devIp && devIp !== '10.225.134.105') {
+    return `http://${devIp}:8088/api/v1`;
+  }
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8088/api/v1';
+  }
+  return 'http://localhost:8088/api/v1';
+};
+
+let activeBaseUrl = getDefaultBaseUrl();
+
+export const getBaseUrl = (): string => activeBaseUrl;
+
+export const setBaseUrl = (newUrl: string): void => {
+  activeBaseUrl = newUrl;
+  apiClient.defaults.baseURL = newUrl;
+};
+
+export const BASE_URL = activeBaseUrl;
 const storage = getStorage('spotibase-auth');
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8088/api/v1';
-
 const apiClient: AxiosInstance = axios.create({
-  baseURL: BASE_URL,
+  baseURL: activeBaseUrl,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -49,14 +92,59 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryNetwork?: boolean };
+    if (!error.response && originalRequest && !originalRequest._retryNetwork) {
+      originalRequest._retryNetwork = true;
+      const devIp = getDevHostIp();
+      const currentUrl = getBaseUrl();
+
+      const candidates = Platform.OS === 'android'
+        ? [
+            'http://10.0.2.2:8088/api/v1',
+            devIp ? `http://${devIp}:8088/api/v1` : null,
+            'http://localhost:8088/api/v1',
+          ].filter((u): u is string => Boolean(u) && u !== currentUrl)
+        : [
+            'http://localhost:8088/api/v1',
+            devIp ? `http://${devIp}:8088/api/v1` : null,
+          ].filter((u): u is string => Boolean(u) && u !== currentUrl);
+
+      for (const candidate of candidates) {
+        try {
+          const token = storage.getString('accessToken');
+          const relativeUrl = originalRequest.url?.startsWith('http')
+            ? originalRequest.url.replace(/^https?:\/\/[^/]+\/api\/v1/, '')
+            : originalRequest.url;
+          const fullUrl = `${candidate}${relativeUrl || ''}`;
+
+          const res = await axios({
+            method: originalRequest.method || 'GET',
+            url: fullUrl,
+            data: originalRequest.data,
+            headers: {
+              ...originalRequest.headers,
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            timeout: originalRequest.timeout || 30000,
+          });
+
+          setBaseUrl(candidate);
+          return res;
+        } catch (retryErr: any) {
+          if (retryErr.response) {
+            setBaseUrl(candidate);
+            return Promise.reject(retryErr);
+          }
+        }
+      }
+    }
+    if ((error.response?.status === 401 || (error.response?.status === 403 && storage.getString('refreshToken'))) && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
         const refreshToken = storage.getString('refreshToken');
         if (!refreshToken) throw new Error('No refresh token');
 
-        const res = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
+        const res = await axios.post(`${getBaseUrl()}/auth/refresh`, { refreshToken });
         const { accessToken, refreshToken: newRefresh } = res.data as AuthResponse;
 
         storage.set('accessToken', accessToken);
@@ -112,7 +200,44 @@ export const songApi = {
   getFeatured: (limit = 20) => apiClient.get<SongResponse[]>(`/songs/featured?limit=${limit}`),
   like: (id: string) => apiClient.post(`/songs/${id}/like`),
   unlike: (id: string) => apiClient.delete(`/songs/${id}/like`),
-  stream: (id: string) => `${BASE_URL}/songs/${id}/stream`,
+  delete: (id: string) => apiClient.delete(`/songs/${id}`),
+  stream: (id: string) => `${getBaseUrl()}/songs/${id}/stream`,
+  /**
+   * Bulk upload: one or more audio files in a single multipart request.
+   * Metadata is optional per file (server parses FLAC/MP3 tags when absent).
+   * Files are stored as-is, so FLAC is streamed back as FLAC.
+   */
+  uploadBulk: async (
+    files: PickedSongFile[],
+    requests: BulkUploadEntry[] = [],
+    onProgress?: (loaded: number, total: number) => void
+  ): Promise<SongResponse[]> => {
+    const formData = new FormData();
+    for (const file of files) {
+      if (Platform.OS === 'web') {
+        // Web needs a real File/Blob (document picker returns a blob: URI)
+        const blob = await fetch(file.uri).then((r) => r.blob());
+        formData.append('files', new File([blob], file.name, { type: file.mimeType || 'audio/flac' }));
+      } else {
+        // React Native accepts { uri, name, type } objects in FormData
+        formData.append('files', {
+          uri: file.uri,
+          name: file.name,
+          type: file.mimeType || 'audio/flac',
+        } as unknown as Blob);
+      }
+    }
+    if (requests.length > 0) {
+      formData.append('requests', JSON.stringify(requests));
+    }
+    const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    const res = await apiClient.post<SongResponse[]>('/songs/bulk', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0, // large FLAC files can take a while
+      onUploadProgress: (e) => onProgress?.(e.loaded, e.total || totalBytes),
+    });
+    return res.data;
+  },
 };
 
 export const albumApi = {
@@ -214,9 +339,15 @@ export const adminApi = {
   updateUserRole: (id: string, role: string) =>
     apiClient.put(`/admin/users/${id}/role`, { role }),
   forceDeleteSong: (id: string) => apiClient.delete(`/admin/songs/${id}`),
+  forceDeletePlaylist: (id: string) => apiClient.delete(`/admin/playlists/${id}`),
+  forceDeleteAlbum: (id: string) => apiClient.delete(`/admin/albums/${id}`),
+  forceDeleteArtist: (id: string) => apiClient.delete(`/admin/artists/${id}`),
+  forceDeleteUser: (id: string) => apiClient.delete(`/admin/users/${id}`),
   featureSong: (songId: string) => apiClient.post('/admin/feature/song', { songId }),
   featurePlaylist: (playlistId: string) =>
     apiClient.post('/admin/feature/playlist', { playlistId }),
+  syncStorage: () => apiClient.post<AdminDashboardResponse>('/admin/storage/sync'),
+  clearAllStorage: () => apiClient.post<AdminDashboardResponse>('/admin/storage/clear-all'),
   getUserGrowth: () => apiClient.get('/admin/analytics/user-growth'),
   getTopSongs: () => apiClient.get('/admin/analytics/top-songs'),
   getTopGenres: () => apiClient.get('/admin/analytics/top-genres'),

@@ -1,0 +1,48 @@
+79653025be1c639b88a6e96eff299249
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.RNScreensTurboModule = void 0;
+var _common = require("../common");
+var _worklet_5026965592223_init_data = {
+  code: "function reactNativeReanimated_RNScreensTurboModuleTs1(){const{logger,defaultReturnValue}=this.__closure;logger.warn('RNScreensTurboModule has not been found. Check that you have installed `react-native-screens@3.30.0` or newer in your project and rebuilt your app.');return defaultReturnValue;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/screenTransition/RNScreensTurboModule.ts",
+  sourceMap: "{\"version\":3,\"names\":[\"reactNativeReanimated_RNScreensTurboModuleTs1\",\"logger\",\"defaultReturnValue\",\"__closure\",\"warn\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-reanimated/src/screenTransition/RNScreensTurboModule.ts\"],\"mappings\":\"AAMS,SAAAA,6CAAMA,CAAA,QAAAC,MAAA,CAAAC,kBAAA,OAAAC,SAAA,CAEXF,MAAM,CAACG,IAAI,CACT,qJACF,CAAC,CACD,MAAO,CAAAF,kBAAkB,CAC3B\",\"ignoreList\":[]}"
+};
+function noopFactory(defaultReturnValue) {
+  return function reactNativeReanimated_RNScreensTurboModuleTs1Factory(_ref) {
+    var _worklet_5026965592223_init_data = _ref._worklet_5026965592223_init_data,
+      logger = _ref.logger,
+      defaultReturnValue = _ref.defaultReturnValue;
+    var _e = [new global.Error(), -3, -27];
+    var reactNativeReanimated_RNScreensTurboModuleTs1 = function () {
+      logger.warn('RNScreensTurboModule has not been found. Check that you have installed `react-native-screens@3.30.0` or newer in your project and rebuilt your app.');
+      return defaultReturnValue;
+    };
+    reactNativeReanimated_RNScreensTurboModuleTs1.__closure = {
+      logger,
+      defaultReturnValue
+    };
+    reactNativeReanimated_RNScreensTurboModuleTs1.__workletHash = 5026965592223;
+    reactNativeReanimated_RNScreensTurboModuleTs1.__pluginVersion = "0.10.1";
+    reactNativeReanimated_RNScreensTurboModuleTs1.__initData = _worklet_5026965592223_init_data;
+    reactNativeReanimated_RNScreensTurboModuleTs1.__stackDetails = _e;
+    return reactNativeReanimated_RNScreensTurboModuleTs1;
+  }({
+    _worklet_5026965592223_init_data,
+    logger: _common.logger,
+    defaultReturnValue
+  });
+}
+var RNScreensTurboModule = exports.RNScreensTurboModule = global.RNScreensTurboModule || {
+  startTransition: noopFactory({
+    topScreenId: -1,
+    belowTopScreenId: -1,
+    canStartTransition: false
+  }),
+  updateTransition: noopFactory(),
+  finishTransition: noopFactory()
+};
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsIlJOU2NyZWVuc1R1cmJvTW9kdWxlIiwiX2NvbW1vbiIsInJlcXVpcmUiLCJfd29ya2xldF81MDI2OTY1NTkyMjIzX2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsIm5vb3BGYWN0b3J5IiwiZGVmYXVsdFJldHVyblZhbHVlIiwicmVhY3ROYXRpdmVSZWFuaW1hdGVkX1JOU2NyZWVuc1R1cmJvTW9kdWxlVHMxRmFjdG9yeSIsIl9yZWYiLCJsb2dnZXIiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwicmVhY3ROYXRpdmVSZWFuaW1hdGVkX1JOU2NyZWVuc1R1cmJvTW9kdWxlVHMxIiwid2FybiIsIl9fY2xvc3VyZSIsIl9fd29ya2xldEhhc2giLCJfX3BsdWdpblZlcnNpb24iLCJfX2luaXREYXRhIiwiX19zdGFja0RldGFpbHMiLCJzdGFydFRyYW5zaXRpb24iLCJ0b3BTY3JlZW5JZCIsImJlbG93VG9wU2NyZWVuSWQiLCJjYW5TdGFydFRyYW5zaXRpb24iLCJ1cGRhdGVUcmFuc2l0aW9uIiwiZmluaXNoVHJhbnNpdGlvbiJdLCJzb3VyY2VzIjpbIlJOU2NyZWVuc1R1cmJvTW9kdWxlLnRzIl0sInNvdXJjZXNDb250ZW50IjpbIid1c2Ugc3RyaWN0JztcblxuaW1wb3J0IHsgbG9nZ2VyIH0gZnJvbSAnLi4vY29tbW9uJztcbmltcG9ydCB0eXBlIHsgUk5TY3JlZW5zVHVyYm9Nb2R1bGVUeXBlIH0gZnJvbSAnLi9jb21tb25UeXBlcyc7XG5cbmZ1bmN0aW9uIG5vb3BGYWN0b3J5PFQ+KGRlZmF1bHRSZXR1cm5WYWx1ZT86IFQpOiAoKSA9PiBUIHtcbiAgcmV0dXJuICgpID0+IHtcbiAgICAnd29ya2xldCc7XG4gICAgbG9nZ2VyLndhcm4oXG4gICAgICAnUk5TY3JlZW5zVHVyYm9Nb2R1bGUgaGFzIG5vdCBiZWVuIGZvdW5kLiBDaGVjayB0aGF0IHlvdSBoYXZlIGluc3RhbGxlZCBgcmVhY3QtbmF0aXZlLXNjcmVlbnNAMy4zMC4wYCBvciBuZXdlciBpbiB5b3VyIHByb2plY3QgYW5kIHJlYnVpbHQgeW91ciBhcHAuJ1xuICAgICk7XG4gICAgcmV0dXJuIGRlZmF1bHRSZXR1cm5WYWx1ZSBhcyBUO1xuICB9O1xufVxuXG50eXBlIFRyYW5zYWN0aW9uQ29uZmlnID0ge1xuICB0b3BTY3JlZW5JZDogbnVtYmVyO1xuICBiZWxvd1RvcFNjcmVlbklkOiBudW1iZXI7XG4gIGNhblN0YXJ0VHJhbnNpdGlvbjogYm9vbGVhbjtcbn07XG5cbmV4cG9ydCBjb25zdCBSTlNjcmVlbnNUdXJib01vZHVsZTogUk5TY3JlZW5zVHVyYm9Nb2R1bGVUeXBlID1cbiAgZ2xvYmFsLlJOU2NyZWVuc1R1cmJvTW9kdWxlIHx8IHtcbiAgICBzdGFydFRyYW5zaXRpb246IG5vb3BGYWN0b3J5PFRyYW5zYWN0aW9uQ29uZmlnPih7XG4gICAgICB0b3BTY3JlZW5JZDogLTEsXG4gICAgICBiZWxvd1RvcFNjcmVlbklkOiAtMSxcbiAgICAgIGNhblN0YXJ0VHJhbnNpdGlvbjogZmFsc2UsXG4gICAgfSksXG4gICAgdXBkYXRlVHJhbnNpdGlvbjogbm9vcEZhY3RvcnkoKSxcbiAgICBmaW5pc2hUcmFuc2l0aW9uOiBub29wRmFjdG9yeSgpLFxuICB9O1xuIl0sIm1hcHBpbmdzIjoiQUFBQSxZQUFZOztBQUFDQSxNQUFBLENBQUFDLGNBQUEsQ0FBQUMsT0FBQTtFQUFBQyxLQUFBO0FBQUE7QUFBQUQsT0FBQSxDQUFBRSxvQkFBQTtBQUViLElBQUFDLE9BQUEsR0FBQUMsT0FBQTtBQUFtQyxJQUFBQyxnQ0FBQTtFQUFBQyxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBR25DLFNBQVNDLFdBQVdBLENBQUlDLGtCQUFzQixFQUFXO0VBQ3ZELE9BQU8sU0FBQUMscURBQUFDLElBQUE7SUFBQSxJQUFBUCxnQ0FBQSxHQUFBTyxJQUFBLENBQUFQLGdDQUFBO01BRUxRLE1BQU0sR0FBQUQsSUFBQSxDQUFOQyxNQUFNO01BR0NILGtCQUFrQixHQUFBRSxJQUFBLENBQWxCRixrQkFBa0I7SUFBQSxJQUFBSSxFQUFBLFFBQUFDLE1BQUEsQ0FBQUMsS0FBQTtJQUFBLElBQUFDLDZDQUFBLFlBQUFBLENBQUEsRUFMZDtNQUVYSixNQUFNLENBQUNLLElBQUksQ0FDVCxxSkFDRixDQUFDO01BQ0QsT0FBT1Isa0JBQWtCO0lBQzNCLENBQUM7SUFBQU8sNkNBQUEsQ0FBQUUsU0FBQTtNQUpDTixNQUFNO01BR0NIO0lBQWtCO0lBQUFPLDZDQUFBLENBQUFHLGFBQUE7SUFBQUgsNkNBQUEsQ0FBQUksZUFBQTtJQUFBSiw2Q0FBQSxDQUFBSyxVQUFBLEdBQUFqQixnQ0FBQTtJQUFBWSw2Q0FBQSxDQUFBTSxjQUFBLEdBQUFULEVBQUE7SUFBQSxPQUFBRyw2Q0FBQTtFQUFBLENBTHBCO0lBQUFaLGdDQUFBO0lBRUxRLE1BQU0sRUFBTkEsY0FBTTtJQUdDSDtFQUFrQjtBQUU3QjtBQVFPLElBQU1SLG9CQUE4QyxHQUFBRixPQUFBLENBQUFFLG9CQUFBLEdBQ3pEYSxNQUFNLENBQUNiLG9CQUFvQixJQUFJO0VBQzdCc0IsZUFBZSxFQUFFZixXQUFXLENBQW9CO0lBQzlDZ0IsV0FBVyxFQUFFLENBQUMsQ0FBQztJQUNmQyxnQkFBZ0IsRUFBRSxDQUFDLENBQUM7SUFDcEJDLGtCQUFrQixFQUFFO0VBQ3RCLENBQUMsQ0FBQztFQUNGQyxnQkFBZ0IsRUFBRW5CLFdBQVcsQ0FBQyxDQUFDO0VBQy9Cb0IsZ0JBQWdCLEVBQUVwQixXQUFXLENBQUM7QUFDaEMsQ0FBQyIsImlnbm9yZUxpc3QiOltdfQ==

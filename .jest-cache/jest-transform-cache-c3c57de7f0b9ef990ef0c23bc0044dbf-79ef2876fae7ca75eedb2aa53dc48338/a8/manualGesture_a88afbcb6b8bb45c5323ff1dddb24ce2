@@ -1,0 +1,53 @@
+31a83f9e13d64aea64e37d1f8c0aa344
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _superPropGet2 = _interopRequireDefault(require("@babel/runtime/helpers/superPropGet"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ManualGesture = void 0;
+var _gesture = require("./gesture");
+var _worklet_8341633256781_init_data = {
+  code: "function changeEventCalculator_reactNativeGestureHandler_manualGestureJs1(current,_previous){return current;}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/manualGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"changeEventCalculator_reactNativeGestureHandler_manualGestureJs1\",\"current\",\"_previous\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/manualGesture.js\"],\"mappings\":\"AAOA,SAAAA,gEAAmDA,CAAAC,OAAA,CAAAC,SAAA,EAGjD,MAAO,CAAAD,OAAO,CAChB\",\"ignoreList\":[]}"
+};
+var changeEventCalculator = function changeEventCalculator_reactNativeGestureHandler_manualGestureJs1Factory(_ref) {
+  var _worklet_8341633256781_init_data = _ref._worklet_8341633256781_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var changeEventCalculator = function (current, _previous) {
+    return current;
+  };
+  changeEventCalculator.__closure = {};
+  changeEventCalculator.__workletHash = 8341633256781;
+  changeEventCalculator.__pluginVersion = "0.10.1";
+  changeEventCalculator.__initData = _worklet_8341633256781_init_data;
+  changeEventCalculator.__stackDetails = _e;
+  return changeEventCalculator;
+}({
+  _worklet_8341633256781_init_data
+});
+var ManualGesture = function (_gesture$ContinousBas) {
+  function ManualGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, ManualGesture);
+    _this = (0, _callSuper2.default)(this, ManualGesture);
+    _this.handlerName = 'ManualGestureHandler';
+    return _this;
+  }
+  (0, _inherits2.default)(ManualGesture, _gesture$ContinousBas);
+  return (0, _createClass2.default)(ManualGesture, [{
+    key: "onChange",
+    value: function onChange(callback) {
+      this.handlers.changeEventCalculator = changeEventCalculator;
+      return (0, _superPropGet2.default)(ManualGesture, "onChange", this, 3)([callback]);
+    }
+  }]);
+}(_gesture.ContinousBaseGesture);
+exports.ManualGesture = ManualGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJfd29ya2xldF84MzQxNjMzMjU2NzgxX2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsImNoYW5nZUV2ZW50Q2FsY3VsYXRvciIsImNoYW5nZUV2ZW50Q2FsY3VsYXRvcl9yZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX21hbnVhbEdlc3R1cmVKczFGYWN0b3J5IiwiX3JlZiIsIl9lIiwiZ2xvYmFsIiwiRXJyb3IiLCJjdXJyZW50IiwiX3ByZXZpb3VzIiwiX19jbG9zdXJlIiwiX193b3JrbGV0SGFzaCIsIl9fcGx1Z2luVmVyc2lvbiIsIl9faW5pdERhdGEiLCJfX3N0YWNrRGV0YWlscyIsIk1hbnVhbEdlc3R1cmUiLCJfZ2VzdHVyZSRDb250aW5vdXNCYXMiLCJjb25zdHJ1Y3RvciIsIl90aGlzIiwiX2NsYXNzQ2FsbENoZWNrMiIsImRlZmF1bHQiLCJfY2FsbFN1cGVyMiIsImhhbmRsZXJOYW1lIiwiX2luaGVyaXRzMiIsIl9jcmVhdGVDbGFzczIiLCJrZXkiLCJ2YWx1ZSIsIm9uQ2hhbmdlIiwiY2FsbGJhY2siLCJoYW5kbGVycyIsIl9zdXBlclByb3BHZXQyIiwiQ29udGlub3VzQmFzZUdlc3R1cmUiLCJleHBvcnRzIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL2hhbmRsZXJzL2dlc3R1cmVzL21hbnVhbEdlc3R1cmUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7OztBQUNBLElBQUFBLFFBQUEsR0FBQUMsT0FBQTtBQUFBLElBQUFDLGdDQUFBO0VBQUFDLElBQUE7RUFBQUMsUUFBQTtFQUFBQyxTQUFBO0FBQUE7QUFBQSxJQUFBQyxxQkFBQSxHQUVBLFNBQUFDLHdFQUFBQyxJQUFBO0VBQUEsSUFBQU4sZ0NBQUEsR0FBQU0sSUFBQSxDQUFBTixnQ0FBQTtFQUFBLElBQUFPLEVBQUEsUUFBQUMsTUFBQSxDQUFBQyxLQUFBO0VBQUEsSUFBQUwscUJBQUEsWUFBQUEsQ0FDRU0sT0FBa0QsRUFDbERDLFNBQXFELEVBQ3JEO0lBRUEsT0FBT0QsT0FBTztFQUNoQjtFQUFBTixxQkFBQSxDQUFBUSxTQUFBO0VBQUFSLHFCQUFBLENBQUFTLGFBQUE7RUFBQVQscUJBQUEsQ0FBQVUsZUFBQTtFQUFBVixxQkFBQSxDQUFBVyxVQUFBLEdBQUFmLGdDQUFBO0VBQUFJLHFCQUFBLENBQUFZLGNBQUEsR0FBQVQsRUFBQTtFQUFBLE9BQUFILHFCQUFBO0FBQUEsQ0FOQTtFQUFBSjtBQUFBO0FBQUEsSUFRYWlCLGFBQWEsYUFBQUMscUJBQUE7RUFJeEIsU0FBQUMsY0FBQSxFQUFjO0lBQUEsSUFBQUMsS0FBQTtJQUFBLElBQUFDLGdCQUFBLENBQUFDLE9BQUEsUUFBQUwsYUFBQTtJQUNaRyxLQUFBLE9BQUFHLFdBQUEsQ0FBQUQsT0FBQSxRQUFBTCxhQUFBO0lBRUFHLEtBQUEsQ0FBS0ksV0FBVyxHQUFHLHNCQUFzQjtJQUFBLE9BQUFKLEtBQUE7RUFDM0M7RUFBQSxJQUFBSyxVQUFBLENBQUFILE9BQUEsRUFBQUwsYUFBQSxFQUFBQyxxQkFBQTtFQUFBLFdBQUFRLGFBQUEsQ0FBQUosT0FBQSxFQUFBTCxhQUFBO0lBQUFVLEdBQUE7SUFBQUMsS0FBQSxFQUVBLFNBQUFDLFFBQVFBLENBQ05DLFFBQW9FLEVBQ3BFO01BRUEsSUFBSSxDQUFDQyxRQUFRLENBQUMzQixxQkFBcUIsR0FBR0EscUJBQXFCO01BQzNELFdBQUE0QixjQUFBLENBQUFWLE9BQUEsRUFBQUwsYUFBQSx3QkFBc0JhLFFBQVE7SUFDaEM7RUFBQTtBQUFBLEVBaEJpQ2hDLFFBQUEsQ0FBQW1DLG9CQUFvQjtBQWlCdERDLE9BQUEsQ0FBQWpCLGFBQUEsR0FBQUEsYUFBQSIsImlnbm9yZUxpc3QiOltdfQ==

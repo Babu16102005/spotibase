@@ -33,6 +33,18 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getDashboard());
     }
 
+    @PostMapping("/storage/sync")
+    public ResponseEntity<AdminDashboardResponse> syncStorage() {
+        log.info("Admin requested live storage sync");
+        return ResponseEntity.ok(adminService.syncStorage());
+    }
+
+    @PostMapping("/storage/clear-all")
+    public ResponseEntity<AdminDashboardResponse> clearAllSongsAndStorage() {
+        log.warn("Admin triggered COMPLETE CLEAR of all songs and Cloudflare R2 storage");
+        return ResponseEntity.ok(adminService.clearAllSongsAndStorage());
+    }
+
     @GetMapping("/users")
     public ResponseEntity<PagedResponse<UserResponse>> getAllUsers(
             @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -52,6 +64,34 @@ public class AdminController {
     public ResponseEntity<Void> forceDeleteSong(@PathVariable String id) {
         log.info("Admin force deleting song: {}", id);
         adminService.forceDeleteSong(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/playlists/{id}")
+    public ResponseEntity<Void> forceDeletePlaylist(@PathVariable String id) {
+        log.info("Admin force deleting playlist: {}", id);
+        adminService.forceDeletePlaylist(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/albums/{id}")
+    public ResponseEntity<Void> forceDeleteAlbum(@PathVariable String id) {
+        log.info("Admin force deleting album: {}", id);
+        adminService.forceDeleteAlbum(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/artists/{id}")
+    public ResponseEntity<Void> forceDeleteArtist(@PathVariable String id) {
+        log.info("Admin force deleting artist: {}", id);
+        adminService.forceDeleteArtist(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<Void> forceDeleteUser(@PathVariable String id) {
+        log.info("Admin force deleting user: {}", id);
+        adminService.forceDeleteUser(id);
         return ResponseEntity.noContent().build();
     }
 

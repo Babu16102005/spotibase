@@ -1,0 +1,82 @@
+9a3dea25ca3534c435221c4cae12fad8
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _superPropGet2 = _interopRequireDefault(require("@babel/runtime/helpers/superPropGet"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ForceTouchGesture = void 0;
+var _gesture = require("./gesture");
+var _worklet_6555184671956_init_data = {
+  code: "function changeEventCalculator_reactNativeGestureHandler_forceTouchGestureJs1(current,previous){let changePayload;if(previous===undefined){changePayload={forceChange:current.force};}else{changePayload={forceChange:current.force-previous.force};}return{...current,...changePayload};}",
+  location: "D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/forceTouchGesture.js",
+  sourceMap: "{\"version\":3,\"names\":[\"changeEventCalculator_reactNativeGestureHandler_forceTouchGestureJs1\",\"current\",\"previous\",\"changePayload\",\"undefined\",\"forceChange\",\"force\"],\"sources\":[\"D:/babu_projects/spotibase/mobile/node_modules/react-native-gesture-handler/lib/commonjs/handlers/gestures/forceTouchGesture.js\"],\"mappings\":\"AAOA,SAAAA,qEAAAC,OAAA,CAAAC,QAAA,MAAAC,aAAA,CACA,GAAAD,QAAA,GAAAE,SAAA,EACAD,aAAA,E,yBAEA,EAGE,KAAI,CACJA,aAAY,CAAK,CACfE,WAAa,CAAAJ,OAAG,CAAAK,KAAA,CAAAJ,QAAA,CAAAI,K,GAGlB,MAAO,CACL,GAAAL,OAAA,C,GACEE,a\",\"ignoreList\":[]}"
+};
+var changeEventCalculator = function changeEventCalculator_reactNativeGestureHandler_forceTouchGestureJs1Factory(_ref) {
+  var _worklet_6555184671956_init_data = _ref._worklet_6555184671956_init_data;
+  var _e = [new global.Error(), 1, -27];
+  var changeEventCalculator = function (current, previous) {
+    var changePayload;
+    if (previous === undefined) {
+      changePayload = {
+        forceChange: current.force
+      };
+    } else {
+      changePayload = {
+        forceChange: current.force - previous.force
+      };
+    }
+    return Object.assign({}, current, changePayload);
+  };
+  changeEventCalculator.__closure = {};
+  changeEventCalculator.__workletHash = 6555184671956;
+  changeEventCalculator.__pluginVersion = "0.10.1";
+  changeEventCalculator.__initData = _worklet_6555184671956_init_data;
+  changeEventCalculator.__stackDetails = _e;
+  return changeEventCalculator;
+}({
+  _worklet_6555184671956_init_data
+});
+var ForceTouchGesture = function (_gesture$ContinousBas) {
+  function ForceTouchGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, ForceTouchGesture);
+    _this = (0, _callSuper2.default)(this, ForceTouchGesture);
+    _this.config = {};
+    _this.handlerName = 'ForceTouchGestureHandler';
+    return _this;
+  }
+  (0, _inherits2.default)(ForceTouchGesture, _gesture$ContinousBas);
+  return (0, _createClass2.default)(ForceTouchGesture, [{
+    key: "minForce",
+    value: function minForce(force) {
+      this.config.minForce = force;
+      return this;
+    }
+  }, {
+    key: "maxForce",
+    value: function maxForce(force) {
+      this.config.maxForce = force;
+      return this;
+    }
+  }, {
+    key: "feedbackOnActivation",
+    value: function feedbackOnActivation(value) {
+      this.config.feedbackOnActivation = value;
+      return this;
+    }
+  }, {
+    key: "onChange",
+    value: function onChange(callback) {
+      this.handlers.changeEventCalculator = changeEventCalculator;
+      return (0, _superPropGet2.default)(ForceTouchGesture, "onChange", this, 3)([callback]);
+    }
+  }]);
+}(_gesture.ContinousBaseGesture);
+exports.ForceTouchGesture = ForceTouchGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2VzdHVyZSIsInJlcXVpcmUiLCJfd29ya2xldF82NTU1MTg0NjcxOTU2X2luaXRfZGF0YSIsImNvZGUiLCJsb2NhdGlvbiIsInNvdXJjZU1hcCIsImNoYW5nZUV2ZW50Q2FsY3VsYXRvciIsImNoYW5nZUV2ZW50Q2FsY3VsYXRvcl9yZWFjdE5hdGl2ZUdlc3R1cmVIYW5kbGVyX2ZvcmNlVG91Y2hHZXN0dXJlSnMxRmFjdG9yeSIsIl9yZWYiLCJfZSIsImdsb2JhbCIsIkVycm9yIiwiY3VycmVudCIsInByZXZpb3VzIiwiY2hhbmdlUGF5bG9hZCIsInVuZGVmaW5lZCIsImZvcmNlQ2hhbmdlIiwiZm9yY2UiLCJPYmplY3QiLCJhc3NpZ24iLCJfX2Nsb3N1cmUiLCJfX3dvcmtsZXRIYXNoIiwiX19wbHVnaW5WZXJzaW9uIiwiX19pbml0RGF0YSIsIl9fc3RhY2tEZXRhaWxzIiwiRm9yY2VUb3VjaEdlc3R1cmUiLCJfZ2VzdHVyZSRDb250aW5vdXNCYXMiLCJjb25zdHJ1Y3RvciIsIl90aGlzIiwiX2NsYXNzQ2FsbENoZWNrMiIsImRlZmF1bHQiLCJfY2FsbFN1cGVyMiIsImNvbmZpZyIsImhhbmRsZXJOYW1lIiwiX2luaGVyaXRzMiIsIl9jcmVhdGVDbGFzczIiLCJrZXkiLCJ2YWx1ZSIsIm1pbkZvcmNlIiwibWF4Rm9yY2UiLCJmZWVkYmFja09uQWN0aXZhdGlvbiIsIm9uQ2hhbmdlIiwiY2FsbGJhY2siLCJoYW5kbGVycyIsIl9zdXBlclByb3BHZXQyIiwiQ29udGlub3VzQmFzZUdlc3R1cmUiLCJleHBvcnRzIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL2hhbmRsZXJzL2dlc3R1cmVzL2ZvcmNlVG91Y2hHZXN0dXJlLnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7Ozs7QUFBQSxJQUFBQSxRQUFBLEdBQUFDLE9BQUE7QUFBQSxJQUFBQyxnQ0FBQTtFQUFBQyxJQUFBO0VBQUFDLFFBQUE7RUFBQUMsU0FBQTtBQUFBO0FBQUEsSUFBQUMscUJBQUEsR0FZQSxTQUFBQyw0RUFBQUMsSUFBQTtFQUFBLElBQUFOLGdDQUFBLEdBQUFNLElBQUEsQ0FBQU4sZ0NBQUE7RUFBQSxJQUFBTyxFQUFBLFFBQUFDLE1BQUEsQ0FBQUMsS0FBQTtFQUFBLElBQUFMLHFCQUFBLFlBQUFBLENBQ0VNLE9BQWlFLEVBQ2pFQyxRQUFtRSxFQUNuRTtJQUVBLElBQUlDLGFBQWtEO0lBQ3RELElBQUlELFFBQVEsS0FBS0UsU0FBUyxFQUFFO01BQzFCRCxhQUFhLEdBQUc7UUFDZEUsV0FBVyxFQUFFSixPQUFPLENBQUNLO01BQ3ZCLENBQUM7SUFDSCxDQUFDLE1BQU07TUFDTEgsYUFBYSxHQUFHO1FBQ2RFLFdBQVcsRUFBRUosT0FBTyxDQUFDSyxLQUFLLEdBQUdKLFFBQVEsQ0FBQ0k7TUFDeEMsQ0FBQztJQUNIO0lBRUEsT0FBQUMsTUFBQSxDQUFBQyxNQUFBLEtBQVlQLE9BQU8sRUFBS0UsYUFBQTtFQUMxQjtFQUFBUixxQkFBQSxDQUFBYyxTQUFBO0VBQUFkLHFCQUFBLENBQUFlLGFBQUE7RUFBQWYscUJBQUEsQ0FBQWdCLGVBQUE7RUFBQWhCLHFCQUFBLENBQUFpQixVQUFBLEdBQUFyQixnQ0FBQTtFQUFBSSxxQkFBQSxDQUFBa0IsY0FBQSxHQUFBZixFQUFBO0VBQUEsT0FBQUgscUJBQUE7QUFBQSxDQWpCQTtFQUFBSjtBQUFBO0FBQUEsSUFzQmF1QixpQkFBaUIsYUFBQUMscUJBQUE7RUFNNUIsU0FBQUMsa0JBQUEsRUFBYztJQUFBLElBQUFDLEtBQUE7SUFBQSxJQUFBQyxnQkFBQSxDQUFBQyxPQUFBLFFBQUFMLGlCQUFBO0lBQ1pHLEtBQUEsT0FBQUcsV0FBQSxDQUFBRCxPQUFBLFFBQUFMLGlCQUFBO0lBQU9HLEtBQUEsQ0FIRkksTUFBTSxHQUFnRCxDQUFDLENBQUM7SUFLN0RKLEtBQUEsQ0FBS0ssV0FBVyxHQUFHLDBCQUEwQjtJQUFBLE9BQUFMLEtBQUE7RUFDL0M7RUFBQSxJQUFBTSxVQUFBLENBQUFKLE9BQUEsRUFBQUwsaUJBQUEsRUFBQUMscUJBQUE7RUFBQSxXQUFBUyxhQUFBLENBQUFMLE9BQUEsRUFBQUwsaUJBQUE7SUFBQVcsR0FBQTtJQUFBQyxLQUFBLEVBT0EsU0FBQUMsUUFBUUEsQ0FBQ3JCLEtBQWEsRUFBRTtNQUN0QixJQUFJLENBQUNlLE1BQU0sQ0FBQ00sUUFBUSxHQUFHckIsS0FBSztNQUM1QixPQUFPLElBQUk7SUFDYjtFQUFBO0lBQUFtQixHQUFBO0lBQUFDLEtBQUEsRUFPQSxTQUFBRSxRQUFRQSxDQUFDdEIsS0FBYSxFQUFFO01BQ3RCLElBQUksQ0FBQ2UsTUFBTSxDQUFDTyxRQUFRLEdBQUd0QixLQUFLO01BQzVCLE9BQU8sSUFBSTtJQUNiO0VBQUE7SUFBQW1CLEdBQUE7SUFBQUMsS0FBQSxFQU1BLFNBQUFHLG9CQUFvQkEsQ0FBQ0gsS0FBYyxFQUFFO01BQ25DLElBQUksQ0FBQ0wsTUFBTSxDQUFDUSxvQkFBb0IsR0FBR0gsS0FBSztNQUN4QyxPQUFPLElBQUk7SUFDYjtFQUFBO0lBQUFELEdBQUE7SUFBQUMsS0FBQSxFQUVBLFNBQUFJLFFBQVFBLENBQ05DLFFBT1MsRUFDVDtNQUVBLElBQUksQ0FBQ0MsUUFBUSxDQUFDckMscUJBQXFCLEdBQUdBLHFCQUFxQjtNQUMzRCxXQUFBc0MsY0FBQSxDQUFBZCxPQUFBLEVBQUFMLGlCQUFBLHdCQUFzQmlCLFFBQVE7SUFDaEM7RUFBQTtBQUFBLEVBdERxQzFDLFFBQUEsQ0FBQTZDLG9CQUFvQjtBQXlEM0RDLE9BQUEsQ0FBQXJCLGlCQUFBLEdBQUFBLGlCQUFBIiwiaWdub3JlTGlzdCI6W119

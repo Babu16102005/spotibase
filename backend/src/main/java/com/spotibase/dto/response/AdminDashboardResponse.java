@@ -22,6 +22,13 @@ public class AdminDashboardResponse {
     private long totalListeningHours;
     private long totalDownloads;
 
+    private long totalStorageUsedBytes;
+    private long maxStorageLimitBytes;
+    private long maxStorageThresholdBytes;
+    private boolean storageLimitReached;
+    private long r2ObjectCount;
+    private String storageProvider;
+
     private List<Map<String, Object>> topSongs;
     private List<Map<String, Object>> topArtists;
     private List<Map<String, Object>> topGenres;

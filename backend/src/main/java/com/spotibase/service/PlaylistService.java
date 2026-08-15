@@ -440,4 +440,13 @@ public class PlaylistService {
                 && playlistCollaboratorRepository.existsByPlaylistIdAndUserId(playlist.getId(), userId)) return;
         throw new UnauthorizedException("You do not have permission to modify this playlist");
     }
+
+    @Transactional(readOnly = true)
+    public List<PlaylistResponse> getPlaylistsByIds(List<String> ids, String userId) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        List<Playlist> playlists = playlistRepository.findAllById(ids);
+        return playlists.stream()
+                .map(playlist -> toPlaylistResponse(playlist, userId))
+                .collect(Collectors.toList());
+    }
 }

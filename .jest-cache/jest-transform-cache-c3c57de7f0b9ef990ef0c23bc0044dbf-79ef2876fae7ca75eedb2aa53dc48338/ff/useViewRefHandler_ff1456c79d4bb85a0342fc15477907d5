@@ -1,0 +1,38 @@
+e9bb38541eb0ff8acd67f94836db9be3
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.useViewRefHandler = useViewRefHandler;
+var _utils = require("../../../utils");
+var _getShadowNodeFromRef = require("../../../getShadowNodeFromRef");
+var _react = require("react");
+var _findNodeHandle = _interopRequireDefault(require("../../../findNodeHandle"));
+function _interopRequireDefault(e) {
+  return e && e.__esModule ? e : {
+    default: e
+  };
+}
+function useViewRefHandler(state, updateAttachedGestures) {
+  var refHandler = (0, _react.useCallback)(ref => {
+    if (ref === null) {
+      return;
+    }
+    state.viewRef = ref;
+    if (state.previousViewTag === -1) {
+      state.previousViewTag = (0, _findNodeHandle.default)(state.viewRef);
+    }
+    if (!state.firstRender) {
+      updateAttachedGestures(true);
+    }
+    if (__DEV__ && (0, _utils.isFabric)() && global.isViewFlatteningDisabled) {
+      var node = (0, _getShadowNodeFromRef.getShadowNodeFromRef)(ref);
+      if (global.isViewFlatteningDisabled(node) === false) {
+        console.error((0, _utils.tagMessage)('GestureDetector has received a child that may get view-flattened. ' + '\nTo prevent it from misbehaving you need to wrap the child with a `<View collapsable={false}>`.'));
+      }
+    }
+  }, [state, updateAttachedGestures]);
+  return refHandler;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfdXRpbHMiLCJyZXF1aXJlIiwiX2dldFNoYWRvd05vZGVGcm9tUmVmIiwiX3JlYWN0IiwiX2ZpbmROb2RlSGFuZGxlIiwiX2ludGVyb3BSZXF1aXJlRGVmYXVsdCIsImUiLCJfX2VzTW9kdWxlIiwiZGVmYXVsdCIsInVzZVZpZXdSZWZIYW5kbGVyIiwic3RhdGUiLCJ1cGRhdGVBdHRhY2hlZEdlc3R1cmVzIiwicmVmSGFuZGxlciIsInVzZUNhbGxiYWNrIiwicmVmIiwidmlld1JlZiIsInByZXZpb3VzVmlld1RhZyIsImZpcnN0UmVuZGVyIiwiX19ERVZfXyIsImlzRmFicmljIiwiZ2xvYmFsIiwiaXNWaWV3RmxhdHRlbmluZ0Rpc2FibGVkIiwibm9kZSIsImdldFNoYWRvd05vZGVGcm9tUmVmIiwiY29uc29sZSIsImVycm9yIiwidGFnTWVzc2FnZSJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uLy4uL3NyYy9oYW5kbGVycy9nZXN0dXJlcy9HZXN0dXJlRGV0ZWN0b3IvdXNlVmlld1JlZkhhbmRsZXIudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztBQUFBLElBQUFBLE1BQUEsR0FBQUMsT0FBQTtBQUNBLElBQUFDLHFCQUFBLEdBQUFELE9BQUE7QUFHQSxJQUFBRSxNQUFBLEdBQUFGLE9BQUE7QUFDQSxJQUFBRyxlQUFBLEdBQUFDLHNCQUFBLENBQUFKLE9BQUE7QUFBcUQsU0FBQUksdUJBQUFDLENBQUE7RUFBQSxPQUFBQSxDQUFBLElBQUFBLENBQUEsQ0FBQUMsVUFBQSxHQUFBRCxDQUFBO0lBQUFFLE9BQUEsRUFBQUY7RUFBQTtBQUFBO0FBUzlDLFNBQVNHLGlCQUFpQkEsQ0FDL0JDLEtBQTJCLEVBQzNCQyxzQkFBNEQsRUFDNUQ7RUFDQSxJQUFNQyxVQUFVLEdBQUcsSUFBQVQsTUFBQSxDQUFBVSxXQUFXLEVBQzNCQyxHQUEyQixJQUFLO0lBQy9CLElBQUlBLEdBQUcsS0FBSyxJQUFJLEVBQUU7TUFDaEI7SUFDRjtJQUVBSixLQUFLLENBQUNLLE9BQU8sR0FBR0QsR0FBRztJQUduQixJQUFJSixLQUFLLENBQUNNLGVBQWUsS0FBSyxDQUFDLENBQUMsRUFBRTtNQUNoQ04sS0FBSyxDQUFDTSxlQUFlLEdBQUcsSUFBQVosZUFBQSxDQUFBSSxPQUFjLEVBQUNFLEtBQUssQ0FBQ0ssT0FBTyxDQUFXO0lBQ2pFO0lBSUEsSUFBSSxDQUFDTCxLQUFLLENBQUNPLFdBQVcsRUFBRTtNQUN0Qk4sc0JBQXNCLENBQUMsSUFBSSxDQUFDO0lBQzlCO0lBRUEsSUFBSU8sT0FBTyxJQUFJLElBQUFsQixNQUFBLENBQUFtQixRQUFRLEVBQUMsQ0FBQyxJQUFJQyxNQUFNLENBQUNDLHdCQUF3QixFQUFFO01BQzVELElBQU1DLElBQUksR0FBRyxJQUFBcEIscUJBQUEsQ0FBQXFCLG9CQUFvQixFQUFDVCxHQUFHLENBQUM7TUFDdEMsSUFBSU0sTUFBTSxDQUFDQyx3QkFBd0IsQ0FBQ0MsSUFBSSxDQUFDLEtBQUssS0FBSyxFQUFFO1FBQ25ERSxPQUFPLENBQUNDLEtBQUssQ0FDWCxJQUFBekIsTUFBQSxDQUFBMEIsVUFBVSxFQUNSLG9FQUFvRSxHQUNsRSxrR0FDSixDQUNGLENBQUM7TUFDSDtJQUNGO0VBQ0YsQ0FBQyxFQUNELENBQUNoQixLQUFLLEVBQUVDLHNCQUFzQixDQUNoQyxDQUFDO0VBRUQsT0FBT0MsVUFBVTtBQUNuQiIsImlnbm9yZUxpc3QiOltdfQ==

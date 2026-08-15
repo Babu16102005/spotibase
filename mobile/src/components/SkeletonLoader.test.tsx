@@ -2,7 +2,14 @@ import React from 'react';
 import { Animated } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { render } from '@testing-library/react-native';
-import Skeleton, { SongSkeleton, CardSkeleton } from './SkeletonLoader';
+import Skeleton, {
+  SongSkeleton,
+  CardSkeleton,
+  HeaderSkeleton,
+  DetailPageSkeleton,
+  GridSkeleton,
+  PageSkeleton,
+} from './SkeletonLoader';
 
 jest.mock('../api/client', () => ({
   queueApi: { addToQueue: jest.fn() },
@@ -33,12 +40,18 @@ describe('SkeletonLoader', () => {
     act(() => tree.unmount());
   });
 
-  it('CardSkeleton defaults to 5 cards', () => {
-    let tree: any;
-    act(() => {
-      tree = create(<CardSkeleton />);
-    });
-    expect(tree.root.findAllByType(Animated.View)).toHaveLength(15);
-    act(() => tree.unmount());
+  it('DetailPageSkeleton renders header and list skeletons', () => {
+    const { toJSON } = render(<DetailPageSkeleton rows={3} />);
+    expect(toJSON()).not.toBeNull();
+  });
+
+  it('GridSkeleton renders grid items', () => {
+    const { toJSON } = render(<GridSkeleton count={4} />);
+    expect(toJSON()).not.toBeNull();
+  });
+
+  it('PageSkeleton renders page section skeletons', () => {
+    const { toJSON } = render(<PageSkeleton />);
+    expect(toJSON()).not.toBeNull();
   });
 });

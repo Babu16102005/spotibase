@@ -1,0 +1,9 @@
+aebf5336137656fca70119218638702a
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.ghQueueMicrotask = void 0;
+var ghQueueMicrotask = exports.ghQueueMicrotask = typeof setImmediate === 'function' ? setImmediate.bind(null) : typeof requestAnimationFrame === 'function' ? requestAnimationFrame.bind(null) : queueMicrotask.bind(null);
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJnaFF1ZXVlTWljcm90YXNrIiwiZXhwb3J0cyIsInNldEltbWVkaWF0ZSIsImJpbmQiLCJyZXF1ZXN0QW5pbWF0aW9uRnJhbWUiLCJxdWV1ZU1pY3JvdGFzayJdLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy9naFF1ZXVlTWljcm90YXNrLnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7QUFFTyxJQUFNQSxnQkFBZ0IsR0FBQUMsT0FBQSxDQUFBRCxnQkFBQSxHQUMzQixPQUFPRSxZQUFZLEtBQUssVUFBVSxHQUM5QkEsWUFBWSxDQUFDQyxJQUFJLENBQUMsSUFBSSxDQUFDLEdBQ3ZCLE9BQU9DLHFCQUFxQixLQUFLLFVBQVUsR0FDekNBLHFCQUFxQixDQUFDRCxJQUFJLENBQUMsSUFBSSxDQUFDLEdBQ2hDRSxjQUFjLENBQUNGLElBQUksQ0FBQyxJQUFJLENBQUMiLCJpZ25vcmVMaXN0IjpbXX0=

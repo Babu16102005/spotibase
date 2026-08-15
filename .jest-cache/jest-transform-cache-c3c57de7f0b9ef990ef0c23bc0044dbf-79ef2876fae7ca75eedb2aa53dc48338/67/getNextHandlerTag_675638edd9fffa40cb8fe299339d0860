@@ -1,0 +1,12 @@
+a1f35ccf038a4ccaed0ad38ee5ab07a1
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.getNextHandlerTag = getNextHandlerTag;
+var handlerTag = 1;
+function getNextHandlerTag() {
+  return handlerTag++;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJoYW5kbGVyVGFnIiwiZ2V0TmV4dEhhbmRsZXJUYWciXSwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvaGFuZGxlcnMvZ2V0TmV4dEhhbmRsZXJUYWcudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztBQUFBLElBQUlBLFVBQVUsR0FBRyxDQUFDO0FBRVgsU0FBU0MsaUJBQWlCQSxDQUFBLEVBQVc7RUFDMUMsT0FBT0QsVUFBVSxFQUFFO0FBQ3JCIiwiaWdub3JlTGlzdCI6W119

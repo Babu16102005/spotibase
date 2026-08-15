@@ -1,19 +1,22 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { searchApi } from '../../api/client';
-import { useThemeStore } from '../../store';
+import { useThemeStore, usePlayerStore } from '../../store';
 import SongCard from '../../components/SongCard';
 import AlbumCard from '../../components/AlbumCard';
 import ArtistCard from '../../components/ArtistCard';
 import PlaylistCard from '../../components/PlaylistCard';
 
-const SearchScreen = ({ navigation }: any) => {
+const SearchScreen = ({ navigation, route }: any) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any>(null);
   const [trending, setTrending] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('songs');
   const { theme } = useThemeStore();
+  const playMultiple = usePlayerStore((s) => s.playMultiple);
   const debounceRef = useRef<any>(null);
+
+  const genreFromParam = route?.params?.genre;
 
   useEffect(() => {
     searchApi.trending().then((r: any) => {
@@ -22,6 +25,15 @@ const SearchScreen = ({ navigation }: any) => {
       else if (data && typeof data === 'object') setTrending(data.trending || []);
     }).catch(() => {});
   }, []);
+
+  // When arriving with a genre param (e.g. Home genre card), prefill & search it
+  useEffect(() => {
+    if (genreFromParam) {
+      setQuery(genreFromParam as string);
+      handleSearch(genreFromParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [genreFromParam]);
 
   const handleSearch = useCallback(async (q: string) => {
     setQuery(q);
@@ -76,8 +88,13 @@ const SearchScreen = ({ navigation }: any) => {
           ))}
         </ScrollView>
 
-        {activeTab === 'songs' && results.songs?.map((s: any) => (
-          <SongCard key={s.id} song={s} />
+        {activeTab === 'songs' && results.songs?.map((s: any, idx: number) => (
+          <SongCard
+            key={s.id}
+            song={s}
+            index={idx}
+            onPress={() => playMultiple(results.songs, idx)}
+          />
         ))}
         {activeTab === 'albums' && (
           <View style={styles.grid}>

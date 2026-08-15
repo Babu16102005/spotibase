@@ -30,17 +30,21 @@ public interface SongRepository extends JpaRepository<Song, String> {
 
     List<Song> findByReleaseDateAfter(LocalDate date, Pageable pageable);
 
-    @Query("SELECT s FROM Song s WHERE s.archived = false ORDER BY s.playCount DESC")
+    @Query("SELECT s FROM Song s WHERE s.archived = false ORDER BY s.playCount DESC, s.createdAt DESC")
     List<Song> findTopSongs(Pageable pageable);
 
-    @Query("SELECT s FROM Song s WHERE s.releaseDate >= :since AND s.archived = false ORDER BY s.releaseDate DESC")
-    List<Song> findNewReleases(@Param("since") LocalDate since, Pageable pageable);
+    @Query("SELECT s FROM Song s WHERE s.archived = false ORDER BY s.createdAt DESC, s.releaseDate DESC")
+    List<Song> findNewReleases(Pageable pageable);
 
     @Query("SELECT s FROM Song s WHERE s.featured = true AND s.archived = false")
     List<Song> findFeaturedSongs(Pageable pageable);
 
     @Query("SELECT s FROM Song s WHERE s.archived = false ORDER BY s.createdAt DESC")
     Page<Song> findAllActive(Pageable pageable);
+
+    /** Used by OrphanStorageCleanupScheduler to verify a storage object is referenced by an active song. */
+    boolean existsByFileUrl(String fileUrl);
+    boolean existsByFileUrlAndArchivedFalse(String fileUrl);
 
     @Query("SELECT s FROM Song s WHERE s.album.id = :albumId ORDER BY s.trackNumber ASC")
     List<Song> findByAlbumIdOrderByTrackNumber(@Param("albumId") String albumId);
@@ -53,6 +57,9 @@ public interface SongRepository extends JpaRepository<Song, String> {
 
     @Query("SELECT COALESCE(SUM(s.playCount), 0) FROM Song s")
     long totalPlayCount();
+
+    @Query("SELECT COALESCE(SUM(s.fileSize), 0) FROM Song s WHERE s.archived = false")
+    long totalStorageUsedBytes();
 
     long countByArtistId(String artistId);
 

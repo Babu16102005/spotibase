@@ -1,19 +1,20 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
-import { useAuthStore, useNotificationStore, useThemeStore } from '../../store';
-import { formatCount } from '../../utils';
+import { useAuthStore, useThemeStore } from '../../store';
+import SongUploader from '../../components/SongUploader';
+import GlassButton from '../../components/GlassButton';
+import { coverSource } from '../../utils';
 
 const ProfileScreen = ({ navigation }: any) => {
   const { user, logout } = useAuthStore();
-  const unreadCount = useNotificationStore((s) => s.unreadCount);
-  const { theme, themeMode, setThemeMode } = useThemeStore();
+  const { theme, themeMode, setThemeMode, greetingPattern, setGreetingPattern } = useThemeStore();
   const isAdmin = user?.role === 'ADMIN';
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.header}>
         <Image
-          source={{ uri: user?.avatarUrl || 'https://via.placeholder.com/120' }}
+          source={coverSource(user?.avatarUrl)}
           style={[styles.avatar, { borderColor: theme.colors.border }]}
         />
         <Text style={[styles.name, { color: theme.colors.text }]}>{user?.username}</Text>
@@ -22,14 +23,6 @@ const ProfileScreen = ({ navigation }: any) => {
 
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={[styles.statValue, { color: theme.colors.text }]}>{formatCount(user?.followerCount || 0)}</Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Followers</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={[styles.statValue, { color: theme.colors.text }]}>{formatCount(user?.followingCount || 0)}</Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Following</Text>
-          </View>
-          <View style={styles.stat}>
             <Text style={[styles.statValue, { color: theme.colors.text }]}>{user?.role || 'USER'}</Text>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Role</Text>
           </View>
@@ -37,35 +30,43 @@ const ProfileScreen = ({ navigation }: any) => {
       </View>
 
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Appearance</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Appearance & Theme</Text>
         <View style={styles.themeRow}>
           {(['DARK', 'AMOLED', 'LIGHT'] as const).map((mode) => (
-            <TouchableOpacity
+            <GlassButton
               key={mode}
-              style={[styles.themeButton, { backgroundColor: themeMode === mode ? theme.colors.primary : theme.colors.surface }]}
+              variant={themeMode === mode ? 'primary' : 'metal'}
+              size="sm"
+              title={mode}
               onPress={() => setThemeMode(mode)}
-            >
-              <Text style={[styles.themeButtonText, { color: themeMode === mode ? '#000' : theme.colors.text }]}>{mode}</Text>
-            </TouchableOpacity>
+              style={{ flex: 1, minWidth: 80, justifyContent: 'center' }}
+            />
+          ))}
+        </View>
+
+        <Text style={[styles.subSectionTitle, { color: theme.colors.textSecondary }]}>Greeting Section Theme</Text>
+        <View style={styles.patternGrid}>
+          {(['RANDOM', 'FLUID', 'AURORA', 'COSMIC', 'GEOMETRIC'] as const).map((pat) => (
+            <GlassButton
+              key={pat}
+              variant={greetingPattern === pat ? 'primary' : 'glass'}
+              size="sm"
+              title={pat}
+              onPress={() => setGreetingPattern(pat)}
+              style={{ borderRadius: 14 }}
+              textStyle={{ fontSize: 11 }}
+            />
           ))}
         </View>
       </View>
 
+      {isAdmin && (
+        <View style={[styles.section, { borderBottomWidth: 0.5, borderBottomColor: theme.colors.border }]}>
+          <SongUploader />
+        </View>
+      )}
+
       <View style={styles.section}>
-        <TouchableOpacity
-          style={[styles.menuItem, { borderBottomColor: theme.colors.border }]}
-          onPress={() => navigation?.navigate('Notifications')}
-        >
-          <View style={styles.menuRow}>
-            <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Notifications</Text>
-            {unreadCount > 0 && (
-              <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
-                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-              </View>
-            )}
-          </View>
-          <Text style={{ color: theme.colors.textSecondary }}>›</Text>
-        </TouchableOpacity>
         {isAdmin && (
           <TouchableOpacity
             style={[styles.menuItem, { borderBottomColor: theme.colors.border }]}
@@ -100,21 +101,11 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, marginTop: 2 },
   section: { paddingHorizontal: 24, paddingVertical: 16 },
   sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
+  subSectionTitle: { fontSize: 13, fontWeight: '600', marginTop: 16, marginBottom: 8 },
   themeRow: { flexDirection: 'row', gap: 8 },
-  themeButton: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
-  themeButtonText: { fontSize: 12, fontWeight: '600' },
+  patternGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   menuItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 0.5 },
   menuItemText: { fontSize: 16 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: { color: '#000', fontSize: 12, fontWeight: '700' },
 });
 
 export default ProfileScreen;

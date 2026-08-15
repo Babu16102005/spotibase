@@ -1,0 +1,11 @@
+2cb7dda0c5f768a4ed18bdd1b0bc627a
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _reactNative = require("react-native");
+var TouchableNativeFeedback = _reactNative.TouchableNativeFeedback;
+var _default = exports.default = TouchableNativeFeedback;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfcmVhY3ROYXRpdmUiLCJyZXF1aXJlIiwiVG91Y2hhYmxlTmF0aXZlRmVlZGJhY2siLCJSTlRvdWNoYWJsZU5hdGl2ZUZlZWRiYWNrIiwiX2RlZmF1bHQiLCJleHBvcnRzIiwiZGVmYXVsdCJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uLy4uL3NyYy9jb21wb25lbnRzL3RvdWNoYWJsZXMvVG91Y2hhYmxlTmF0aXZlRmVlZGJhY2sudHN4Il0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7QUFBQSxJQUFBQSxZQUFBLEdBQUFDLE9BQUE7QUFLQSxJQUFNQyx1QkFBdUIsR0FBR0MsWUFBQSxDQUFBRCx1QkFBeUI7QUFBQyxJQUFBRSxRQUFBLEdBQUFDLE9BQUEsQ0FBQUMsT0FBQSxHQUUzQ0osdUJBQXVCIiwiaWdub3JlTGlzdCI6W119

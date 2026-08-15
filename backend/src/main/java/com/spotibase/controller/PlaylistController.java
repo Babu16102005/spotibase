@@ -140,6 +140,9 @@ public class PlaylistController {
     @PostMapping("/{id}/like")
     public ResponseEntity<Void> likePlaylist(@CurrentUser CustomUserDetails user,
                                               @PathVariable String id) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         log.info("User {} likes playlist {}", user.getId(), id);
         likeService.likePlaylist(user.getId(), id);
         return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -148,6 +151,9 @@ public class PlaylistController {
     @DeleteMapping("/{id}/like")
     public ResponseEntity<Void> unlikePlaylist(@CurrentUser CustomUserDetails user,
                                                 @PathVariable String id) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         log.info("User {} unlikes playlist {}", user.getId(), id);
         likeService.unlikePlaylist(user.getId(), id);
         return ResponseEntity.noContent().build();

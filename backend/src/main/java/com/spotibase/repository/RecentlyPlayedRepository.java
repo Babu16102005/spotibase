@@ -15,6 +15,8 @@ public interface RecentlyPlayedRepository extends JpaRepository<RecentlyPlayed, 
 
     List<RecentlyPlayed> findByUserIdOrderByPlayedAtDesc(String userId);
 
+    List<RecentlyPlayed> findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(String userId, java.time.LocalDateTime cutoff);
+
     Optional<RecentlyPlayed> findByUserIdAndItemTypeAndItemId(String userId, String itemType, String itemId);
 
     @Modifying
@@ -22,4 +24,8 @@ public interface RecentlyPlayedRepository extends JpaRepository<RecentlyPlayed, 
     void deleteByUserIdAndItemTypeAndItemId(@Param("userId") String userId,
                                            @Param("itemType") String itemType,
                                            @Param("itemId") String itemId);
+
+    @Modifying
+    @Query("DELETE FROM RecentlyPlayed rp WHERE rp.playedAt < :cutoff")
+    int deleteOlderThan(@Param("cutoff") java.time.LocalDateTime cutoff);
 }

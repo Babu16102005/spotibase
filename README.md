@@ -17,7 +17,7 @@ This is a monorepo: `backend/` (Spring Boot), `mobile/` (Expo app), plus infrast
 - **Home** — personalized sections and daily mixes computed from listening history and likes
 - **Admin** — dashboard, user management and roles, song/album moderation (soft delete/restore), featured content, and analytics (overview, user growth, top songs, top genres)
 - **Realtime** — STOMP WebSocket for presence, cross-device queue sync, and collaborative playlist updates
-- **Storage** — songs on Cloudflare R2 with Range-enabled streaming redirects; covers/avatars on Supabase Storage
+- **Storage & Free Tier Safety** — songs stored on Cloudflare R2 (S3-compatible) with Range-enabled streaming redirects; covers/avatars on Supabase Storage. Includes an automated **9.5 GB Restriction Threshold** (out of 10 GB Free Tier capacity) enforcing an admin upload soft cap to prevent free-tier overages.
 - **Offline-ready mobile** — MMKV-backed cache, downloads screen, queue save/restore
 - **Web PWA** — Expo web export (service worker + manifest) served as static files
 
@@ -207,6 +207,17 @@ GitHub Actions (`.github/workflows/`), triggered on push/PR to `main` and `devel
 ## Deployment
 
 See `docs/deployment.md` for: the production Docker stack, full `.env` requirements, nginx SSL setup (certs in `nginx/ssl/`, `DOMAIN` variable, `proxy` profile), and EAS build steps for the stores.
+
+## Storage Limits & Free Tier Restrictions
+
+To safely operate within the **10 GB Free Tier limit** of Cloudflare R2 and Supabase Storage without incurring unexpected billing charges:
+
+* **Free Tier Allocation:** 10.0 GB (10,737,418,240 bytes)
+* **Administrative Restriction Cap:** **9.5 GB** (10,200,547,328 bytes)
+* **Enforcement Mechanism:**
+  - **Backend:** Both single song uploads (`StorageService.uploadSong`) and bulk song uploads (`SongService.createSongsBulk`) query active song storage usage (`SUM(s.fileSize)`). If total storage exceeds 9.5 GB, the request is rejected with `HTTP 400 Bad Request: Storage limit reached (9.5 GB safety cap of 10 GB free tier)`.
+  - **Admin Dashboard:** Displays live storage level progress bar out of 10 GB with real-time percentage and badge indicator (`FREE TIER ACTIVE` vs `UPLOADS RESTRICTED`).
+  - **Song Uploader:** Displays safety cap notice and automatically disables song uploads when the 9.5 GB restriction cap is reached.
 
 ## API documentation
 

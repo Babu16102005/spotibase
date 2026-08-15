@@ -1,0 +1,34 @@
+b2352c4445c1ba2ed1404198bd7d4814
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.enableExperimentalWebImplementation = enableExperimentalWebImplementation;
+exports.enableLegacyWebImplementation = enableLegacyWebImplementation;
+exports.isNewWebImplementationEnabled = isNewWebImplementationEnabled;
+var _reactNative = require("react-native");
+var _utils = require("./utils");
+var useNewWebImplementation = true;
+var getWasCalled = false;
+function enableExperimentalWebImplementation() {
+  var _shouldEnable = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : true;
+  console.warn((0, _utils.tagMessage)('New web implementation is enabled by default. This function will be removed in Gesture Handler 3.'));
+}
+function enableLegacyWebImplementation() {
+  var shouldUseLegacyImplementation = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : true;
+  console.warn((0, _utils.tagMessage)('Legacy web implementation is deprecated. This function will be removed in Gesture Handler 3.'));
+  if (_reactNative.Platform.OS !== 'web' || useNewWebImplementation === !shouldUseLegacyImplementation) {
+    return;
+  }
+  if (getWasCalled) {
+    console.error('Some parts of this application have already started using the new gesture handler implementation. No changes will be applied. You can try enabling legacy implementation earlier.');
+    return;
+  }
+  useNewWebImplementation = !shouldUseLegacyImplementation;
+}
+function isNewWebImplementationEnabled() {
+  getWasCalled = true;
+  return useNewWebImplementation;
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfcmVhY3ROYXRpdmUiLCJyZXF1aXJlIiwiX3V0aWxzIiwidXNlTmV3V2ViSW1wbGVtZW50YXRpb24iLCJnZXRXYXNDYWxsZWQiLCJlbmFibGVFeHBlcmltZW50YWxXZWJJbXBsZW1lbnRhdGlvbiIsIl9zaG91bGRFbmFibGUiLCJhcmd1bWVudHMiLCJsZW5ndGgiLCJ1bmRlZmluZWQiLCJjb25zb2xlIiwid2FybiIsInRhZ01lc3NhZ2UiLCJlbmFibGVMZWdhY3lXZWJJbXBsZW1lbnRhdGlvbiIsInNob3VsZFVzZUxlZ2FjeUltcGxlbWVudGF0aW9uIiwiUGxhdGZvcm0iLCJPUyIsImVycm9yIiwiaXNOZXdXZWJJbXBsZW1lbnRhdGlvbkVuYWJsZWQiXSwic291cmNlcyI6WyIuLi8uLi9zcmMvRW5hYmxlTmV3V2ViSW1wbGVtZW50YXRpb24udHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7Ozs7O0FBQUEsSUFBQUEsWUFBQSxHQUFBQyxPQUFBO0FBQ0EsSUFBQUMsTUFBQSxHQUFBRCxPQUFBO0FBRUEsSUFBSUUsdUJBQXVCLEdBQUcsSUFBSTtBQUNsQyxJQUFJQyxZQUFZLEdBQUcsS0FBSztBQUtqQixTQUFTQyxtQ0FBbUNBLENBQUEsRUFFM0M7RUFBQSxJQUROQyxhQUFhLEdBQUFDLFNBQUEsQ0FBQUMsTUFBQSxRQUFBRCxTQUFBLFFBQUFFLFNBQUEsR0FBQUYsU0FBQSxNQUFHLElBQUk7RUFHcEJHLE9BQU8sQ0FBQ0MsSUFBSSxDQUNWLElBQUFULE1BQUEsQ0FBQVUsVUFBVSxFQUNSLG1HQUNGLENBQ0YsQ0FBQztBQUNIO0FBS08sU0FBU0MsNkJBQTZCQSxDQUFBLEVBRXJDO0VBQUEsSUFETkMsNkJBQTZCLEdBQUFQLFNBQUEsQ0FBQUMsTUFBQSxRQUFBRCxTQUFBLFFBQUFFLFNBQUEsR0FBQUYsU0FBQSxNQUFHLElBQUk7RUFFcENHLE9BQU8sQ0FBQ0MsSUFBSSxDQUNWLElBQUFULE1BQUEsQ0FBQVUsVUFBVSxFQUNSLDhGQUNGLENBQ0YsQ0FBQztFQUVELElBQ0VaLFlBQUEsQ0FBQWUsUUFBUSxDQUFDQyxFQUFFLEtBQUssS0FBSyxJQUNyQmIsdUJBQXVCLEtBQUssQ0FBQ1csNkJBQTZCLEVBQzFEO0lBQ0E7RUFDRjtFQUVBLElBQUlWLFlBQVksRUFBRTtJQUNoQk0sT0FBTyxDQUFDTyxLQUFLLENBQ1gsbUxBQ0YsQ0FBQztJQUNEO0VBQ0Y7RUFFQWQsdUJBQXVCLEdBQUcsQ0FBQ1csNkJBQTZCO0FBQzFEO0FBRU8sU0FBU0ksNkJBQTZCQSxDQUFBLEVBQVk7RUFDdkRkLFlBQVksR0FBRyxJQUFJO0VBQ25CLE9BQU9ELHVCQUF1QjtBQUNoQyIsImlnbm9yZUxpc3QiOltdfQ==

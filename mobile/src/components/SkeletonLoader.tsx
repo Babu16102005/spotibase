@@ -64,11 +64,76 @@ export const CardSkeleton: React.FC<{ count?: number }> = ({ count = 5 }) => {
   );
 };
 
+export const HeaderSkeleton: React.FC = () => {
+  return (
+    <View style={styles.headerSkeleton}>
+      <Skeleton width={180} height={180} borderRadius={16} />
+      <Skeleton width={200} height={22} borderRadius={6} style={{ marginTop: 16 }} />
+      <Skeleton width={130} height={14} borderRadius={4} style={{ marginTop: 8 }} />
+      <View style={styles.actionRowSkeleton}>
+        <Skeleton width={110} height={40} borderRadius={20} />
+        <Skeleton width={40} height={40} borderRadius={20} />
+      </View>
+    </View>
+  );
+};
+
+export const DetailPageSkeleton: React.FC<{ rows?: number }> = ({ rows = 6 }) => {
+  return (
+    <View style={styles.pageSkeletonContainer}>
+      <HeaderSkeleton />
+      <View style={styles.listSkeleton}>
+        {Array.from({ length: rows }).map((_, i) => (
+          <SongSkeleton key={i} />
+        ))}
+      </View>
+    </View>
+  );
+};
+
+export const GridSkeleton: React.FC<{ count?: number }> = ({ count = 6 }) => {
+  const cardWidth = 150;
+  return (
+    <View style={styles.gridContainer}>
+      {Array.from({ length: count }).map((_, i) => (
+        <View key={i} style={styles.gridItem}>
+          <Skeleton width={cardWidth} height={cardWidth} borderRadius={12} />
+          <Skeleton width={cardWidth * 0.8} height={14} style={{ marginTop: 8 }} />
+          <Skeleton width={cardWidth * 0.5} height={12} style={{ marginTop: 4 }} />
+        </View>
+      ))}
+    </View>
+  );
+};
+
+export const PageSkeleton: React.FC = () => {
+  return (
+    <View style={styles.pageSkeletonContainer}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 16 }}>
+        <Skeleton width={220} height={28} borderRadius={6} />
+        <Skeleton width={150} height={14} borderRadius={4} style={{ marginTop: 8 }} />
+      </View>
+      <CardSkeleton count={4} />
+      <View style={{ marginTop: 16 }}>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <SongSkeleton key={i} />
+        ))}
+      </View>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   songRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16 },
   songInfo: { flex: 1, marginLeft: 12 },
   cardRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 8 },
   cardItem: { marginRight: 12 },
+  headerSkeleton: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
+  actionRowSkeleton: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 20 },
+  pageSkeletonContainer: { flex: 1, paddingTop: 16 },
+  listSkeleton: { marginTop: 12 },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, paddingHorizontal: 16, paddingVertical: 12 },
+  gridItem: { marginBottom: 12 },
 });
 
 export default Skeleton;

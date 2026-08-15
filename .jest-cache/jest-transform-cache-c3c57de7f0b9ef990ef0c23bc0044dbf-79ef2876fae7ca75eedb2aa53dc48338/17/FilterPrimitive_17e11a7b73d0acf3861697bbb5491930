@@ -1,0 +1,37 @@
+1ae3c9b1276eeb400aa4896a03b66bf6
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _react = require("react");
+var FilterPrimitive = function (_react$Component) {
+  function FilterPrimitive() {
+    var _this;
+    (0, _classCallCheck2.default)(this, FilterPrimitive);
+    for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+      args[_key] = arguments[_key];
+    }
+    _this = (0, _callSuper2.default)(this, FilterPrimitive, [...args]);
+    _this.root = null;
+    _this.refMethod = instance => {
+      _this.root = instance;
+    };
+    _this.setNativeProps = props => {
+      var _this$root;
+      (_this$root = _this.root) === null || _this$root === void 0 || _this$root.setNativeProps(props);
+    };
+    return _this;
+  }
+  (0, _inherits2.default)(FilterPrimitive, _react$Component);
+  return (0, _createClass2.default)(FilterPrimitive);
+}(_react.Component);
+FilterPrimitive.defaultPrimitiveProps = {};
+exports.default = FilterPrimitive;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfcmVhY3QiLCJyZXF1aXJlIiwiRmlsdGVyUHJpbWl0aXZlIiwiX3JlYWN0JENvbXBvbmVudCIsIl90aGlzIiwiX2NsYXNzQ2FsbENoZWNrMiIsImRlZmF1bHQiLCJfbGVuIiwiYXJndW1lbnRzIiwibGVuZ3RoIiwiYXJncyIsIkFycmF5IiwiX2tleSIsIl9jYWxsU3VwZXIyIiwicm9vdCIsInJlZk1ldGhvZCIsImluc3RhbmNlIiwic2V0TmF0aXZlUHJvcHMiLCJwcm9wcyIsIl90aGlzJHJvb3QiLCJfaW5oZXJpdHMyIiwiX2NyZWF0ZUNsYXNzMiIsIkNvbXBvbmVudCIsImRlZmF1bHRQcmltaXRpdmVQcm9wcyIsImV4cG9ydHMiXSwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvZWxlbWVudHMvZmlsdGVycy9GaWx0ZXJQcmltaXRpdmUudHN4Il0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7OztBQUFBLElBQUFBLE1BQUEsR0FBQUMsT0FBQTtBQUFBLElBWXFCQyxlQUFlLGFBQUFDLGdCQUFBO0VBQUEsU0FBQUQsZ0JBQUE7SUFBQSxJQUFBRSxLQUFBO0lBQUEsSUFBQUMsZ0JBQUEsQ0FBQUMsT0FBQSxRQUFBSixlQUFBO0lBQUEsU0FBQUssSUFBQSxHQUFBQyxTQUFBLENBQUFDLE1BQUEsRUFBQUMsSUFBQSxPQUFBQyxLQUFBLENBQUFKLElBQUEsR0FBQUssSUFBQSxNQUFBQSxJQUFBLEdBQUFMLElBQUEsRUFBQUssSUFBQTtNQUFBRixJQUFBLENBQUFFLElBQUEsSUFBQUosU0FBQSxDQUFBSSxJQUFBO0lBQUE7SUFBQVIsS0FBQSxPQUFBUyxXQUFBLENBQUFQLE9BQUEsUUFBQUosZUFBQSxNQUFBUSxJQUFBO0lBQUFOLEtBQUEsQ0FJbENVLElBQUksR0FBZ0QsSUFBSTtJQUFBVixLQUFBLENBS3hEVyxTQUFTLEdBQ1BDLFFBQXFELElBQ2xEO01BQ0haLEtBQUEsQ0FBS1UsSUFBSSxHQUFHRSxRQUFRO0lBQ3RCLENBQUM7SUFBQVosS0FBQSxDQUVEYSxjQUFjLEdBQUlDLEtBQVEsSUFBSztNQUFBLElBQUFDLFVBQUE7TUFDN0IsQ0FBQUEsVUFBQSxHQUFBZixLQUFBLENBQUtVLElBQUksY0FBQUssVUFBQSxlQUFUQSxVQUFBLENBQVdGLGNBQWMsQ0FBQ0MsS0FBSyxDQUFDO0lBQ2xDLENBQUM7SUFBQSxPQUFBZCxLQUFBO0VBQUE7RUFBQSxJQUFBZ0IsVUFBQSxDQUFBZCxPQUFBLEVBQUFKLGVBQUEsRUFBQUMsZ0JBQUE7RUFBQSxXQUFBa0IsYUFBQSxDQUFBZixPQUFBLEVBQUFKLGVBQUE7QUFBQSxFQWpCNkNGLE1BQUEsQ0FBQXNCLFNBQVM7QUFBcENwQixlQUFlLENBTTNCcUIscUJBQXFCLEdBQzFCLENBQUMsQ0FBQztBQVdMQyxPQUFBLENBQUFsQixPQUFBLEdBQUFKLGVBQUEiLCJpZ25vcmVMaXN0IjpbXX0=

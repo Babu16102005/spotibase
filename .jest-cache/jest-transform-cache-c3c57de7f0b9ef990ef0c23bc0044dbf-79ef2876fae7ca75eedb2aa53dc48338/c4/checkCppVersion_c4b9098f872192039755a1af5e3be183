@@ -1,0 +1,41 @@
+7aa7e4b82e2a3211344439a96e1df6d7
+'use strict';
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.checkCppVersion = checkCppVersion;
+exports.matchVersion = matchVersion;
+var _slicedToArray2 = _interopRequireDefault(require("@babel/runtime/helpers/slicedToArray"));
+var _jsVersion = require("./jsVersion.js");
+var _logger = require("./logger.js");
+function checkCppVersion() {
+  var cppVersion = global._WORKLETS_VERSION_CPP;
+  if (cppVersion === undefined) {
+    _logger.logger.warn(`Couldn't determine the version of the native part of Worklets.
+    See \`https://docs.swmansion.com/react-native-worklets/docs/guides/troubleshooting#couldnt-determine-the-version-of-the-native-part-of-worklets\` for more details.`);
+    return;
+  }
+  var ok = matchVersion(_jsVersion.jsVersion, cppVersion);
+  if (!ok) {
+    throw new Error(`[Worklets] Mismatch between JavaScript part and native part of Worklets (${_jsVersion.jsVersion} vs ${cppVersion}).
+    See \`https://docs.swmansion.com/react-native-worklets/docs/guides/troubleshooting#mismatch-between-javascript-part-and-native-part-of-worklets\` for more details.`);
+  }
+}
+function matchVersion(version1, version2) {
+  if (version1.match(/^\d+\.\d+\.\d+$/) && version2.match(/^\d+\.\d+\.\d+$/)) {
+    var _version1$split = version1.split('.'),
+      _version1$split2 = (0, _slicedToArray2.default)(_version1$split, 2),
+      major1 = _version1$split2[0],
+      minor1 = _version1$split2[1];
+    var _version2$split = version2.split('.'),
+      _version2$split2 = (0, _slicedToArray2.default)(_version2$split, 2),
+      major2 = _version2$split2[0],
+      minor2 = _version2$split2[1];
+    return major1 === major2 && minor1 === minor2;
+  } else {
+    return version1 === version2;
+  }
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfaW50ZXJvcFJlcXVpcmVEZWZhdWx0IiwicmVxdWlyZSIsImRlZmF1bHQiLCJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImNoZWNrQ3BwVmVyc2lvbiIsIm1hdGNoVmVyc2lvbiIsIl9zbGljZWRUb0FycmF5MiIsIl9qc1ZlcnNpb24iLCJfbG9nZ2VyIiwiY3BwVmVyc2lvbiIsImdsb2JhbCIsIl9XT1JLTEVUU19WRVJTSU9OX0NQUCIsInVuZGVmaW5lZCIsImxvZ2dlciIsIndhcm4iLCJvayIsImpzVmVyc2lvbiIsIkVycm9yIiwidmVyc2lvbjEiLCJ2ZXJzaW9uMiIsIm1hdGNoIiwiX3ZlcnNpb24xJHNwbGl0Iiwic3BsaXQiLCJfdmVyc2lvbjEkc3BsaXQyIiwibWFqb3IxIiwibWlub3IxIiwiX3ZlcnNpb24yJHNwbGl0IiwiX3ZlcnNpb24yJHNwbGl0MiIsIm1ham9yMiIsIm1pbm9yMiJdLCJzb3VyY2VzIjpbIi4uLy4uLy4uL3NyYy9kZWJ1Zy9jaGVja0NwcFZlcnNpb24udHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7O0FBQUEsSUFBQUEsc0JBQUEsR0FBQUMsT0FBQSxpREFBQUMsT0FBQTtBQUFBQyxNQUFBLENBQUFDLGNBQUEsQ0FBQUMsT0FBQTtFQUFBQyxLQUFBO0FBQUE7QUFBQUQsT0FBQSxDQUFBRSxlQUFBLEdBQUFBLGVBQUE7QUFBQUYsT0FBQSxDQUFBRyxZQUFBLEdBQUFBLFlBQUE7QUFBQSxJQUFBQyxlQUFBLEdBQUFULHNCQUFBLENBQUFDLE9BQUE7QUFFWixJQUFBUyxVQUFBLEdBQUFULE9BQUE7QUFDQSxJQUFBVSxPQUFBLEdBQUFWLE9BQUE7QUFFTyxTQUFTTSxlQUFlQSxDQUFBLEVBQUc7RUFDaEMsSUFBTUssVUFBVSxHQUFHQyxNQUFNLENBQUNDLHFCQUFxQjtFQUMvQyxJQUFJRixVQUFVLEtBQUtHLFNBQVMsRUFBRTtJQUM1QkMsY0FBTSxDQUFDQyxJQUFJLENBQ1Q7QUFDTix3S0FDSSxDQUFDO0lBQ0Q7RUFDRjtFQUNBLElBQU1DLEVBQUUsR0FBR1YsWUFBWSxDQUFDVyxvQkFBUyxFQUFFUCxVQUFVLENBQUM7RUFDOUMsSUFBSSxDQUFDTSxFQUFFLEVBQUU7SUFDUCxNQUFNLElBQUlFLEtBQUssQ0FDYiw0RUFBNEVELG9CQUFTLE9BQU9QLFVBQVU7QUFDNUcsd0tBQ0ksQ0FBQztFQUNIO0FBQ0Y7QUFFTyxTQUFTSixZQUFZQSxDQUFDYSxRQUFnQixFQUFFQyxRQUFnQixFQUFFO0VBQy9ELElBQUlELFFBQVEsQ0FBQ0UsS0FBSyxDQUFDLGlCQUFpQixDQUFDLElBQUlELFFBQVEsQ0FBQ0MsS0FBSyxDQUFDLGlCQUFpQixDQUFDLEVBQUU7SUFFMUUsSUFBQUMsZUFBQSxHQUF5QkgsUUFBUSxDQUFDSSxLQUFLLENBQUMsR0FBRyxDQUFDO01BQUFDLGdCQUFBLE9BQUFqQixlQUFBLENBQUFQLE9BQUEsRUFBQXNCLGVBQUE7TUFBckNHLE1BQU0sR0FBQUQsZ0JBQUE7TUFBRUUsTUFBTSxHQUFBRixnQkFBQTtJQUNyQixJQUFBRyxlQUFBLEdBQXlCUCxRQUFRLENBQUNHLEtBQUssQ0FBQyxHQUFHLENBQUM7TUFBQUssZ0JBQUEsT0FBQXJCLGVBQUEsQ0FBQVAsT0FBQSxFQUFBMkIsZUFBQTtNQUFyQ0UsTUFBTSxHQUFBRCxnQkFBQTtNQUFFRSxNQUFNLEdBQUFGLGdCQUFBO0lBQ3JCLE9BQU9ILE1BQU0sS0FBS0ksTUFBTSxJQUFJSCxNQUFNLEtBQUtJLE1BQU07RUFDL0MsQ0FBQyxNQUFNO0lBRUwsT0FBT1gsUUFBUSxLQUFLQyxRQUFRO0VBQzlCO0FBQ0YiLCJpZ25vcmVMaXN0IjpbXX0=

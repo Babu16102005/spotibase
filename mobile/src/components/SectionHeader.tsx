@@ -9,7 +9,7 @@ interface SectionHeaderProps {
   onAction?: () => void;
 }
 
-const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, actionLabel, onAction }) => {
+const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, actionLabel = 'Show all', onAction }) => {
   const { theme } = useThemeStore();
 
   return (
@@ -19,8 +19,8 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({ title, subtitle, actionLa
         {subtitle && <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>}
       </View>
       {actionLabel && onAction && (
-        <TouchableOpacity onPress={onAction}>
-          <Text style={[styles.action, { color: theme.colors.primary }]}>{actionLabel}</Text>
+        <TouchableOpacity onPress={onAction} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Text style={[styles.action, { color: theme.colors.textSecondary }]}>{actionLabel}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -36,9 +36,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   titleContainer: { flex: 1 },
-  title: { fontSize: 20, fontWeight: '700' },
-  subtitle: { fontSize: 13, marginTop: 2 },
-  action: { fontSize: 13, fontWeight: '600' },
+  title: { fontSize: 20, fontWeight: '700', letterSpacing: -0.3 },
+  subtitle: { fontSize: 13, marginTop: 2, opacity: 0.8 },
+  action: { fontSize: 13, fontWeight: '700', marginLeft: 12 },
 });
 
 export default SectionHeader;

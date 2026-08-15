@@ -23,6 +23,15 @@ public class CreateSongRequest {
     // OPTIONAL: Primary artist - if not provided, will create/find "Unknown Artist"
     private String artistId;
 
+    // OPTIONAL: Artist by name (bulk upload) - resolved or auto-created when artistId is absent
+    private String artistName;
+
+    // OPTIONAL: Album by name (bulk upload) - resolved or auto-created when albumId is absent
+    private String albumName;
+
+    // OPTIONAL: Genre by name (bulk upload) - resolved or auto-created when genreId is absent
+    private String genreName;
+
     // OPTIONAL: Album artist (for compilations, various artists albums)
     private String albumArtistId;
 

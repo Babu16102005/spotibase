@@ -28,16 +28,34 @@ copy(path.join(assetsDir, 'manifest.json'), path.join(outputDir, 'manifest.json'
 copy(path.join(assetsDir, 'icon.png'), path.join(outputDir, 'icon-192.png'));
 copy(path.join(assetsDir, 'icon.png'), path.join(outputDir, 'icon-512.png'));
 
-// 4. Inject <link rel="manifest"> + theme-color into index.html if missing.
+// 4. Inject <link rel="manifest"> + theme-color + autofill style fix into index.html if missing.
 const indexPath = path.join(outputDir, 'index.html');
 let html = fs.readFileSync(indexPath, 'utf8');
 if (!html.includes('rel="manifest"')) {
   html = html.replace(
     '<title>',
-    '<link rel="manifest" href="/manifest.json" />\n    <meta name="theme-color" content="#1DB954" />\n    <title>'
+    `<link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1DB954" />
+    <style id="spotibase-autofill-fix">
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus,
+      input:-webkit-autofill:active,
+      textarea:-webkit-autofill,
+      textarea:-webkit-autofill:hover,
+      textarea:-webkit-autofill:focus,
+      textarea:-webkit-autofill:active {
+        -webkit-background-clip: text !important;
+        background-clip: text !important;
+        -webkit-text-fill-color: inherit !important;
+        transition: background-color 500000s ease-in-out 0s, color 500000s ease-in-out 0s !important;
+        caret-color: inherit !important;
+      }
+    </style>
+    <title>`
   );
   fs.writeFileSync(indexPath, html);
-  console.log('[postexport] injected manifest link into index.html');
+  console.log('[postexport] injected manifest link and autofill styles into index.html');
 } else {
   console.log('[postexport] index.html already references the manifest');
 }

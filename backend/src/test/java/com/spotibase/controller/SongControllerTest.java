@@ -26,6 +26,8 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -53,6 +55,9 @@ class SongControllerTest extends BaseWebMvcTest {
 
     @MockBean
     private com.spotibase.service.StorageService storageService;
+
+    @MockBean
+    private com.spotibase.service.R2StorageService r2StorageService;
 
     private SongResponse buildSongResponse() {
         return SongResponse.builder()
@@ -179,37 +184,50 @@ class SongControllerTest extends BaseWebMvcTest {
     // ---------- stream ----------
 
     @Test
-    void streamSong_isPermitAll_redirectsToR2File() throws Exception {
+    void streamSong_isPermitAll_streamsFromR2() throws Exception {
         com.spotibase.entity.Song song = com.spotibase.entity.Song.builder()
                 .id("song-1")
                 .name("Hit Song")
                 .fileUrl("https://pub-example.r2.dev/songs/artist-1/song-1.mp3")
                 .durationMs(180000)
-                .fileFormat("audio/mpeg")
+                .fileFormat("MP3")
                 .build();
         when(songService.getSongEntityById("song-1")).thenReturn(song);
+        when(r2StorageService.resolveKey("https://pub-example.r2.dev/songs/artist-1/song-1.mp3"))
+                .thenReturn("songs/artist-1/song-1.mp3");
+        when(r2StorageService.readRange("songs/artist-1/song-1.mp3", null))
+                .thenReturn(new com.spotibase.service.R2StorageService.R2ObjectStream(
+                        mock(software.amazon.awssdk.core.ResponseInputStream.class),
+                        100000, 0, 99999, "audio/mpeg"));
 
         mockMvc.perform(get("/api/v1/songs/song-1/stream"))
-                .andExpect(status().isFound())
-                .andExpect(header().string("Location", "https://pub-example.r2.dev/songs/artist-1/song-1.mp3"))
-                .andExpect(header().string("Accept-Ranges", "bytes"));
+                .andExpect(status().isOk())
+                .andExpect(header().string("Accept-Ranges", "bytes"))
+                .andExpect(header().string("Content-Type", "audio/mpeg"));
 
         verify(songService).incrementPlayCount("song-1");
     }
 
     @Test
-    void streamSong_withRange_redirectsAndPassesRange() throws Exception {
+    void streamSong_withRange_returnsPartialContent() throws Exception {
         com.spotibase.entity.Song song = com.spotibase.entity.Song.builder()
                 .id("song-1")
                 .name("Hit Song")
                 .fileUrl("https://pub-example.r2.dev/songs/artist-1/song-1.mp3")
-                .fileFormat("audio/mpeg")
+                .fileFormat("MP3")
                 .build();
         when(songService.getSongEntityById("song-1")).thenReturn(song);
+        when(r2StorageService.resolveKey("https://pub-example.r2.dev/songs/artist-1/song-1.mp3"))
+                .thenReturn("songs/artist-1/song-1.mp3");
+        when(r2StorageService.readRange(eq("songs/artist-1/song-1.mp3"), any()))
+                .thenReturn(new com.spotibase.service.R2StorageService.R2ObjectStream(
+                        mock(software.amazon.awssdk.core.ResponseInputStream.class),
+                        100000, 0, 1023, "audio/mpeg"));
 
         mockMvc.perform(get("/api/v1/songs/song-1/stream").header("Range", "bytes=0-1023"))
-                .andExpect(status().isFound())
-                .andExpect(header().string("Accept-Ranges", "bytes"));
+                .andExpect(status().isPartialContent())
+                .andExpect(header().string("Accept-Ranges", "bytes"))
+                .andExpect(header().string("Content-Range", "bytes 0-1023/100000"));
     }
 
     @Test
@@ -255,6 +273,58 @@ class SongControllerTest extends BaseWebMvcTest {
         mockMvc.perform(multipart("/api/v1/songs")
                         .file(new MockMultipartFile("request", "", "application/json",
                                 objectMapper.writeValueAsBytes(request)))
+                        .with(user(TestUsers.regularUser("user-1"))))
+                .andExpect(status().isForbidden());
+    }
+
+    // ---------- bulk upload ----------
+
+    @Test
+    void createSongsBulk_asAdmin_returns201WithList() throws Exception {
+        List<CreateSongRequest> requests = List.of(
+                CreateSongRequest.builder().title("Track One").artistName("Artist A").build(),
+                CreateSongRequest.builder().title("Track Two").artistName("Artist B").build());
+        when(songService.createSongsBulk(any(), any()))
+                .thenReturn(List.of(buildSongResponse(), buildSongResponse()));
+
+        mockMvc.perform(multipart("/api/v1/songs/bulk")
+                        .file(new MockMultipartFile("files", "a.flac", "audio/flac", new byte[] { 1, 2, 3 }))
+                        .file(new MockMultipartFile("files", "b.flac", "audio/flac", new byte[] { 4, 5, 6 }))
+                        .file(new MockMultipartFile("requests", "", "application/json",
+                                objectMapper.writeValueAsBytes(requests)))
+                        .with(user(TestUsers.admin("admin-1"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$[0].id").value("song-1"))
+                .andExpect(jsonPath("$[1].id").value("song-1"));
+
+        verify(songService).createSongsBulk(any(), any());
+    }
+
+    @Test
+    void createSongsBulk_withoutMetadata_returns201() throws Exception {
+        when(songService.createSongsBulk(any(), any()))
+                .thenReturn(List.of(buildSongResponse()));
+
+        mockMvc.perform(multipart("/api/v1/songs/bulk")
+                        .file(new MockMultipartFile("files", "song.flac", "audio/flac", new byte[] { 1, 2, 3 }))
+                        .with(user(TestUsers.admin("admin-1"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$[0].id").value("song-1"));
+    }
+
+    @Test
+    void createSongsBulk_invalidMetadata_returns400() throws Exception {
+        mockMvc.perform(multipart("/api/v1/songs/bulk")
+                        .file(new MockMultipartFile("files", "song.flac", "audio/flac", new byte[] { 1, 2, 3 }))
+                        .file(new MockMultipartFile("requests", "", "application/json", "not-json".getBytes()))
+                        .with(user(TestUsers.admin("admin-1"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createSongsBulk_asRegularUser_isForbidden() throws Exception {
+        mockMvc.perform(multipart("/api/v1/songs/bulk")
+                        .file(new MockMultipartFile("files", "song.flac", "audio/flac", new byte[] { 1, 2, 3 }))
                         .with(user(TestUsers.regularUser("user-1"))))
                 .andExpect(status().isForbidden());
     }

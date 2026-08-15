@@ -1,0 +1,21 @@
+73aa9b887c55834ad5a980a6ac82e92f
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.baseGestureHandlerWithDetectorProps = exports.baseGestureHandlerProps = exports.MouseButton = void 0;
+var commonProps = ['id', 'enabled', 'shouldCancelWhenOutside', 'hitSlop', 'cancelsTouchesInView', 'userSelect', 'activeCursor', 'mouseButton', 'enableContextMenu', 'touchAction'];
+var componentInteractionProps = ['waitFor', 'simultaneousHandlers', 'blocksHandlers'];
+var baseGestureHandlerProps = exports.baseGestureHandlerProps = [...commonProps, ...componentInteractionProps, 'onBegan', 'onFailed', 'onCancelled', 'onActivated', 'onEnded', 'onGestureEvent', 'onHandlerStateChange'];
+var baseGestureHandlerWithDetectorProps = exports.baseGestureHandlerWithDetectorProps = [...commonProps, 'needsPointerData', 'manualActivation'];
+var MouseButton = exports.MouseButton = function (MouseButton) {
+  MouseButton[MouseButton["LEFT"] = 1] = "LEFT";
+  MouseButton[MouseButton["RIGHT"] = 2] = "RIGHT";
+  MouseButton[MouseButton["MIDDLE"] = 4] = "MIDDLE";
+  MouseButton[MouseButton["BUTTON_4"] = 8] = "BUTTON_4";
+  MouseButton[MouseButton["BUTTON_5"] = 16] = "BUTTON_5";
+  MouseButton[MouseButton["ALL"] = 31] = "ALL";
+  return MouseButton;
+}({});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJjb21tb25Qcm9wcyIsImNvbXBvbmVudEludGVyYWN0aW9uUHJvcHMiLCJiYXNlR2VzdHVyZUhhbmRsZXJQcm9wcyIsImV4cG9ydHMiLCJiYXNlR2VzdHVyZUhhbmRsZXJXaXRoRGV0ZWN0b3JQcm9wcyIsIk1vdXNlQnV0dG9uIl0sInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL2hhbmRsZXJzL2dlc3R1cmVIYW5kbGVyQ29tbW9uLnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7QUFXQSxJQUFNQSxXQUFXLEdBQUcsQ0FDbEIsSUFBSSxFQUNKLFNBQVMsRUFDVCx5QkFBeUIsRUFDekIsU0FBUyxFQUNULHNCQUFzQixFQUN0QixZQUFZLEVBQ1osY0FBYyxFQUNkLGFBQWEsRUFDYixtQkFBbUIsRUFDbkIsYUFBYSxDQUNMO0FBRVYsSUFBTUMseUJBQXlCLEdBQUcsQ0FDaEMsU0FBUyxFQUNULHNCQUFzQixFQUN0QixnQkFBZ0IsQ0FDUjtBQUVILElBQU1DLHVCQUF1QixHQUFBQyxPQUFBLENBQUFELHVCQUFBLEdBQUcsQ0FDckMsR0FBR0YsV0FBVyxFQUNkLEdBQUdDLHlCQUF5QixFQUM1QixTQUFTLEVBQ1QsVUFBVSxFQUNWLGFBQWEsRUFDYixhQUFhLEVBQ2IsU0FBUyxFQUNULGdCQUFnQixFQUNoQixzQkFBc0IsQ0FDZDtBQUVILElBQU1HLG1DQUFtQyxHQUFBRCxPQUFBLENBQUFDLG1DQUFBLEdBQUcsQ0FDakQsR0FBR0osV0FBVyxFQUNkLGtCQUFrQixFQUNsQixrQkFBa0IsQ0FDbkI7QUFBQyxJQWtFVUssV0FBVyxHQUFBRixPQUFBLENBQUFFLFdBQUEsYUFBWEEsV0FBVztFQUFYQSxXQUFXLENBQVhBLFdBQVc7RUFBWEEsV0FBVyxDQUFYQSxXQUFXO0VBQVhBLFdBQVcsQ0FBWEEsV0FBVztFQUFYQSxXQUFXLENBQVhBLFdBQVc7RUFBWEEsV0FBVyxDQUFYQSxXQUFXO0VBQVhBLFdBQVcsQ0FBWEEsV0FBVztFQUFBLE9BQVhBLFdBQVc7QUFBQSIsImlnbm9yZUxpc3QiOltdfQ==

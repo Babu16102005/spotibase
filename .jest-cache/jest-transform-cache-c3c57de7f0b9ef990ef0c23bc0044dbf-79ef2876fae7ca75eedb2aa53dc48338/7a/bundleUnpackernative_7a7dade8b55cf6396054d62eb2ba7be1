@@ -1,0 +1,43 @@
+c3245116efaa5204dc7f9b170f3ea30f
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.bundleValueUnpacker = bundleValueUnpacker;
+var _logger = require("../debug/logger.js");
+var handleCache = new WeakMap();
+function bundleValueUnpacker(objectToUnpack) {
+  var workletHash = objectToUnpack.__workletHash;
+  if (workletHash !== undefined) {
+    return getWorklet(workletHash, objectToUnpack.__closure);
+  } else if (objectToUnpack.__init !== undefined) {
+    var value = handleCache.get(objectToUnpack);
+    if (value === undefined) {
+      value = objectToUnpack.__init();
+      handleCache.set(objectToUnpack, value);
+    }
+    return value;
+  } else {
+    throw new Error(`[Worklets] Data type not recognized by value unpacker: "${globalThis._toString(objectToUnpack)}".`);
+  }
+}
+function getWorklet(workletHash, closureVariables) {
+  var worklet;
+  if (__DEV__) {
+    try {
+      worklet = getWorkletFromMetroRequire(workletHash, closureVariables);
+    } catch (e) {
+      _logger.logger.error(`Unable to resolve worklet with hash ${workletHash}. Try reloading the app. Original error: ${e.message}`);
+    }
+  } else {
+    worklet = getWorkletFromMetroRequire(workletHash, closureVariables);
+  }
+  return worklet;
+}
+var metroRequire = globalThis.__r;
+function getWorkletFromMetroRequire(workletHash, closureVariables) {
+  var factory = metroRequire(workletHash).default;
+  return factory(closureVariables);
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJPYmplY3QiLCJkZWZpbmVQcm9wZXJ0eSIsImV4cG9ydHMiLCJ2YWx1ZSIsImJ1bmRsZVZhbHVlVW5wYWNrZXIiLCJfbG9nZ2VyIiwicmVxdWlyZSIsImhhbmRsZUNhY2hlIiwiV2Vha01hcCIsIm9iamVjdFRvVW5wYWNrIiwid29ya2xldEhhc2giLCJfX3dvcmtsZXRIYXNoIiwidW5kZWZpbmVkIiwiZ2V0V29ya2xldCIsIl9fY2xvc3VyZSIsIl9faW5pdCIsImdldCIsInNldCIsIkVycm9yIiwiZ2xvYmFsVGhpcyIsIl90b1N0cmluZyIsImNsb3N1cmVWYXJpYWJsZXMiLCJ3b3JrbGV0IiwiX19ERVZfXyIsImdldFdvcmtsZXRGcm9tTWV0cm9SZXF1aXJlIiwiZSIsImxvZ2dlciIsImVycm9yIiwibWVzc2FnZSIsIm1ldHJvUmVxdWlyZSIsIl9fciIsImZhY3RvcnkiLCJkZWZhdWx0Il0sInNvdXJjZXMiOlsiLi4vLi4vLi4vc3JjL21lbW9yeS9idW5kbGVVbnBhY2tlci5uYXRpdmUudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiJBQUFBLFlBQVk7O0FBQUFBLE1BQUEsQ0FBQUMsY0FBQSxDQUFBQyxPQUFBO0VBQUFDLEtBQUE7QUFBQTtBQUFBRCxPQUFBLENBQUFFLG1CQUFBLEdBQUFBLG1CQUFBO0FBRVosSUFBQUMsT0FBQSxHQUFBQyxPQUFBO0FBR0EsSUFBTUMsV0FBVyxHQUFHLElBQUlDLE9BQU8sQ0FBMkIsQ0FBQztBQUVwRCxTQUFTSixtQkFBbUJBLENBQUNLLGNBQThCLEVBQVc7RUFDM0UsSUFBTUMsV0FBVyxHQUFHRCxjQUFjLENBQUNFLGFBQWE7RUFDaEQsSUFBSUQsV0FBVyxLQUFLRSxTQUFTLEVBQUU7SUFDN0IsT0FBT0MsVUFBVSxDQUFDSCxXQUFXLEVBQUVELGNBQWMsQ0FBQ0ssU0FBUyxDQUFDO0VBQzFELENBQUMsTUFBTSxJQUFJTCxjQUFjLENBQUNNLE1BQU0sS0FBS0gsU0FBUyxFQUFFO0lBQzlDLElBQUlULEtBQUssR0FBR0ksV0FBVyxDQUFDUyxHQUFHLENBQUNQLGNBQWMsQ0FBQztJQUMzQyxJQUFJTixLQUFLLEtBQUtTLFNBQVMsRUFBRTtNQUN2QlQsS0FBSyxHQUFHTSxjQUFjLENBQUNNLE1BQU0sQ0FBQyxDQUFDO01BQy9CUixXQUFXLENBQUNVLEdBQUcsQ0FBQ1IsY0FBYyxFQUFFTixLQUFLLENBQUM7SUFDeEM7SUFDQSxPQUFPQSxLQUFLO0VBQ2QsQ0FBQyxNQUFNO0lBQ0wsTUFBTSxJQUFJZSxLQUFLLENBQ2IsMkRBQTJEQyxVQUFVLENBQUNDLFNBQVMsQ0FDN0VYLGNBQ0YsQ0FBQyxJQUNILENBQUM7RUFDSDtBQUNGO0FBRUEsU0FBU0ksVUFBVUEsQ0FDakJILFdBQW1CLEVBQ25CVyxnQkFBeUMsRUFDWjtFQUM3QixJQUFJQyxPQUFPO0VBQ1gsSUFBSUMsT0FBTyxFQUFFO0lBQ1gsSUFBSTtNQUNGRCxPQUFPLEdBQUdFLDBCQUEwQixDQUFDZCxXQUFXLEVBQUVXLGdCQUFnQixDQUFDO0lBQ3JFLENBQUMsQ0FBQyxPQUFPSSxDQUFDLEVBQUU7TUFDVkMsY0FBTSxDQUFDQyxLQUFLLENBQ1YsdUNBQXVDakIsV0FBVyw0Q0FBNkNlLENBQUMsQ0FBV0csT0FBTyxFQUNwSCxDQUFDO0lBQ0g7RUFDRixDQUFDLE1BQU07SUFDTE4sT0FBTyxHQUFHRSwwQkFBMEIsQ0FBQ2QsV0FBVyxFQUFFVyxnQkFBZ0IsQ0FBQztFQUNyRTtFQUNBLE9BQU9DLE9BQU87QUFDaEI7QUFFQSxJQUFNTyxZQUFZLEdBQUdWLFVBQVUsQ0FBQ1csR0FBRztBQUVuQyxTQUFTTiwwQkFBMEJBLENBQ2pDZCxXQUFtQixFQUNuQlcsZ0JBQXlDLEVBQ3hCO0VBQ2pCLElBQU1VLE9BQU8sR0FBR0YsWUFBWSxDQUFDbkIsV0FBVyxDQUFDLENBQUNzQixPQUF5QjtFQUNuRSxPQUFPRCxPQUFPLENBQUNWLGdCQUFnQixDQUFDO0FBQ2xDIiwiaWdub3JlTGlzdCI6W119

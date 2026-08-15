@@ -1,28 +1,57 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Switch, StyleSheet } from 'react-native';
 import { useThemeStore, usePlayerStore } from '../../store';
+import GlassButton from '../../components/GlassButton';
 
 const SettingsScreen = ({ navigation }: any) => {
-  const { theme, themeMode, setThemeMode } = useThemeStore();
-  const { shuffle, repeat, setShuffle, setRepeat, volume, setVolume } = usePlayerStore();
-
-  const qualityOptions = ['LOW', 'MEDIUM', 'HIGH', 'LOSSLESS'];
+  const { theme, themeMode, setThemeMode, greetingPattern, setGreetingPattern } = useThemeStore();
+  const { shuffle, repeat, setShuffle, setRepeat } = usePlayerStore();
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Text style={[styles.title, { color: theme.colors.text }]}>Settings</Text>
+      <View style={styles.headerRow}>
+        {navigation?.canGoBack?.() && (
+          <GlassButton
+            variant="metal"
+            size="icon"
+            icon="chevronLeft"
+            iconSize={18}
+            onPress={() => navigation.goBack()}
+            accessibilityLabel="Back"
+          />
+        )}
+        <Text style={[styles.title, { color: theme.colors.text }]}>Settings</Text>
+      </View>
 
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Theme</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>App Theme</Text>
         <View style={styles.themeRow}>
-          {(['DARK', 'AMOLED', 'LIGHT'] as const).map(m => (
-            <TouchableOpacity
+          {(['DARK', 'AMOLED', 'LIGHT'] as const).map((m) => (
+            <GlassButton
               key={m}
-              style={[styles.themeButton, { backgroundColor: themeMode === m ? theme.colors.primary : theme.colors.surface }]}
+              variant={themeMode === m ? 'primary' : 'metal'}
+              size="sm"
+              title={m}
               onPress={() => setThemeMode(m)}
-            >
-              <Text style={{ color: themeMode === m ? '#000' : theme.colors.text, fontWeight: '600', fontSize: 13 }}>{m}</Text>
-            </TouchableOpacity>
+              style={{ flex: 1, minWidth: 80, justifyContent: 'center' }}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Greeting Section Theme</Text>
+        <View style={styles.patternGrid}>
+          {(['RANDOM', 'FLUID', 'AURORA', 'COSMIC', 'GEOMETRIC'] as const).map((pat) => (
+            <GlassButton
+              key={pat}
+              variant={greetingPattern === pat ? 'primary' : 'glass'}
+              size="sm"
+              title={pat}
+              onPress={() => setGreetingPattern(pat)}
+              style={{ borderRadius: 14 }}
+              textStyle={{ fontSize: 11 }}
+            />
           ))}
         </View>
       </View>
@@ -35,22 +64,13 @@ const SettingsScreen = ({ navigation }: any) => {
         </View>
         <View style={styles.settingRow}>
           <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Repeat</Text>
-          <TouchableOpacity onPress={() => setRepeat(repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off')}>
-            <Text style={[styles.settingValue, { color: theme.colors.primary }]}>
-              {repeat === 'off' ? 'Off' : repeat === 'all' ? 'All' : 'One'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Audio Quality</Text>
-        <View style={styles.qualityRow}>
-          {qualityOptions.map(q => (
-            <TouchableOpacity key={q} style={[styles.qualityButton, { backgroundColor: theme.colors.surface }]}>
-              <Text style={{ color: theme.colors.text, fontSize: 12, fontWeight: '600' }}>{q}</Text>
-            </TouchableOpacity>
-          ))}
+          <GlassButton
+            variant="glass"
+            size="sm"
+            title={repeat === 'off' ? 'Off' : repeat === 'all' ? 'All' : 'One'}
+            onPress={() => setRepeat(repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off')}
+            textStyle={{ color: theme.colors.primary }}
+          />
         </View>
       </View>
 
@@ -65,16 +85,21 @@ const SettingsScreen = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  title: { fontSize: 28, fontWeight: '800', paddingHorizontal: 16, paddingTop: 48, paddingBottom: 16 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  title: { fontSize: 28, fontWeight: '800' },
   section: { paddingHorizontal: 16, paddingVertical: 12 },
   sectionTitle: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
   themeRow: { flexDirection: 'row', gap: 8 },
-  themeButton: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
+  patternGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 0.5 },
   settingLabel: { fontSize: 16 },
-  settingValue: { fontSize: 14, fontWeight: '600' },
-  qualityRow: { flexDirection: 'row', gap: 8 },
-  qualityButton: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   aboutText: { fontSize: 14, marginTop: 4 },
 });
 

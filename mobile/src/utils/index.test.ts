@@ -1,6 +1,7 @@
 import {
   formatDuration,
   formatCount,
+  formatFileSize,
   formatDate,
   getGreeting,
   getRelativeTime,
@@ -41,6 +42,20 @@ describe('utils: formatCount', () => {
   it('formats millions with one decimal', () => {
     expect(formatCount(1_000_000)).toBe('1.0M');
     expect(formatCount(2_500_000)).toBe('2.5M');
+  });
+});
+
+describe('utils: formatFileSize', () => {
+  it('formats 0 or falsy bytes', () => {
+    expect(formatFileSize(0)).toBe('0 B');
+    expect(formatFileSize(null)).toBe('0 B');
+  });
+
+  it('formats bytes, KB, MB, GB properly', () => {
+    expect(formatFileSize(500)).toBe('500 B');
+    expect(formatFileSize(1024)).toBe('1.00 KB');
+    expect(formatFileSize(1024 * 1024 * 2.5)).toBe('2.50 MB');
+    expect(formatFileSize(1024 * 1024 * 1024 * 10)).toBe('10.00 GB');
   });
 });
 

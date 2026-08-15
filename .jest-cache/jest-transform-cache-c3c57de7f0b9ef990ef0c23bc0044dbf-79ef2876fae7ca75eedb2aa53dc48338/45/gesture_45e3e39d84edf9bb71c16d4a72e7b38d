@@ -1,0 +1,272 @@
+8cf2a725996f11ab668406d44cb397ec
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _callSuper2 = _interopRequireDefault(require("@babel/runtime/helpers/callSuper"));
+var _inherits2 = _interopRequireDefault(require("@babel/runtime/helpers/inherits"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.Gesture = exports.ContinousBaseGesture = exports.CALLBACK_TYPE = exports.BaseGesture = void 0;
+var _getNextHandlerTag = require("../getNextHandlerTag");
+var _utils = require("../../utils");
+var CALLBACK_TYPE = exports.CALLBACK_TYPE = {
+  UNDEFINED: 0,
+  BEGAN: 1,
+  START: 2,
+  UPDATE: 3,
+  CHANGE: 4,
+  END: 5,
+  FINALIZE: 6,
+  TOUCHES_DOWN: 7,
+  TOUCHES_MOVE: 8,
+  TOUCHES_UP: 9,
+  TOUCHES_CANCELLED: 10
+};
+var Gesture = (0, _createClass2.default)(function Gesture() {
+  (0, _classCallCheck2.default)(this, Gesture);
+});
+exports.Gesture = Gesture;
+var nextGestureId = 0;
+var BaseGesture = function (_Gesture) {
+  function BaseGesture() {
+    var _this;
+    (0, _classCallCheck2.default)(this, BaseGesture);
+    _this = (0, _callSuper2.default)(this, BaseGesture);
+    _this.gestureId = -1;
+    _this.handlerTag = -1;
+    _this.handlerName = '';
+    _this.config = {};
+    _this.handlers = {
+      gestureId: -1,
+      handlerTag: -1,
+      isWorklet: []
+    };
+    _this.gestureId = nextGestureId++;
+    _this.handlers.gestureId = _this.gestureId;
+    return _this;
+  }
+  (0, _inherits2.default)(BaseGesture, _Gesture);
+  return (0, _createClass2.default)(BaseGesture, [{
+    key: "addDependency",
+    value: function addDependency(key, gesture) {
+      var value = this.config[key];
+      this.config[key] = value ? Array().concat(value, gesture) : [gesture];
+    }
+  }, {
+    key: "withRef",
+    value: function withRef(ref) {
+      this.config.ref = ref;
+      return this;
+    }
+  }, {
+    key: "isWorklet",
+    value: function isWorklet(callback) {
+      return callback.__workletHash !== undefined;
+    }
+  }, {
+    key: "onBegin",
+    value: function onBegin(callback) {
+      this.handlers.onBegin = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.BEGAN] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "onStart",
+    value: function onStart(callback) {
+      this.handlers.onStart = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.START] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "onEnd",
+    value: function onEnd(callback) {
+      this.handlers.onEnd = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.END] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "onFinalize",
+    value: function onFinalize(callback) {
+      this.handlers.onFinalize = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.FINALIZE] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "onTouchesDown",
+    value: function onTouchesDown(callback) {
+      this.config.needsPointerData = true;
+      this.handlers.onTouchesDown = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.TOUCHES_DOWN] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "onTouchesMove",
+    value: function onTouchesMove(callback) {
+      this.config.needsPointerData = true;
+      this.handlers.onTouchesMove = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.TOUCHES_MOVE] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "onTouchesUp",
+    value: function onTouchesUp(callback) {
+      this.config.needsPointerData = true;
+      this.handlers.onTouchesUp = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.TOUCHES_UP] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "onTouchesCancelled",
+    value: function onTouchesCancelled(callback) {
+      this.config.needsPointerData = true;
+      this.handlers.onTouchesCancelled = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.TOUCHES_CANCELLED] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "enabled",
+    value: function enabled(_enabled) {
+      this.config.enabled = _enabled;
+      return this;
+    }
+  }, {
+    key: "shouldCancelWhenOutside",
+    value: function shouldCancelWhenOutside(value) {
+      this.config.shouldCancelWhenOutside = value;
+      return this;
+    }
+  }, {
+    key: "hitSlop",
+    value: function hitSlop(_hitSlop) {
+      this.config.hitSlop = _hitSlop;
+      return this;
+    }
+  }, {
+    key: "activeCursor",
+    value: function activeCursor(_activeCursor) {
+      this.config.activeCursor = _activeCursor;
+      return this;
+    }
+  }, {
+    key: "mouseButton",
+    value: function mouseButton(_mouseButton) {
+      this.config.mouseButton = _mouseButton;
+      return this;
+    }
+  }, {
+    key: "runOnJS",
+    value: function runOnJS(_runOnJS) {
+      this.config.runOnJS = _runOnJS;
+      return this;
+    }
+  }, {
+    key: "simultaneousWithExternalGesture",
+    value: function simultaneousWithExternalGesture() {
+      for (var _len = arguments.length, gestures = new Array(_len), _key = 0; _key < _len; _key++) {
+        gestures[_key] = arguments[_key];
+      }
+      for (var gesture of gestures) {
+        if (gesture) {
+          this.addDependency('simultaneousWith', gesture);
+        }
+      }
+      return this;
+    }
+  }, {
+    key: "requireExternalGestureToFail",
+    value: function requireExternalGestureToFail() {
+      for (var _len2 = arguments.length, gestures = new Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
+        gestures[_key2] = arguments[_key2];
+      }
+      for (var gesture of gestures) {
+        if (gesture) {
+          this.addDependency('requireToFail', gesture);
+        }
+      }
+      return this;
+    }
+  }, {
+    key: "blocksExternalGesture",
+    value: function blocksExternalGesture() {
+      for (var _len3 = arguments.length, gestures = new Array(_len3), _key3 = 0; _key3 < _len3; _key3++) {
+        gestures[_key3] = arguments[_key3];
+      }
+      for (var gesture of gestures) {
+        if (gesture) {
+          this.addDependency('blocksHandlers', gesture);
+        }
+      }
+      return this;
+    }
+  }, {
+    key: "withTestId",
+    value: function withTestId(id) {
+      this.config.testId = id;
+      return this;
+    }
+  }, {
+    key: "cancelsTouchesInView",
+    value: function cancelsTouchesInView(value) {
+      this.config.cancelsTouchesInView = value;
+      return this;
+    }
+  }, {
+    key: "initialize",
+    value: function initialize() {
+      this.handlerTag = (0, _getNextHandlerTag.getNextHandlerTag)();
+      this.handlers = Object.assign({}, this.handlers, {
+        handlerTag: this.handlerTag
+      });
+      if (this.config.ref) {
+        this.config.ref.current = this;
+      }
+    }
+  }, {
+    key: "toGestureArray",
+    value: function toGestureArray() {
+      return [this];
+    }
+  }, {
+    key: "prepare",
+    value: function prepare() {}
+  }, {
+    key: "shouldUseReanimated",
+    get: function () {
+      return this.config.runOnJS !== true && !this.handlers.isWorklet.includes(false) && !(0, _utils.isRemoteDebuggingEnabled)();
+    }
+  }]);
+}(Gesture);
+exports.BaseGesture = BaseGesture;
+var ContinousBaseGesture = function (_BaseGesture2) {
+  function ContinousBaseGesture() {
+    (0, _classCallCheck2.default)(this, ContinousBaseGesture);
+    return (0, _callSuper2.default)(this, ContinousBaseGesture, arguments);
+  }
+  (0, _inherits2.default)(ContinousBaseGesture, _BaseGesture2);
+  return (0, _createClass2.default)(ContinousBaseGesture, [{
+    key: "onUpdate",
+    value: function onUpdate(callback) {
+      this.handlers.onUpdate = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.UPDATE] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "onChange",
+    value: function onChange(callback) {
+      this.handlers.onChange = callback;
+      this.handlers.isWorklet[CALLBACK_TYPE.CHANGE] = this.isWorklet(callback);
+      return this;
+    }
+  }, {
+    key: "manualActivation",
+    value: function manualActivation(_manualActivation) {
+      this.config.manualActivation = _manualActivation;
+      return this;
+    }
+  }]);
+}(BaseGesture);
+exports.ContinousBaseGesture = ContinousBaseGesture;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfZ2V0TmV4dEhhbmRsZXJUYWciLCJyZXF1aXJlIiwiX3V0aWxzIiwiQ0FMTEJBQ0tfVFlQRSIsImV4cG9ydHMiLCJVTkRFRklORUQiLCJCRUdBTiIsIlNUQVJUIiwiVVBEQVRFIiwiQ0hBTkdFIiwiRU5EIiwiRklOQUxJWkUiLCJUT1VDSEVTX0RPV04iLCJUT1VDSEVTX01PVkUiLCJUT1VDSEVTX1VQIiwiVE9VQ0hFU19DQU5DRUxMRUQiLCJHZXN0dXJlIiwiX2NyZWF0ZUNsYXNzMiIsImRlZmF1bHQiLCJfY2xhc3NDYWxsQ2hlY2syIiwibmV4dEdlc3R1cmVJZCIsIkJhc2VHZXN0dXJlIiwiX0dlc3R1cmUiLCJjb25zdHJ1Y3RvciIsIl90aGlzIiwiX2NhbGxTdXBlcjIiLCJnZXN0dXJlSWQiLCJoYW5kbGVyVGFnIiwiaGFuZGxlck5hbWUiLCJjb25maWciLCJoYW5kbGVycyIsImlzV29ya2xldCIsIl9pbmhlcml0czIiLCJrZXkiLCJ2YWx1ZSIsImFkZERlcGVuZGVuY3kiLCJnZXN0dXJlIiwiQXJyYXkiLCJjb25jYXQiLCJ3aXRoUmVmIiwicmVmIiwiY2FsbGJhY2siLCJfX3dvcmtsZXRIYXNoIiwidW5kZWZpbmVkIiwib25CZWdpbiIsIm9uU3RhcnQiLCJvbkVuZCIsIm9uRmluYWxpemUiLCJvblRvdWNoZXNEb3duIiwibmVlZHNQb2ludGVyRGF0YSIsIm9uVG91Y2hlc01vdmUiLCJvblRvdWNoZXNVcCIsIm9uVG91Y2hlc0NhbmNlbGxlZCIsImVuYWJsZWQiLCJzaG91bGRDYW5jZWxXaGVuT3V0c2lkZSIsImhpdFNsb3AiLCJhY3RpdmVDdXJzb3IiLCJtb3VzZUJ1dHRvbiIsInJ1bk9uSlMiLCJzaW11bHRhbmVvdXNXaXRoRXh0ZXJuYWxHZXN0dXJlIiwiX2xlbiIsImFyZ3VtZW50cyIsImxlbmd0aCIsImdlc3R1cmVzIiwiX2tleSIsInJlcXVpcmVFeHRlcm5hbEdlc3R1cmVUb0ZhaWwiLCJfbGVuMiIsIl9rZXkyIiwiYmxvY2tzRXh0ZXJuYWxHZXN0dXJlIiwiX2xlbjMiLCJfa2V5MyIsIndpdGhUZXN0SWQiLCJpZCIsInRlc3RJZCIsImNhbmNlbHNUb3VjaGVzSW5WaWV3IiwiaW5pdGlhbGl6ZSIsImdldE5leHRIYW5kbGVyVGFnIiwiT2JqZWN0IiwiYXNzaWduIiwiY3VycmVudCIsInRvR2VzdHVyZUFycmF5IiwicHJlcGFyZSIsImdldCIsImluY2x1ZGVzIiwiaXNSZW1vdGVEZWJ1Z2dpbmdFbmFibGVkIiwiQ29udGlub3VzQmFzZUdlc3R1cmUiLCJfQmFzZUdlc3R1cmUyIiwib25VcGRhdGUiLCJvbkNoYW5nZSIsIm1hbnVhbEFjdGl2YXRpb24iXSwic291cmNlcyI6WyIuLi8uLi8uLi8uLi9zcmMvaGFuZGxlcnMvZ2VzdHVyZXMvZ2VzdHVyZS50cyJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7QUFTQSxJQUFBQSxrQkFBQSxHQUFBQyxPQUFBO0FBYUEsSUFBQUMsTUFBQSxHQUFBRCxPQUFBO0FBaUVPLElBQU1FLGFBQWEsR0FBQUMsT0FBQSxDQUFBRCxhQUFBLEdBQUc7RUFDM0JFLFNBQVMsRUFBRSxDQUFDO0VBQ1pDLEtBQUssRUFBRSxDQUFDO0VBQ1JDLEtBQUssRUFBRSxDQUFDO0VBQ1JDLE1BQU0sRUFBRSxDQUFDO0VBQ1RDLE1BQU0sRUFBRSxDQUFDO0VBQ1RDLEdBQUcsRUFBRSxDQUFDO0VBQ05DLFFBQVEsRUFBRSxDQUFDO0VBQ1hDLFlBQVksRUFBRSxDQUFDO0VBQ2ZDLFlBQVksRUFBRSxDQUFDO0VBQ2ZDLFVBQVUsRUFBRSxDQUFDO0VBQ2JDLGlCQUFpQixFQUFFO0FBQ3JCLENBQVU7QUFBQSxJQU1ZQyxPQUFPLE9BQUFDLGFBQUEsQ0FBQUMsT0FBQSxXQUFBRixRQUFBO0VBQUEsSUFBQUcsZ0JBQUEsQ0FBQUQsT0FBQSxRQUFBRixPQUFBO0FBQUE7QUFrQjVCWixPQUFBLENBQUFZLE9BQUEsR0FBQUEsT0FBQTtBQUVELElBQUlJLGFBQWEsR0FBRyxDQUFDO0FBQUEsSUFDQ0MsV0FBVyxh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

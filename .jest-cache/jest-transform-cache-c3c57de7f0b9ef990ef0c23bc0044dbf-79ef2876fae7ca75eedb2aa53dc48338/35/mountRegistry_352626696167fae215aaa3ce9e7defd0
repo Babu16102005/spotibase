@@ -1,0 +1,56 @@
+c882df38d631244ed6185071d9db40ba
+"use strict";
+
+var _interopRequireDefault = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault(require("@babel/runtime/helpers/createClass"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.MountRegistry = void 0;
+var MountRegistry = function () {
+  function MountRegistry() {
+    (0, _classCallCheck2.default)(this, MountRegistry);
+  }
+  return (0, _createClass2.default)(MountRegistry, null, [{
+    key: "addMountListener",
+    value: function addMountListener(listener) {
+      this.mountListeners.add(listener);
+      return () => {
+        this.mountListeners.delete(listener);
+      };
+    }
+  }, {
+    key: "addUnmountListener",
+    value: function addUnmountListener(listener) {
+      this.unmountListeners.add(listener);
+      return () => {
+        this.unmountListeners.delete(listener);
+      };
+    }
+  }, {
+    key: "gestureHandlerWillMount",
+    value: function gestureHandlerWillMount(handler) {
+      this.mountListeners.forEach(listener => listener(handler));
+    }
+  }, {
+    key: "gestureHandlerWillUnmount",
+    value: function gestureHandlerWillUnmount(handler) {
+      this.unmountListeners.forEach(listener => listener(handler));
+    }
+  }, {
+    key: "gestureWillMount",
+    value: function gestureWillMount(gesture) {
+      this.mountListeners.forEach(listener => listener(gesture));
+    }
+  }, {
+    key: "gestureWillUnmount",
+    value: function gestureWillUnmount(gesture) {
+      this.unmountListeners.forEach(listener => listener(gesture));
+    }
+  }]);
+}();
+MountRegistry.mountListeners = new Set();
+MountRegistry.unmountListeners = new Set();
+exports.MountRegistry = MountRegistry;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJNb3VudFJlZ2lzdHJ5IiwiX2NsYXNzQ2FsbENoZWNrMiIsImRlZmF1bHQiLCJfY3JlYXRlQ2xhc3MyIiwia2V5IiwidmFsdWUiLCJhZGRNb3VudExpc3RlbmVyIiwibGlzdGVuZXIiLCJtb3VudExpc3RlbmVycyIsImFkZCIsImRlbGV0ZSIsImFkZFVubW91bnRMaXN0ZW5lciIsInVubW91bnRMaXN0ZW5lcnMiLCJnZXN0dXJlSGFuZGxlcldpbGxNb3VudCIsImhhbmRsZXIiLCJmb3JFYWNoIiwiZ2VzdHVyZUhhbmRsZXJXaWxsVW5tb3VudCIsImdlc3R1cmVXaWxsTW91bnQiLCJnZXN0dXJlIiwiZ2VzdHVyZVdpbGxVbm1vdW50IiwiU2V0IiwiZXhwb3J0cyJdLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy9tb3VudFJlZ2lzdHJ5LnRzIl0sInNvdXJjZXNDb250ZW50IjpbbnVsbF0sIm1hcHBpbmdzIjoiOzs7Ozs7Ozs7SUFXYUEsYUFBYTtFQUFBLFNBQUFBLGNBQUE7SUFBQSxJQUFBQyxnQkFBQSxDQUFBQyxPQUFBLFFBQUFGLGFBQUE7RUFBQTtFQUFBLFdBQUFHLGFBQUEsQ0FBQUQsT0FBQSxFQUFBRixhQUFBO0lBQUFJLEdBQUE7SUFBQUMsS0FBQSxFQUl4QixTQUFPQyxnQkFBZ0JBLENBQUNDLFFBQThCLEVBQWM7TUFDbEUsSUFBSSxDQUFDQyxjQUFjLENBQUNDLEdBQUcsQ0FBQ0YsUUFBUSxDQUFDO01BRWpDLE9BQU8sTUFBTTtRQUNYLElBQUksQ0FBQ0MsY0FBYyxDQUFDRSxNQUFNLENBQUNILFFBQVEsQ0FBQztNQUN0QyxDQUFDO0lBQ0g7RUFBQTtJQUFBSCxHQUFBO0lBQUFDLEtBQUEsRUFFQSxTQUFPTSxrQkFBa0JBLENBQUNKLFFBQThCLEVBQWM7TUFDcEUsSUFBSSxDQUFDSyxnQkFBZ0IsQ0FBQ0gsR0FBRyxDQUFDRixRQUFRLENBQUM7TUFFbkMsT0FBTyxNQUFNO1FBQ1gsSUFBSSxDQUFDSyxnQkFBZ0IsQ0FBQ0YsTUFBTSxDQUFDSCxRQUFRLENBQUM7TUFDeEMsQ0FBQztJQUNIO0VBQUE7SUFBQUgsR0FBQTtJQUFBQyxLQUFBLEVBRUEsU0FBT1EsdUJBQXVCQSxDQUFDQyxPQUF3QixFQUFFO01BQ3ZELElBQUksQ0FBQ04sY0FBYyxDQUFDTyxPQUFPLENBQUVSLFFBQVEsSUFDbkNBLFFBQVEsQ0FBQ08sT0FBdUMsQ0FDbEQsQ0FBQztJQUNIO0VBQUE7SUFBQVYsR0FBQTtJQUFBQyxLQUFBLEVBRUEsU0FBT1cseUJBQXlCQSxDQUFDRixPQUF3QixFQUFFO01BQ3pELElBQUksQ0FBQ0YsZ0JBQWdCLENBQUNHLE9BQU8sQ0FBRVIsUUFBUSxJQUNyQ0EsUUFBUSxDQUFDTyxPQUF1QyxDQUNsRCxDQUFDO0lBQ0g7RUFBQTtJQUFBVixHQUFBO0lBQUFDLEtBQUEsRUFFQSxTQUFPWSxnQkFBZ0JBLENBQUNDLE9BQW9CLEVBQUU7TUFDNUMsSUFBSSxDQUFDVixjQUFjLENBQUNPLE9BQU8sQ0FBRVIsUUFBUSxJQUFLQSxRQUFRLENBQUNXLE9BQU8sQ0FBQyxDQUFDO0lBQzlEO0VBQUE7SUFBQWQsR0FBQTtJQUFBQyxLQUFBLEVBRUEsU0FBT2Msa0JBQWtCQSxDQUFDRCxPQUFvQixFQUFFO01BQzlDLElBQUksQ0FBQ04sZ0JBQWdCLENBQUNHLE9BQU8sQ0FBRVIsUUFBUSxJQUFLQSxRQUFRLENBQUNXLE9BQU8sQ0FBQyxDQUFDO0lBQ2hFO0VBQUE7QUFBQTtBQXRDV2xCLGFBQWEsQ0FDVFEsY0FBYyxHQUFHLElBQUlZLEdBQUcsQ0FBdUIsQ0FBQztBQURwRHBCLGFBQWEsQ0FFVFksZ0JBQWdCLEdBQUcsSUFBSVEsR0FBRyxDQUF1QixDQUFDO0FBcUNsRUMsT0FBQSxDQUFBckIsYUFBQSxHQUFBQSxhQUFBIiwiaWdub3JlTGlzdCI6W119

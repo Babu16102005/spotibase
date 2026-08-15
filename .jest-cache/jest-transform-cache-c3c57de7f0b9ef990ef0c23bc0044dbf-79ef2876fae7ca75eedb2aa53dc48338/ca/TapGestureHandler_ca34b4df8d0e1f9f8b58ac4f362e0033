@@ -1,0 +1,24 @@
+d3f3548265c474575be7e3d4f9c0925c
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.tapHandlerName = exports.tapGestureHandlerProps = exports.TapGestureHandler = void 0;
+var _createHandler = _interopRequireDefault(require("./createHandler"));
+var _gestureHandlerCommon = require("./gestureHandlerCommon");
+function _interopRequireDefault(e) {
+  return e && e.__esModule ? e : {
+    default: e
+  };
+}
+var tapGestureHandlerProps = exports.tapGestureHandlerProps = ['maxDurationMs', 'maxDelayMs', 'numberOfTaps', 'maxDeltaX', 'maxDeltaY', 'maxDist', 'minPointers'];
+var tapHandlerName = exports.tapHandlerName = 'TapGestureHandler';
+var TapGestureHandler = exports.TapGestureHandler = (0, _createHandler.default)({
+  name: tapHandlerName,
+  allowedProps: [..._gestureHandlerCommon.baseGestureHandlerProps, ...tapGestureHandlerProps],
+  config: {
+    shouldCancelWhenOutside: true
+  }
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfY3JlYXRlSGFuZGxlciIsIl9pbnRlcm9wUmVxdWlyZURlZmF1bHQiLCJyZXF1aXJlIiwiX2dlc3R1cmVIYW5kbGVyQ29tbW9uIiwiZSIsIl9fZXNNb2R1bGUiLCJkZWZhdWx0IiwidGFwR2VzdHVyZUhhbmRsZXJQcm9wcyIsImV4cG9ydHMiLCJ0YXBIYW5kbGVyTmFtZSIsIlRhcEdlc3R1cmVIYW5kbGVyIiwibmFtZSIsImFsbG93ZWRQcm9wcyIsImJhc2VHZXN0dXJlSGFuZGxlclByb3BzIiwiY29uZmlnIiwic2hvdWxkQ2FuY2VsV2hlbk91dHNpZGUiXSwic291cmNlcyI6WyIuLi8uLi8uLi9zcmMvaGFuZGxlcnMvVGFwR2VzdHVyZUhhbmRsZXIudHMiXSwic291cmNlc0NvbnRlbnQiOltudWxsXSwibWFwcGluZ3MiOiI7Ozs7OztBQUNBLElBQUFBLGNBQUEsR0FBQUMsc0JBQUEsQ0FBQUMsT0FBQTtBQUNBLElBQUFDLHFCQUFBLEdBQUFELE9BQUE7QUFHZ0MsU0FBQUQsdUJBQUFHLENBQUE7RUFBQSxPQUFBQSxDQUFBLElBQUFBLENBQUEsQ0FBQUMsVUFBQSxHQUFBRCxDQUFBO0lBQUFFLE9BQUEsRUFBQUY7RUFBQTtBQUFBO0FBRXpCLElBQU1HLHNCQUFzQixHQUFBQyxPQUFBLENBQUFELHNCQUFBLEdBQUcsQ0FDcEMsZUFBZSxFQUNmLFlBQVksRUFDWixjQUFjLEVBQ2QsV0FBVyxFQUNYLFdBQVcsRUFDWCxTQUFTLEVBQ1QsYUFBYSxDQUNMO0FBNERILElBQU1FLGNBQWMsR0FBQUQsT0FBQSxDQUFBQyxjQUFBLEdBQUcsbUJBQW1CO0FBVzFDLElBQU1DLGlCQUFpQixHQUFBRixPQUFBLENBQUFFLGlCQUFBLEdBQUcsSUFBQVYsY0FBQSxDQUFBTSxPQUFhLEVBRzVDO0VBQ0FLLElBQUksRUFBRUYsY0FBYztFQUNwQkcsWUFBWSxFQUFFLENBQ1osR0FBR1QscUJBQUEsQ0FBQVUsdUJBQXVCLEVBQzFCLEdBQUdOLHNCQUFzQixDQUNqQjtFQUNWTyxNQUFNLEVBQUU7SUFDTkMsdUJBQXVCLEVBQUU7RUFDM0I7QUFDRixDQUFDLENBQUMiLCJpZ25vcmVMaXN0IjpbXX0=

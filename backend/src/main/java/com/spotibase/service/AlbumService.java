@@ -260,4 +260,13 @@ public class AlbumService {
         }
         return albums;
     }
+
+    @Transactional(readOnly = true)
+    public List<AlbumResponse> getAlbumsByIds(List<String> ids, String userId) {
+        if (ids == null || ids.isEmpty()) return List.of();
+        List<Album> albums = albumRepository.findAllById(ids);
+        return albums.stream()
+                .map(album -> toAlbumResponse(album, userId))
+                .collect(Collectors.toList());
+    }
 }

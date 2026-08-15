@@ -1,0 +1,114 @@
+aba7bb3cff68f61f814c0f58fc8cdec7
+"use strict";
+
+var _interopRequireDefault2 = require("@babel/runtime/helpers/interopRequireDefault").default;
+var _classCallCheck2 = _interopRequireDefault2(require("@babel/runtime/helpers/classCallCheck"));
+var _createClass2 = _interopRequireDefault2(require("@babel/runtime/helpers/createClass"));
+var _callSuper2 = _interopRequireDefault2(require("@babel/runtime/helpers/callSuper"));
+var _inherits2 = _interopRequireDefault2(require("@babel/runtime/helpers/inherits"));
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = exports.FeFuncR = exports.FeFuncG = exports.FeFuncB = exports.FeFuncA = void 0;
+var _util = require("../../lib/util");
+var _FilterPrimitive = _interopRequireDefault(require("./FilterPrimitive"));
+function _interopRequireDefault(e) {
+  return e && e.__esModule ? e : {
+    default: e
+  };
+}
+var FeComponentTransferFunction = function (_FilterPrimitive$defa) {
+  function FeComponentTransferFunction() {
+    var _this;
+    (0, _classCallCheck2.default)(this, FeComponentTransferFunction);
+    for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+      args[_key] = arguments[_key];
+    }
+    _this = (0, _callSuper2.default)(this, FeComponentTransferFunction, [...args]);
+    _this.channel = 'UNKNOWN';
+    return _this;
+  }
+  (0, _inherits2.default)(FeComponentTransferFunction, _FilterPrimitive$defa);
+  return (0, _createClass2.default)(FeComponentTransferFunction, [{
+    key: "render",
+    value: function render() {
+      (0, _util.warnUnimplementedFilter)();
+      return null;
+    }
+  }]);
+}(_FilterPrimitive.default);
+FeComponentTransferFunction.defaultProps = {
+  type: 'identity',
+  tableValues: [],
+  slope: 1,
+  intercept: 0,
+  amplitude: 1,
+  exponent: 1,
+  offset: 0
+};
+exports.default = FeComponentTransferFunction;
+var FeFuncR = function (_FeComponentTransferF) {
+  function FeFuncR() {
+    var _this2;
+    (0, _classCallCheck2.default)(this, FeFuncR);
+    for (var _len2 = arguments.length, args = new Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
+      args[_key2] = arguments[_key2];
+    }
+    _this2 = (0, _callSuper2.default)(this, FeFuncR, [...args]);
+    _this2.channel = 'R';
+    return _this2;
+  }
+  (0, _inherits2.default)(FeFuncR, _FeComponentTransferF);
+  return (0, _createClass2.default)(FeFuncR);
+}(FeComponentTransferFunction);
+FeFuncR.displayName = 'FeFuncR';
+exports.FeFuncR = FeFuncR;
+var FeFuncG = function (_FeComponentTransferF2) {
+  function FeFuncG() {
+    var _this3;
+    (0, _classCallCheck2.default)(this, FeFuncG);
+    for (var _len3 = arguments.length, args = new Array(_len3), _key3 = 0; _key3 < _len3; _key3++) {
+      args[_key3] = arguments[_key3];
+    }
+    _this3 = (0, _callSuper2.default)(this, FeFuncG, [...args]);
+    _this3.channel = 'G';
+    return _this3;
+  }
+  (0, _inherits2.default)(FeFuncG, _FeComponentTransferF2);
+  return (0, _createClass2.default)(FeFuncG);
+}(FeComponentTransferFunction);
+FeFuncG.displayName = 'FeFuncG';
+exports.FeFuncG = FeFuncG;
+var FeFuncB = function (_FeComponentTransferF3) {
+  function FeFuncB() {
+    var _this4;
+    (0, _classCallCheck2.default)(this, FeFuncB);
+    for (var _len4 = arguments.length, args = new Array(_len4), _key4 = 0; _key4 < _len4; _key4++) {
+      args[_key4] = arguments[_key4];
+    }
+    _this4 = (0, _callSuper2.default)(this, FeFuncB, [...args]);
+    _this4.channel = 'B';
+    return _this4;
+  }
+  (0, _inherits2.default)(FeFuncB, _FeComponentTransferF3);
+  return (0, _createClass2.default)(FeFuncB);
+}(FeComponentTransferFunction);
+FeFuncB.displayName = 'FeFuncB';
+exports.FeFuncB = FeFuncB;
+var FeFuncA = function (_FeComponentTransferF4) {
+  function FeFuncA() {
+    var _this5;
+    (0, _classCallCheck2.default)(this, FeFuncA);
+    for (var _len5 = arguments.length, args = new Array(_len5), _key5 = 0; _key5 < _len5; _key5++) {
+      args[_key5] = arguments[_key5];
+    }
+    _this5 = (0, _callSuper2.default)(this, FeFuncA, [...args]);
+    _this5.channel = 'A';
+    return _this5;
+  }
+  (0, _inherits2.default)(FeFuncA, _FeComponentTransferF4);
+  return (0, _createClass2.default)(FeFuncA);
+}(FeComponentTransferFunction);
+FeFuncA.displayName = 'FeFuncA';
+exports.FeFuncA = FeFuncA;
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfdXRpbCIsInJlcXVpcmUiLCJfRmlsdGVyUHJpbWl0aXZlIiwiX2ludGVyb3BSZXF1aXJlRGVmYXVsdCIsImUiLCJfX2VzTW9kdWxlIiwiZGVmYXVsdCIsIkZlQ29tcG9uZW50VHJhbnNmZXJGdW5jdGlvbiIsIl9GaWx0ZXJQcmltaXRpdmUkZGVmYSIsIl90aGlzIiwiX2NsYXNzQ2FsbENoZWNrMiIsIl9sZW4iLCJhcmd1bWVudHMiLCJsZW5ndGgiLCJhcmdzIiwiQXJyYXkiLCJfa2V5IiwiX2NhbGxTdXBlcjIiLCJjaGFubmVsIiwiX2luaGVyaXRzMiIsIl9jcmVhdGVDbGFzczIiLCJrZXkiLCJ2YWx1ZSIsInJlbmRlciIsIndhcm5VbmltcGxlbWVudGVkRmlsdGVyIiwiZGVmYXVsdFByb3BzIiwidHlwZSIsInRhYmxlVmFsdWVzIiwic2xvcGUiLCJpbnRlcmNlcHQiLCJhbXBsaXR1ZGUiLCJleHBvbmVudCIsIm9mZnNldCIsImV4cG9ydHMiLCJGZUZ1bmNSIiwiX0ZlQ29tcG9uZW50VHJhbnNmZXJGIiwiX3RoaXMyIiwiX2xlbjIiLCJfa2V5MiIsImRpc3BsYXlOYW1lIiwiRmVGdW5jRyIsIl9GZUNvbXBvbmVudFRyYW5zZmVyRjIiLCJfdGhpczMiLCJfbGVuMyIsIl9rZXkzIiwiRmVGdW5jQiIsIl9GZUNvbXBvbmVudFRyYW5zZmVyRjMiLCJfdGhpczQiLCJfbGVuNCIsIl9rZXk0IiwiRmVGdW5jQSIsIl9GZUNvbXBvbmVudFRyYW5zZmVyRjQiLCJfdGhpczUiLCJfbGVuNSIsIl9rZXk1Il0sInNvdXJjZXMiOlsiLi4vLi4vLi4vLi4vc3JjL2VsZW1lbnRzL2ZpbHRlcnMvRmVDb21wb25lbnRUcmFuc2ZlckZ1bmN0aW9uLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6W251bGxdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7Ozs7QUFFQSxJQUFBQSxLQUFBLEdBQUFDLE9BQUE7QUFDQSxJQUFBQyxnQkFBQSxHQUFBQyxzQkFBQSxDQUFBRixPQUFBO0FBQWdELFNBQUFF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
