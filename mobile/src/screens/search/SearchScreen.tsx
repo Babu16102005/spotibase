@@ -52,22 +52,62 @@ const SearchScreen = ({ navigation, route }: any) => {
     }, 300);
   }, []);
 
+  // Memoized per-type renderers so they are not recreated on every keystroke/theme change
+  const renderTrending = useCallback((items: string[]) => (
+    <View>
+      {items.length > 0 && (
+        <>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Trending Searches</Text>
+          {items.map((item, i) => (
+            <TouchableOpacity key={i} style={styles.trendingItem} onPress={() => handleSearch(item)}>
+              <Text style={[styles.trendingText, { color: theme.colors.text }]}>🔥 {item}</Text>
+            </TouchableOpacity>
+          ))}
+        </>
+      )}
+    </View>
+  ), [theme, handleSearch]);
+
+  const renderSongs = useCallback((songs: any[]) => (
+    <>
+      {songs?.map((s: any, idx: number) => (
+        <SongCard
+          key={s.id}
+          song={s}
+          index={idx}
+          onPress={() => playMultiple(songs, idx)}
+        />
+      ))}
+    </>
+  ), [playMultiple]);
+
+  const renderAlbums = useCallback((albums: any[]) => (
+    <View style={styles.grid}>
+      {albums?.map((a: any) => (
+        <AlbumCard key={a.id} album={a} onPress={() => navigation?.navigate('Album', { id: a.id })} />
+      ))}
+    </View>
+  ), [navigation]);
+
+  const renderArtists = useCallback((artists: any[]) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      {artists?.map((a: any) => (
+        <ArtistCard key={a.id} artist={a} onPress={() => navigation?.navigate('Artist', { id: a.id })} />
+      ))}
+    </ScrollView>
+  ), [navigation]);
+
+  const renderPlaylists = useCallback((playlists: any[]) => (
+    <View style={styles.grid}>
+      {playlists?.map((p: any) => (
+        <PlaylistCard key={p.id} playlist={p} onPress={() => navigation?.navigate('Playlist', { id: p.id })} />
+      ))}
+    </View>
+  ), [navigation]);
+
   const renderContent = () => {
     if (!results) {
-      return (
-        <View>
-          {trending.length > 0 && (
-            <>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Trending Searches</Text>
-              {trending.map((item, i) => (
-                <TouchableOpacity key={i} style={styles.trendingItem} onPress={() => handleSearch(item)}>
-                  <Text style={[styles.trendingText, { color: theme.colors.text }]}>🔥 {item}</Text>
-                </TouchableOpacity>
-              ))}
-            </>
-          )}
-        </View>
-      );
+      return renderTrending(trending);
     }
 
     const tabs = ['songs', 'albums', 'artists', 'playlists'];
@@ -88,35 +128,10 @@ const SearchScreen = ({ navigation, route }: any) => {
           ))}
         </ScrollView>
 
-        {activeTab === 'songs' && results.songs?.map((s: any, idx: number) => (
-          <SongCard
-            key={s.id}
-            song={s}
-            index={idx}
-            onPress={() => playMultiple(results.songs, idx)}
-          />
-        ))}
-        {activeTab === 'albums' && (
-          <View style={styles.grid}>
-            {results.albums?.map((a: any) => (
-              <AlbumCard key={a.id} album={a} onPress={() => navigation?.navigate('Album', { id: a.id })} />
-            ))}
-          </View>
-        )}
-        {activeTab === 'artists' && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {results.artists?.map((a: any) => (
-              <ArtistCard key={a.id} artist={a} onPress={() => navigation?.navigate('Artist', { id: a.id })} />
-            ))}
-          </ScrollView>
-        )}
-        {activeTab === 'playlists' && (
-          <View style={styles.grid}>
-            {results.playlists?.map((p: any) => (
-              <PlaylistCard key={p.id} playlist={p} onPress={() => navigation?.navigate('Playlist', { id: p.id })} />
-            ))}
-          </View>
-        )}
+        {activeTab === 'songs' && renderSongs(results.songs)}
+        {activeTab === 'albums' && renderAlbums(results.albums)}
+        {activeTab === 'artists' && renderArtists(results.artists)}
+        {activeTab === 'playlists' && renderPlaylists(results.playlists)}
       </View>
     );
   };

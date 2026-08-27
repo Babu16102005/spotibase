@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, Image, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { playlistApi } from '../../api/client';
 import { usePlayerStore, useThemeStore, useAuthStore } from '../../store';
-import { PlaylistResponse } from '../../types';
+import { PlaylistResponse, SongResponse } from '../../types';
 import SongCard from '../../components/SongCard';
 import Icon from '../../components/Icon';
 import GlassButton from '../../components/GlassButton';
@@ -16,8 +16,8 @@ const PlaylistScreen = ({ route, navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const { id } = route.params;
-  const { playMultiple } = usePlayerStore();
-  const { theme } = useThemeStore();
+  const playMultiple = usePlayerStore((s) => s.playMultiple);
+  const theme = useThemeStore((s) => s.theme);
   const user = useAuthStore(s => s.user);
 
   // Multi-selection states
@@ -25,14 +25,14 @@ const PlaylistScreen = ({ route, navigation }: any) => {
   const [bulkAddModalVisible, setBulkAddModalVisible] = useState(false);
   const selectionMode = selectedIds.size > 0;
 
-  const toggleSelect = (songId: string) => {
+  const toggleSelect = useCallback((songId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(songId)) next.delete(songId);
       else next.add(songId);
       return next;
     });
-  };
+  }, []);
 
   const selectAll = () => {
     if (!playlist?.songs) return;
@@ -101,11 +101,11 @@ const PlaylistScreen = ({ route, navigation }: any) => {
     }
   };
 
-  const playAll = () => {
+  const playAll = useCallback(() => {
     if (playlist?.songs) playMultiple(playlist.songs, 0);
-  };
+  }, [playlist, playMultiple]);
 
-  const toggleLike = async () => {
+  const toggleLike = useCallback(async () => {
     try {
       if (playlist?.liked) {
         await playlistApi.unlike(id);
@@ -115,7 +115,63 @@ const PlaylistScreen = ({ route, navigation }: any) => {
         setPlaylist(prev => prev ? { ...prev, liked: true, likeCount: prev.likeCount + 1 } : prev);
       }
     } catch (err) { console.error(err); }
-  };
+  }, [id, playlist]);
+
+  const isOwner = user?.id === playlist?.userId;
+
+  const header = useCallback(() => (
+    <View style={styles.header}>
+      <Image source={coverSource(playlist?.coverUrl)} style={[styles.cover, { borderColor: theme.colors.border }]} />
+      <Text style={[styles.title, { color: theme.colors.text }]}>{playlist?.name}</Text>
+      <Text style={[styles.owner, { color: theme.colors.textSecondary }]}>
+        {playlist?.username} • {playlist?.songCount} songs
+      </Text>
+      <View style={styles.actionRow}>
+        <GlassButton
+          variant="primary"
+          size="lg"
+          icon="play"
+          iconSize={16}
+          iconColor="#000000"
+          title="Play All"
+          onPress={playAll}
+        />
+        <GlassButton
+          variant="secondary"
+          size="icon"
+          icon={playlist?.liked ? 'heartFilled' : 'heart'}
+          iconSize={18}
+          iconColor={playlist?.liked ? theme.colors.primary : theme.colors.textSecondary}
+          onPress={toggleLike}
+          accessibilityLabel={playlist?.liked ? 'Unlike playlist' : 'Like playlist'}
+        />
+      </View>
+      {playlist?.description && (
+        <Text style={[styles.description, { color: theme.colors.textTertiary }]}>{playlist?.description}</Text>
+      )}
+      {isOwner && (
+        <GlassButton
+          variant="secondary"
+          size="sm"
+          title="Edit Playlist"
+          style={{ marginTop: 12 }}
+        />
+      )}
+    </View>
+  ), [playlist, theme, playAll, toggleLike, isOwner]);
+
+  const renderItem = useCallback(({ item, index }: { item: SongResponse; index: number }) => (
+    <SongCard
+      song={item}
+      index={index}
+      showAlbum={true}
+      onPress={() => (selectionMode ? toggleSelect(item.id) : (playlist?.songs && playMultiple(playlist.songs, index)))}
+      selectionMode={selectionMode}
+      isSelected={selectedIds.has(item.id)}
+      onToggleSelect={() => toggleSelect(item.id)}
+      onLongPress={() => toggleSelect(item.id)}
+    />
+  ), [selectionMode, selectedIds, toggleSelect, playMultiple, playlist]);
 
   if (error || (!playlist && !loading)) {
     return (
@@ -144,65 +200,14 @@ const PlaylistScreen = ({ route, navigation }: any) => {
     );
   }
 
-  const isOwner = user?.id === playlist.userId;
-
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <FlatList
-        ListHeaderComponent={() => (
-          <View style={styles.header}>
-            <Image source={coverSource(playlist.coverUrl)} style={[styles.cover, { borderColor: theme.colors.border }]} />
-            <Text style={[styles.title, { color: theme.colors.text }]}>{playlist.name}</Text>
-            <Text style={[styles.owner, { color: theme.colors.textSecondary }]}>
-              {playlist.username} • {playlist.songCount} songs
-            </Text>
-            <View style={styles.actionRow}>
-              <GlassButton
-                variant="primary"
-                size="lg"
-                icon="play"
-                iconSize={16}
-                iconColor="#000000"
-                title="Play All"
-                onPress={playAll}
-              />
-              <GlassButton
-                variant="secondary"
-                size="icon"
-                icon={playlist.liked ? 'heartFilled' : 'heart'}
-                iconSize={18}
-                iconColor={playlist.liked ? theme.colors.primary : theme.colors.textSecondary}
-                onPress={toggleLike}
-                accessibilityLabel={playlist.liked ? 'Unlike playlist' : 'Like playlist'}
-              />
-            </View>
-            {playlist.description && (
-              <Text style={[styles.description, { color: theme.colors.textTertiary }]}>{playlist.description}</Text>
-            )}
-            {isOwner && (
-              <GlassButton
-                variant="secondary"
-                size="sm"
-                title="Edit Playlist"
-                style={{ marginTop: 12 }}
-              />
-            )}
-          </View>
-        )}
+        ListHeaderComponent={header}
         data={playlist.songs}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <SongCard
-            song={item}
-            index={index}
-            showAlbum={true}
-            onPress={() => (selectionMode ? toggleSelect(item.id) : (playlist.songs && playMultiple(playlist.songs, index)))}
-            selectionMode={selectionMode}
-            isSelected={selectedIds.has(item.id)}
-            onToggleSelect={() => toggleSelect(item.id)}
-            onLongPress={() => toggleSelect(item.id)}
-          />
-        )}
+        renderItem={renderItem}
+        extraData={selectedIds}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}

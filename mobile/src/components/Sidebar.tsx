@@ -26,7 +26,7 @@ interface SidebarNavItemProps {
   theme: any;
 }
 
-const SidebarNavItem: React.FC<SidebarNavItemProps> = ({ item, active, onPress, theme }) => {
+const SidebarNavItem = React.memo(({ item, active, onPress, theme }: SidebarNavItemProps) => {
   const [hovered, setHovered] = React.useState(false);
 
   const onHover = Platform.OS === 'web' ? {
@@ -62,7 +62,7 @@ const SidebarNavItem: React.FC<SidebarNavItemProps> = ({ item, active, onPress, 
       </Text>
     </TouchableOpacity>
   );
-};
+});
 
 /**
  * Spotify-style desktop sidebar with macOS accent: brand mark, primary navigation,
@@ -70,6 +70,13 @@ const SidebarNavItem: React.FC<SidebarNavItemProps> = ({ item, active, onPress, 
  */
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
   const { theme } = useThemeStore();
+
+  // Stable per-item press handlers so SidebarNavItem's memoization stays effective
+  // when only `activeTab` changes (rebuild only when the parent's handler changes).
+  const navItems = React.useMemo(
+    () => NAV_ITEMS.map((item) => ({ item, onPress: () => onSelectTab(item.key) })),
+    [onSelectTab]
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.sidebar, borderRightColor: theme.colors.border }]}>
@@ -94,12 +101,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
 
       {/* Primary nav */}
       <View style={styles.nav}>
-        {NAV_ITEMS.map((item) => (
+        {navItems.map(({ item, onPress }) => (
           <SidebarNavItem
             key={item.key}
             item={item}
             active={activeTab === item.key}
-            onPress={() => onSelectTab(item.key)}
+            onPress={onPress}
             theme={theme}
           />
         ))}
@@ -252,4 +259,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Sidebar;
+export default React.memo(Sidebar);

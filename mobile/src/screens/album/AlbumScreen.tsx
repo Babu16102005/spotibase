@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, Image, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { albumApi } from '../../api/client';
 import { usePlayerStore, useThemeStore } from '../../store';
-import { AlbumResponse } from '../../types';
+import { AlbumResponse, SongResponse } from '../../types';
 import SongCard from '../../components/SongCard';
 import Icon from '../../components/Icon';
 import GlassButton from '../../components/GlassButton';
@@ -13,8 +13,8 @@ const AlbumScreen = ({ route, navigation }: any) => {
   const [album, setAlbum] = useState<AlbumResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const { id } = route.params;
-  const { playMultiple } = usePlayerStore();
-  const { theme } = useThemeStore();
+  const playMultiple = usePlayerStore((s) => s.playMultiple);
+  const theme = useThemeStore((s) => s.theme);
 
   useEffect(() => {
     setLoading(true);
@@ -27,9 +27,39 @@ const AlbumScreen = ({ route, navigation }: any) => {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const playAll = () => {
+  const playAll = useCallback(() => {
     if (album?.songs) playMultiple(album.songs, 0);
-  };
+  }, [album, playMultiple]);
+
+  const header = useCallback(() => (
+    <View style={styles.header}>
+      <Image source={coverSource(album?.coverUrl)} style={[styles.cover, { borderColor: theme.colors.border }]} />
+      <Text style={[styles.title, { color: theme.colors.text }]}>{album?.name}</Text>
+      <Text style={[styles.artist, { color: theme.colors.textSecondary }]}>{album?.artistName}</Text>
+      <Text style={[styles.meta, { color: theme.colors.textTertiary }]}>
+        {album?.releaseDate?.substring(0, 4)} • {album?.songCount} songs • {formatDuration(album?.totalDurationMs ?? 0)}
+      </Text>
+      <GlassButton
+        variant="primary"
+        size="lg"
+        icon="play"
+        iconSize={16}
+        iconColor="#000000"
+        title="Play All"
+        onPress={playAll}
+        style={{ marginTop: 20 }}
+      />
+    </View>
+  ), [album, theme, playAll]);
+
+  const renderItem = useCallback(({ item, index }: { item: SongResponse; index: number }) => (
+    <SongCard
+      song={item}
+      index={index}
+      showAlbum={false}
+      onPress={() => album?.songs && playMultiple(album.songs, index)}
+    />
+  ), [album, playMultiple]);
 
   if (loading || !album) {
     return (
@@ -42,36 +72,14 @@ const AlbumScreen = ({ route, navigation }: any) => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <FlatList
-        ListHeaderComponent={() => (
-          <View style={styles.header}>
-            <Image source={coverSource(album.coverUrl)} style={[styles.cover, { borderColor: theme.colors.border }]} />
-            <Text style={[styles.title, { color: theme.colors.text }]}>{album.name}</Text>
-            <Text style={[styles.artist, { color: theme.colors.textSecondary }]}>{album.artistName}</Text>
-            <Text style={[styles.meta, { color: theme.colors.textTertiary }]}>
-              {album.releaseDate?.substring(0, 4)} • {album.songCount} songs • {formatDuration(album.totalDurationMs)}
-            </Text>
-            <GlassButton
-              variant="primary"
-              size="lg"
-              icon="play"
-              iconSize={16}
-              iconColor="#000000"
-              title="Play All"
-              onPress={playAll}
-              style={{ marginTop: 20 }}
-            />
-          </View>
-        )}
+        ListHeaderComponent={header}
         data={album.songs}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <SongCard
-            song={item}
-            index={index}
-            showAlbum={false}
-            onPress={() => album.songs && playMultiple(album.songs, index)}
-          />
-        )}
+        renderItem={renderItem}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
         contentContainerStyle={{ paddingBottom: 100 }}
       />
     </View>

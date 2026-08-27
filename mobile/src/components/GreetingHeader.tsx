@@ -55,7 +55,7 @@ const resolveHeaderColors = (textStr: string, customColors?: string[], currentPa
   return MULTICOLOR_PALETTES.default;
 };
 
-export const GreetingHeader: React.FC<GreetingHeaderProps> = ({
+const GreetingHeaderComponent: React.FC<GreetingHeaderProps> = ({
   greetingText,
   loading = false,
   onPillPress,
@@ -166,6 +166,8 @@ export const GreetingHeader: React.FC<GreetingHeaderProps> = ({
     </VelarisShader>
   );
 };
+
+export const GreetingHeader = React.memo(GreetingHeaderComponent);
 
 const styles = StyleSheet.create({
   container: {

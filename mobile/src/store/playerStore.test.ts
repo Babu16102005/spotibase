@@ -314,7 +314,7 @@ describe('playerStore', () => {
 
   describe('togglePlayPause', () => {
     it('pauses when the native player is playing', async () => {
-      usePlayerStore.setState({ playbackState: 'playing' });
+      usePlayerStore.setState({ currentTrack: makeSong(), playbackState: 'playing' });
       (TrackPlayer.getPlaybackState as jest.Mock).mockResolvedValue({ state: State.Playing });
       await usePlayerStore.getState().togglePlayPause();
       expect(TrackPlayer.pause).toHaveBeenCalledTimes(1);
@@ -323,11 +323,18 @@ describe('playerStore', () => {
     });
 
     it('plays when the native player is not playing', async () => {
-      usePlayerStore.setState({ playbackState: 'paused' });
+      usePlayerStore.setState({ currentTrack: makeSong(), playbackState: 'paused' });
       (TrackPlayer.getPlaybackState as jest.Mock).mockResolvedValue({ state: State.Paused });
       await usePlayerStore.getState().togglePlayPause();
       expect(TrackPlayer.play).toHaveBeenCalledTimes(1);
       expect(usePlayerStore.getState().playbackState).toBe('playing');
+    });
+
+    it('pauses when currently loading', async () => {
+      usePlayerStore.setState({ currentTrack: makeSong(), playbackState: 'loading' });
+      await usePlayerStore.getState().togglePlayPause();
+      expect(TrackPlayer.pause).toHaveBeenCalledTimes(1);
+      expect(usePlayerStore.getState().playbackState).toBe('paused');
     });
   });
 

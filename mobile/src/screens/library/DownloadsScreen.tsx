@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useDownloadStore } from '../../store/downloadStore';
 import { usePlayerStore } from '../../store/playerStore';
@@ -26,16 +27,27 @@ interface DownloadsScreenProps {
 
 const DownloadsScreen = ({ navigation }: DownloadsScreenProps) => {
   const { theme } = useThemeStore();
-  const { downloads, stats, isLoading, fetchDownloads, deleteDownload, clearCompleted, isDownloaded, isDownloading } = useDownloadStore();
-  const { play, playMultiple } = usePlayerStore();
+  // Individual selectors: the screen no longer re-renders on every player
+  // position tick or on download-store fields it does not render.
+  const downloads = useDownloadStore((s) => s.downloads);
+  const stats = useDownloadStore((s) => s.stats);
+  const fetchDownloads = useDownloadStore((s) => s.fetchDownloads);
+  const deleteDownload = useDownloadStore((s) => s.deleteDownload);
+  const clearCompleted = useDownloadStore((s) => s.clearCompleted);
+  const play = usePlayerStore((s) => s.play);
+  const playMultiple = usePlayerStore((s) => s.playMultiple);
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = React.useState(false);
   const [showClearModal, setShowClearModal] = React.useState(false);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDownloads();
-  }, []);
+  // Fetch on mount and gently re-sync in the background whenever the screen
+  // regains focus; the current list stays visible while refreshing.
+  useFocusEffect(
+    useCallback(() => {
+      fetchDownloads();
+    }, [fetchDownloads])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -64,19 +76,55 @@ const DownloadsScreen = ({ navigation }: DownloadsScreenProps) => {
     }
   };
 
-  const handleDeleteDownload = async (songId: string) => {
+  const handleDeleteDownload = useCallback(async (songId: string) => {
     setDeletingId(songId);
     try {
       await deleteDownload(songId);
     } finally {
       setDeletingId(null);
     }
-  };
+  }, [deleteDownload]);
 
   const handleClearCompleted = async () => {
     await clearCompleted();
     setShowClearModal(false);
   };
+
+  // Stable no-op press handler (rows currently have no press action).
+  const noopPress = useCallback(() => {}, []);
+
+  // Memoized list renderers: rows only re-render when their own download,
+  // theme, or deleting state changes (DownloadListItem is React.memo'd).
+  const renderPendingItem = useCallback(({ item }: any) => (
+    <DownloadListItem
+      download={item}
+      theme={theme}
+      onPress={noopPress}
+      onDelete={handleDeleteDownload}
+      deleting={deletingId === item.songId}
+    />
+  ), [theme, noopPress, handleDeleteDownload, deletingId]);
+
+  const renderCompletedItem = useCallback(({ item }: any) => (
+    <DownloadListItem
+      download={item}
+      theme={theme}
+      onPress={noopPress}
+      onDelete={handleDeleteDownload}
+      deleting={deletingId === item.songId}
+    />
+  ), [theme, noopPress, handleDeleteDownload, deletingId]);
+
+  const renderFailedItem = useCallback(({ item }: any) => (
+    <DownloadListItem
+      download={item}
+      theme={theme}
+      onPress={noopPress}
+      onDelete={handleDeleteDownload}
+      deleting={deletingId === item.songId}
+      isFailed
+    />
+  ), [theme, noopPress, handleDeleteDownload, deletingId]);
 
   if (!user) {
     return (
@@ -125,16 +173,8 @@ const DownloadsScreen = ({ navigation }: DownloadsScreenProps) => {
           <FlatList
             data={pendingDownloads}
             keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <DownloadListItem
-                download={item}
-                theme={theme}
-                onPress={() => {}}
-                onDelete={handleDeleteDownload}
-                deleting={deletingId === item.songId}
-              />
-            )}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            renderItem={renderPendingItem}
+            ItemSeparatorComponent={renderSeparator}
           />
         </View>
       )}
@@ -169,18 +209,8 @@ const DownloadsScreen = ({ navigation }: DownloadsScreenProps) => {
           <FlatList
             data={completedDownloads}
             keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <DownloadListItem
-                download={item}
-                theme={theme}
-                onPress={() => {
-                  // Navigate to song or play
-                }}
-                onDelete={handleDeleteDownload}
-                deleting={deletingId === item.songId}
-              />
-            )}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            renderItem={renderCompletedItem}
+            ItemSeparatorComponent={renderSeparator}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -200,19 +230,8 @@ const DownloadsScreen = ({ navigation }: DownloadsScreenProps) => {
           <FlatList
             data={failedDownloads}
             keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <DownloadListItem
-                download={item}
-                theme={theme}
-                onPress={() => {
-                  // Retry download - would need to re-fetch song and start download
-                }}
-                onDelete={handleDeleteDownload}
-                deleting={deletingId === item.songId}
-                isFailed
-              />
-            )}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            renderItem={renderFailedItem}
+            ItemSeparatorComponent={renderSeparator}
           />
         </View>
       )}
@@ -254,6 +273,8 @@ interface DownloadListItemProps {
   deleting?: boolean;
   isFailed?: boolean;
 }
+
+const renderSeparator = () => <View style={styles.separator} />;
 
 const DownloadListItem = React.memo(({
   download,

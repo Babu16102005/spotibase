@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import { View, Text, FlatList, ActivityIndicator, StyleSheet, RefreshControl, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { songApi, searchApi, adminApi } from '../../api/client';
@@ -90,50 +90,7 @@ const AllSongsScreen = () => {
     }, [fetchPage, searchQuery])
   );
 
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      fetchPage(0, true);
-    }
-  }, [fetchPage, searchQuery]);
-
-  const onRefresh = () => {
-    if (searchQuery.trim()) {
-      handleSearchQueryChange(searchQuery);
-    } else {
-      setRefreshing(true);
-      fetchPage(0, true);
-    }
-  };
-
-  const onEndReached = () => {
-    if (searchQuery.trim() || !hasMore || loadingMore || loading) return;
-    setLoadingMore(true);
-    fetchPage(page + 1, false);
-  };
-
-  const handlePlay = (index: number) => {
-    const list = searchQuery.trim() ? searchResults : songs;
-    if (list.length === 0) return;
-    playMultiple(list, index);
-  };
-
-  const handleToggleLike = async (song: SongResponse) => {
-    const nextLiked = !song.liked;
-    // Optimistic update
-    setSongs((prev) => prev.map((s) => (s.id === song.id ? { ...s, liked: nextLiked } : s)));
-    setSearchResults((prev) => prev.map((s) => (s.id === song.id ? { ...s, liked: nextLiked } : s)));
-    try {
-      if (nextLiked) await songApi.like(song.id);
-      else await songApi.unlike(song.id);
-    } catch (err) {
-      console.error('Like toggle failed:', err);
-      // Roll back on error
-      setSongs((prev) => prev.map((s) => (s.id === song.id ? { ...s, liked: song.liked } : s)));
-      setSearchResults((prev) => prev.map((s) => (s.id === song.id ? { ...s, liked: song.liked } : s)));
-    }
-  };
-
-  const handleSearchQueryChange = (q: string) => {
+  const handleSearchQueryChange = useCallback((q: string) => {
     setSearchQuery(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!q.trim()) {
@@ -152,7 +109,57 @@ const AllSongsScreen = () => {
         setSearching(false);
       }
     }, 300);
-  };
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    if (searchQuery.trim()) {
+      handleSearchQueryChange(searchQuery);
+    } else {
+      setRefreshing(true);
+      fetchPage(0, true);
+    }
+  }, [searchQuery, handleSearchQueryChange, fetchPage]);
+
+  const onEndReached = useCallback(() => {
+    if (searchQuery.trim() || !hasMore || loadingMore || loading) return;
+    setLoadingMore(true);
+    fetchPage(page + 1, false);
+  }, [searchQuery, hasMore, loadingMore, loading, fetchPage, page]);
+
+  const handlePlay = useCallback((index: number) => {
+    const list = searchQuery.trim() ? searchResults : songs;
+    if (list.length === 0) return;
+    playMultiple(list, index);
+  }, [searchQuery, searchResults, songs, playMultiple]);
+
+  const handleToggleLike = useCallback(async (song: SongResponse) => {
+    const nextLiked = !song.liked;
+    // Optimistic update
+    setSongs((prev) => prev.map((s) => (s.id === song.id ? { ...s, liked: nextLiked } : s)));
+    setSearchResults((prev) => prev.map((s) => (s.id === song.id ? { ...s, liked: nextLiked } : s)));
+    try {
+      if (nextLiked) await songApi.like(song.id);
+      else await songApi.unlike(song.id);
+    } catch (err) {
+      console.error('Like toggle failed:', err);
+      // Roll back on error
+      setSongs((prev) => prev.map((s) => (s.id === song.id ? { ...s, liked: song.liked } : s)));
+      setSearchResults((prev) => prev.map((s) => (s.id === song.id ? { ...s, liked: song.liked } : s)));
+    }
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleLongPress = useCallback((id: string) => {
+    toggleSelect(id);
+  }, [toggleSelect]);
 
   const filteredLocalSongs = React.useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -179,7 +186,25 @@ const AllSongsScreen = () => {
     return Array.from(map.values());
   }, [searchQuery, songs, searchResults, filteredLocalSongs]);
 
-  const isPlaying = playbackState === 'playing';
+  const isPlaying = playbackState === 'playing' || playbackState === 'loading';
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: SongResponse; index: number }) => (
+      <SongRow
+        song={item}
+        index={index + 1}
+        isCurrent={currentTrack?.id === item.id}
+        isPlaying={isPlaying}
+        onPress={() => (selectionMode ? toggleSelect(item.id) : handlePlay(index))}
+        onToggleLike={handleToggleLike}
+        selectionMode={selectionMode}
+        isSelected={selectedIds.has(item.id)}
+        onToggleSelect={() => toggleSelect(item.id)}
+        onLongPress={() => handleLongPress(item.id)}
+      />
+    ),
+    [currentTrack, isPlaying, selectionMode, selectedIds, handlePlay, toggleSelect, handleLongPress, handleToggleLike]
+  );
 
   if (loading && songs.length === 0) {
     return (
@@ -214,19 +239,6 @@ const AllSongsScreen = () => {
   }
 
   const activeTotalCount = searchQuery.trim() ? activeSongs.length : total;
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleLongPress = (id: string) => {
-    toggleSelect(id);
-  };
 
   const selectAll = () => {
     setSelectedIds(new Set(activeSongs.map((s) => s.id)));
@@ -316,20 +328,8 @@ const AllSongsScreen = () => {
       <FlatList
         data={activeSongs}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <SongRow
-            song={item}
-            index={index + 1}
-            isCurrent={currentTrack?.id === item.id}
-            isPlaying={isPlaying}
-            onPress={() => (selectionMode ? toggleSelect(item.id) : handlePlay(index))}
-            onToggleLike={handleToggleLike}
-            selectionMode={selectionMode}
-            isSelected={selectedIds.has(item.id)}
-            onToggleSelect={() => toggleSelect(item.id)}
-            onLongPress={() => handleLongPress(item.id)}
-          />
-        )}
+        renderItem={renderItem}
+        extraData={selectedIds}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.4}
         getItemLayout={(_, index) => ({ length: 60, offset: 60 * index, index })}

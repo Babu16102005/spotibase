@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,9 +19,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Slider from '@react-native-community/slider';
+import { useShallow } from 'zustand/react/shallow';
 import { usePlayerStore, useThemeStore } from '../store';
 import { songApi } from '../api/client';
 import { formatDuration, coverSource, playerTranslateY, playerScale, playerBorderRadius, playerContentOpacity, playerBackdropOpacity } from '../utils';
+import { SongResponse, PlaybackState, RepeatMode } from '../types';
+import { Theme } from '../theme';
 import Icon from './Icon';
 import GlassButton from './GlassButton';
 import TimelineLoadingBeam from './TimelineLoadingBeam';
@@ -41,179 +44,75 @@ interface PlayerSheetProps {
   onLayout?: (y: number) => void;
 }
 
-const PlayerSheet = ({ onLayout }: PlayerSheetProps) => {
-  const {
-    currentTrack,
-    playbackState,
-    position,
-    duration,
-    shuffle,
-    repeat,
-    volume,
-    isExpanded,
-    togglePlayPause,
-    next,
-    previous,
-    seekTo,
-    setShuffle,
-    setRepeat,
-    setVolume,
-    collapsePlayer,
-    updatePosition,
-  } = usePlayerStore();
+interface FullPlayerContentProps {
+  isExpanded: boolean;
+  theme: Theme;
+  collapsePlayer: () => void;
+  headerPanGesture: ReturnType<typeof Gesture.Pan>;
+  currentTrack: SongResponse;
+  artSize: number;
+  hasCustomThumbnail: boolean;
+  toggleLike: () => void;
+  liked: boolean;
+  playbackState: PlaybackState;
+  seekingValue: number | null;
+  setSeekingValue: (value: number | null) => void;
+  position: number;
+  duration: number;
+  seekTo: (position: number) => Promise<void>;
+  shuffle: boolean;
+  setShuffle: (enabled: boolean) => void;
+  previous: () => Promise<void>;
+  next: () => Promise<void>;
+  isPlaying: boolean;
+  togglePlayPause: () => Promise<void>;
+  repeat: RepeatMode;
+  setRepeat: (mode: RepeatMode) => void;
+  volume: number;
+  setVolume: (volume: number) => void;
+  nextTrack: SongResponse | null;
+}
 
-  const { theme } = useThemeStore();
-  const isPlaying = playbackState === 'playing';
-  const [liked, setLiked] = React.useState(currentTrack?.liked ?? false);
-  const [seekingValue, setSeekingValue] = React.useState<number | null>(null);
-
-  // Local drag offset during collapse swipe
-  const dragOffset = useSharedValue(0);
-  const sheetRef = useRef<View>(null);
-
-  // Sync shared values with isExpanded state (triggered by store)
-  useEffect(() => {
-    if (isExpanded) {
-      playerTranslateY.value = withSpring(0, EXPAND_SPRING_CONFIG);
-      playerScale.value = withSpring(1, EXPAND_SPRING_CONFIG);
-      playerBorderRadius.value = withSpring(0, EXPAND_SPRING_CONFIG);
-      playerContentOpacity.value = withTiming(1, { duration: 200 });
-      playerBackdropOpacity.value = withTiming(0.45, CONTENT_FADE_CONFIG);
-    } else {
-      playerTranslateY.value = withSpring(SCREEN_HEIGHT, COLLAPSE_SPRING_CONFIG);
-      playerScale.value = withSpring(0.95, COLLAPSE_SPRING_CONFIG);
-      playerBorderRadius.value = withSpring(20, COLLAPSE_SPRING_CONFIG);
-      playerContentOpacity.value = withTiming(0, { duration: 150 });
-      playerBackdropOpacity.value = withTiming(0, { duration: 150 });
-    }
-  }, [isExpanded]);
-
-  // Sync position from store (for mini player progress bar)
-  useEffect(() => {
-    updatePosition(position, duration);
-  }, [position, duration, updatePosition]);
-
-  useEffect(() => {
-    setLiked(currentTrack?.liked ?? false);
-  }, [currentTrack?.id, currentTrack?.liked]);
-
-  const toggleLike = async () => {
-    if (!currentTrack) return;
-    const nextLiked = !liked;
-    setLiked(nextLiked);
-    try {
-      if (nextLiked) await songApi.like(currentTrack.id);
-      else await songApi.unlike(currentTrack.id);
-    } catch (err) {
-      console.error('Like toggle failed:', err);
-      setLiked(!nextLiked);
-    }
-  };
-
-  if (!currentTrack) {
-    return null;
-  }
-
-  // Swipe-down gesture on full player to collapse
-  const panGesture = Gesture.Pan()
-    .activeOffsetY([0, 8])
-    .onUpdate((event) => {
-      if (!isExpanded) return;
-      dragOffset.value = Math.max(0, event.translationY);
-      playerTranslateY.value = dragOffset.value;
-      const collapseProgress = Math.min(dragOffset.value / SCREEN_HEIGHT, 1);
-      playerContentOpacity.value = 1 - collapseProgress * 0.9;
-      playerBackdropOpacity.value = 0.45 * (1 - collapseProgress);
-      playerBorderRadius.value = collapseProgress * 20;
-      playerScale.value = 1 - collapseProgress * 0.05;
-    })
-    .onEnd((event) => {
-      if (!isExpanded) return;
-      const shouldCollapse = dragOffset.value > SCREEN_HEIGHT * 0.28 || event.velocityY > 700;
-      if (shouldCollapse) {
-        playerTranslateY.value = withSpring(SCREEN_HEIGHT, COLLAPSE_SPRING_CONFIG);
-        playerScale.value = withSpring(0.95, COLLAPSE_SPRING_CONFIG);
-        playerBorderRadius.value = withSpring(20, COLLAPSE_SPRING_CONFIG);
-        playerContentOpacity.value = withTiming(0, { duration: 150 });
-        playerBackdropOpacity.value = withTiming(0, { duration: 150 });
-        runOnJS(collapsePlayer)();
-      } else {
-        playerTranslateY.value = withSpring(0, EXPAND_SPRING_CONFIG);
-        playerScale.value = withSpring(1, EXPAND_SPRING_CONFIG);
-        playerBorderRadius.value = withSpring(0, EXPAND_SPRING_CONFIG);
-        playerContentOpacity.value = withTiming(1, { duration: 200 });
-        playerBackdropOpacity.value = withTiming(0.45, { duration: 180 });
-      }
-      dragOffset.value = 0;
-    });
-
-  // Dedicated header drag handle gesture (more sensitive)
-  const headerPanGesture = Gesture.Pan()
-    .activeOffsetY([0, 5])
-    .onUpdate((event) => {
-      dragOffset.value = Math.max(0, event.translationY);
-      playerTranslateY.value = dragOffset.value;
-      const collapseProgress = Math.min(dragOffset.value / SCREEN_HEIGHT, 1);
-      playerContentOpacity.value = 1 - collapseProgress * 0.9;
-      playerBackdropOpacity.value = 0.45 * (1 - collapseProgress);
-      playerBorderRadius.value = collapseProgress * 20;
-      playerScale.value = 1 - collapseProgress * 0.05;
-    })
-    .onEnd((event) => {
-      const shouldCollapse = dragOffset.value > SCREEN_HEIGHT * 0.22 || event.velocityY > 600;
-      if (shouldCollapse) {
-        playerTranslateY.value = withSpring(SCREEN_HEIGHT, COLLAPSE_SPRING_CONFIG);
-        playerScale.value = withSpring(0.95, COLLAPSE_SPRING_CONFIG);
-        playerBorderRadius.value = withSpring(20, COLLAPSE_SPRING_CONFIG);
-        playerContentOpacity.value = withTiming(0, { duration: 150 });
-        playerBackdropOpacity.value = withTiming(0, { duration: 150 });
-        runOnJS(collapsePlayer)();
-      } else {
-        playerTranslateY.value = withSpring(0, EXPAND_SPRING_CONFIG);
-        playerScale.value = withSpring(1, EXPAND_SPRING_CONFIG);
-        playerBorderRadius.value = withSpring(0, EXPAND_SPRING_CONFIG);
-        playerContentOpacity.value = withTiming(1, { duration: 200 });
-        playerBackdropOpacity.value = withTiming(0.45, { duration: 180 });
-      }
-      dragOffset.value = 0;
-    });
-
-  // Animated styles using global mutables
-  const containerStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: playerTranslateY.value },
-      { scale: playerScale.value },
-    ],
-    borderTopLeftRadius: playerBorderRadius.value,
-    borderTopRightRadius: playerBorderRadius.value,
-  }));
-
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: playerBackdropOpacity.value,
-  }));
-
+// Full player content (expanded state), memoized so it is only re-rendered
+// when the values it displays actually change (instead of on every parent
+// render). The animated opacity style is owned here via its shared value.
+const FullPlayerContent = React.memo(({
+  isExpanded,
+  theme,
+  collapsePlayer,
+  headerPanGesture,
+  currentTrack,
+  artSize,
+  hasCustomThumbnail,
+  toggleLike,
+  liked,
+  playbackState,
+  seekingValue,
+  setSeekingValue,
+  position,
+  duration,
+  seekTo,
+  shuffle,
+  setShuffle,
+  previous,
+  next,
+  isPlaying,
+  togglePlayPause,
+  repeat,
+  setRepeat,
+  volume,
+  setVolume,
+  nextTrack,
+}: FullPlayerContentProps) => {
   const fullContentStyle = useAnimatedStyle(() => ({
     opacity: playerContentOpacity.value,
   }));
-
-  const queue = usePlayerStore((s) => s.queue);
-  const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
-  const nextTrack = currentIndex >= 0 && currentIndex < queue.length - 1 ? queue[currentIndex + 1] : queue.length > 1 ? queue[0] : null;
 
   const featuringArtists = currentTrack.contributingArtists?.filter(ca => ca.role === 'FEATURING') || [];
   const featuringNames = featuringArtists.map(ca => ca.artistName).join(', ');
   const otherContributors = currentTrack.contributingArtists?.filter(ca => ca.role !== 'PRIMARY' && ca.role !== 'FEATURING') || [];
 
-  const artSize = Math.min(SCREEN_WIDTH - 64, 420);
-  const hasCustomThumbnail = Boolean(
-    currentTrack.coverUrl &&
-    currentTrack.coverUrl.trim() !== '' &&
-    !currentTrack.coverUrl.includes('placeholder') &&
-    !currentTrack.coverUrl.includes('default')
-  );
-
-  // Full player content (expanded state)
-  const renderFullContent = () => (
+  return (
     <Animated.View
       style={[styles.fullContent, fullContentStyle]}
       pointerEvents={isExpanded ? 'auto' : 'none'}
@@ -429,6 +328,191 @@ const PlayerSheet = ({ onLayout }: PlayerSheetProps) => {
       </SafeAreaView>
     </Animated.View>
   );
+});
+FullPlayerContent.displayName = 'FullPlayerContent';
+
+const PlayerSheet = ({ onLayout }: PlayerSheetProps) => {
+  const {
+    currentTrack,
+    playbackState,
+    position,
+    duration,
+    shuffle,
+    repeat,
+    volume,
+    isExpanded,
+    queue,
+  } = usePlayerStore(
+    useShallow((s) => ({
+      currentTrack: s.currentTrack,
+      playbackState: s.playbackState,
+      position: s.position,
+      duration: s.duration,
+      shuffle: s.shuffle,
+      repeat: s.repeat,
+      volume: s.volume,
+      isExpanded: s.isExpanded,
+      queue: s.queue,
+    }))
+  );
+
+  const {
+    togglePlayPause,
+    next,
+    previous,
+    seekTo,
+    setShuffle,
+    setRepeat,
+    setVolume,
+    collapsePlayer,
+  } = usePlayerStore(
+    useShallow((s) => ({
+      togglePlayPause: s.togglePlayPause,
+      next: s.next,
+      previous: s.previous,
+      seekTo: s.seekTo,
+      setShuffle: s.setShuffle,
+      setRepeat: s.setRepeat,
+      setVolume: s.setVolume,
+      collapsePlayer: s.collapsePlayer,
+    }))
+  );
+
+  const { theme } = useThemeStore();
+  const isPlaying = playbackState === 'playing' || playbackState === 'loading';
+  const [liked, setLiked] = React.useState(currentTrack?.liked ?? false);
+  const [seekingValue, setSeekingValue] = React.useState<number | null>(null);
+
+  // Local drag offset during collapse swipe
+  const dragOffset = useSharedValue(0);
+  const sheetRef = useRef<View>(null);
+
+  // Sync shared values with isExpanded state (triggered by store)
+  useEffect(() => {
+    if (isExpanded) {
+      playerTranslateY.value = withSpring(0, EXPAND_SPRING_CONFIG);
+      playerScale.value = withSpring(1, EXPAND_SPRING_CONFIG);
+      playerBorderRadius.value = withSpring(0, EXPAND_SPRING_CONFIG);
+      playerContentOpacity.value = withTiming(1, { duration: 200 });
+      playerBackdropOpacity.value = withTiming(0.45, CONTENT_FADE_CONFIG);
+    } else {
+      playerTranslateY.value = withSpring(SCREEN_HEIGHT, COLLAPSE_SPRING_CONFIG);
+      playerScale.value = withSpring(0.95, COLLAPSE_SPRING_CONFIG);
+      playerBorderRadius.value = withSpring(20, COLLAPSE_SPRING_CONFIG);
+      playerContentOpacity.value = withTiming(0, { duration: 150 });
+      playerBackdropOpacity.value = withTiming(0, { duration: 150 });
+    }
+  }, [isExpanded]);
+
+  useEffect(() => {
+    setLiked(currentTrack?.liked ?? false);
+  }, [currentTrack?.id, currentTrack?.liked]);
+
+  const toggleLike = useCallback(async () => {
+    if (!currentTrack) return;
+    const nextLiked = !liked;
+    setLiked(nextLiked);
+    try {
+      if (nextLiked) await songApi.like(currentTrack.id);
+      else await songApi.unlike(currentTrack.id);
+    } catch (err) {
+      console.error('Like toggle failed:', err);
+      setLiked(!nextLiked);
+    }
+  }, [currentTrack, liked]);
+
+  // Swipe-down gesture on full player to collapse
+  const panGesture = useMemo(() => Gesture.Pan()
+    .activeOffsetY([0, 8])
+    .onUpdate((event) => {
+      if (!isExpanded) return;
+      dragOffset.value = Math.max(0, event.translationY);
+      playerTranslateY.value = dragOffset.value;
+      const collapseProgress = Math.min(dragOffset.value / SCREEN_HEIGHT, 1);
+      playerContentOpacity.value = 1 - collapseProgress * 0.9;
+      playerBackdropOpacity.value = 0.45 * (1 - collapseProgress);
+      playerBorderRadius.value = collapseProgress * 20;
+      playerScale.value = 1 - collapseProgress * 0.05;
+    })
+    .onEnd((event) => {
+      if (!isExpanded) return;
+      const shouldCollapse = dragOffset.value > SCREEN_HEIGHT * 0.28 || event.velocityY > 700;
+      if (shouldCollapse) {
+        playerTranslateY.value = withSpring(SCREEN_HEIGHT, COLLAPSE_SPRING_CONFIG);
+        playerScale.value = withSpring(0.95, COLLAPSE_SPRING_CONFIG);
+        playerBorderRadius.value = withSpring(20, COLLAPSE_SPRING_CONFIG);
+        playerContentOpacity.value = withTiming(0, { duration: 150 });
+        playerBackdropOpacity.value = withTiming(0, { duration: 150 });
+        runOnJS(collapsePlayer)();
+      } else {
+        playerTranslateY.value = withSpring(0, EXPAND_SPRING_CONFIG);
+        playerScale.value = withSpring(1, EXPAND_SPRING_CONFIG);
+        playerBorderRadius.value = withSpring(0, EXPAND_SPRING_CONFIG);
+        playerContentOpacity.value = withTiming(1, { duration: 200 });
+        playerBackdropOpacity.value = withTiming(0.45, { duration: 180 });
+      }
+      dragOffset.value = 0;
+    }), [isExpanded, dragOffset, collapsePlayer]);
+
+  // Dedicated header drag handle gesture (more sensitive)
+  const headerPanGesture = useMemo(() => Gesture.Pan()
+    .activeOffsetY([0, 5])
+    .onUpdate((event) => {
+      dragOffset.value = Math.max(0, event.translationY);
+      playerTranslateY.value = dragOffset.value;
+      const collapseProgress = Math.min(dragOffset.value / SCREEN_HEIGHT, 1);
+      playerContentOpacity.value = 1 - collapseProgress * 0.9;
+      playerBackdropOpacity.value = 0.45 * (1 - collapseProgress);
+      playerBorderRadius.value = collapseProgress * 20;
+      playerScale.value = 1 - collapseProgress * 0.05;
+    })
+    .onEnd((event) => {
+      const shouldCollapse = dragOffset.value > SCREEN_HEIGHT * 0.22 || event.velocityY > 600;
+      if (shouldCollapse) {
+        playerTranslateY.value = withSpring(SCREEN_HEIGHT, COLLAPSE_SPRING_CONFIG);
+        playerScale.value = withSpring(0.95, COLLAPSE_SPRING_CONFIG);
+        playerBorderRadius.value = withSpring(20, COLLAPSE_SPRING_CONFIG);
+        playerContentOpacity.value = withTiming(0, { duration: 150 });
+        playerBackdropOpacity.value = withTiming(0, { duration: 150 });
+        runOnJS(collapsePlayer)();
+      } else {
+        playerTranslateY.value = withSpring(0, EXPAND_SPRING_CONFIG);
+        playerScale.value = withSpring(1, EXPAND_SPRING_CONFIG);
+        playerBorderRadius.value = withSpring(0, EXPAND_SPRING_CONFIG);
+        playerContentOpacity.value = withTiming(1, { duration: 200 });
+        playerBackdropOpacity.value = withTiming(0.45, { duration: 180 });
+      }
+      dragOffset.value = 0;
+    }), [dragOffset, collapsePlayer]);
+
+  // Animated styles using global mutables
+  const containerStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: playerTranslateY.value },
+      { scale: playerScale.value },
+    ],
+    borderTopLeftRadius: playerBorderRadius.value,
+    borderTopRightRadius: playerBorderRadius.value,
+  }));
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: playerBackdropOpacity.value,
+  }));
+
+  if (!currentTrack) {
+    return null;
+  }
+
+  const currentIndex = queue.findIndex((t) => t.id === currentTrack.id);
+  const nextTrack = currentIndex >= 0 && currentIndex < queue.length - 1 ? queue[currentIndex + 1] : queue.length > 1 ? queue[0] : null;
+
+  const artSize = Math.min(SCREEN_WIDTH - 64, 420);
+  const hasCustomThumbnail = Boolean(
+    currentTrack.coverUrl &&
+    currentTrack.coverUrl.trim() !== '' &&
+    !currentTrack.coverUrl.includes('placeholder') &&
+    !currentTrack.coverUrl.includes('default')
+  );
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -466,7 +550,34 @@ const PlayerSheet = ({ onLayout }: PlayerSheetProps) => {
         </Animated.View>
 
         {/* Full player content (visible when expanded) */}
-        {renderFullContent()}
+        <FullPlayerContent
+          isExpanded={isExpanded}
+          theme={theme}
+          collapsePlayer={collapsePlayer}
+          headerPanGesture={headerPanGesture}
+          currentTrack={currentTrack}
+          artSize={artSize}
+          hasCustomThumbnail={hasCustomThumbnail}
+          toggleLike={toggleLike}
+          liked={liked}
+          playbackState={playbackState}
+          seekingValue={seekingValue}
+          setSeekingValue={setSeekingValue}
+          position={position}
+          duration={duration}
+          seekTo={seekTo}
+          shuffle={shuffle}
+          setShuffle={setShuffle}
+          previous={previous}
+          next={next}
+          isPlaying={isPlaying}
+          togglePlayPause={togglePlayPause}
+          repeat={repeat}
+          setRepeat={setRepeat}
+          volume={volume}
+          setVolume={setVolume}
+          nextTrack={nextTrack}
+        />
       </Animated.View>
     </GestureDetector>
   );

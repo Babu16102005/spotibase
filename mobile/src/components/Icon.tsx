@@ -311,4 +311,4 @@ const TextTest: React.FC = () => {
   );
 };
 
-export default Icon;
+export default React.memo(Icon);

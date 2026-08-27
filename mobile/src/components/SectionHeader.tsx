@@ -41,4 +41,4 @@ const styles = StyleSheet.create({
   action: { fontSize: 13, fontWeight: '700', marginLeft: 12 },
 });
 
-export default SectionHeader;
+export default React.memo(SectionHeader);

@@ -12,7 +12,7 @@ const ArtistScreen = ({ route, navigation }: any) => {
   const [artist, setArtist] = useState<ArtistResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const { id } = route.params;
-  const { theme } = useThemeStore();
+  const theme = useThemeStore((s) => s.theme);
 
   useEffect(() => {
     setLoading(true);
@@ -58,4 +58,4 @@ const styles = StyleSheet.create({
   bio: { fontSize: 13, marginTop: 12, textAlign: 'center', lineHeight: 20 },
 });
 
-export default ArtistScreen;
+export default React.memo(ArtistScreen);

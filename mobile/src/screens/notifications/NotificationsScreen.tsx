@@ -22,18 +22,18 @@ type Props = StackScreenProps<RootStackParamList, 'Notifications'>;
 
 const NotificationsScreen = (_props: Props) => {
   const { theme } = useThemeStore();
-  const {
-    notifications,
-    unreadCount,
-    page,
-    last,
-    isLoading,
-    error,
-    fetchNotifications,
-    fetchUnreadCount,
-    markAsRead,
-    markAllAsRead,
-  } = useNotificationStore();
+  // Individual selectors: the component only re-renders when the slices it
+  // actually reads change, instead of on every notification-store update.
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const page = useNotificationStore((s) => s.page);
+  const last = useNotificationStore((s) => s.last);
+  const isLoading = useNotificationStore((s) => s.isLoading);
+  const error = useNotificationStore((s) => s.error);
+  const fetchNotifications = useNotificationStore((s) => s.fetchNotifications);
+  const fetchUnreadCount = useNotificationStore((s) => s.fetchUnreadCount);
+  const markAsRead = useNotificationStore((s) => s.markAsRead);
+  const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -53,7 +53,7 @@ const NotificationsScreen = (_props: Props) => {
     }
   }, [last, isLoading, page, fetchNotifications]);
 
-  const renderSkeleton = () => (
+  const renderSkeleton = useCallback(() => (
     <View style={styles.skeletonRow}>
       <Skeleton width={48} height={48} borderRadius={24} />
       <View style={styles.skeletonText}>
@@ -62,9 +62,9 @@ const NotificationsScreen = (_props: Props) => {
         <Skeleton width="30%" height={10} style={{ marginTop: 6 }} />
       </View>
     </View>
-  );
+  ), []);
 
-  const renderItem = ({ item }: { item: NotificationResponse }) => {
+  const renderItem = useCallback(({ item }: { item: NotificationResponse }) => {
     const unread = !item.isRead;
     return (
       <TouchableOpacity
@@ -111,7 +111,7 @@ const NotificationsScreen = (_props: Props) => {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [theme, markAsRead]);
 
   const renderContent = () => {
     if (isLoading && notifications.length === 0) {

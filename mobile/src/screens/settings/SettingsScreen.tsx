@@ -5,7 +5,10 @@ import GlassButton from '../../components/GlassButton';
 
 const SettingsScreen = ({ navigation }: any) => {
   const { theme, themeMode, setThemeMode, greetingPattern, setGreetingPattern } = useThemeStore();
-  const { shuffle, repeat, setShuffle, setRepeat } = usePlayerStore();
+  const shuffle = usePlayerStore((s) => s.shuffle);
+  const repeat = usePlayerStore((s) => s.repeat);
+  const setShuffle = usePlayerStore((s) => s.setShuffle);
+  const setRepeat = usePlayerStore((s) => s.setRepeat);
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>

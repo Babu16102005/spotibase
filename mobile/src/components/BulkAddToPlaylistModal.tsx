@@ -23,7 +23,7 @@ interface BulkAddToPlaylistModalProps {
   onSuccess: (playlistName: string, count: number) => void;
 }
 
-export const BulkAddToPlaylistModal: React.FC<BulkAddToPlaylistModalProps> = ({
+const BulkAddToPlaylistModalComponent: React.FC<BulkAddToPlaylistModalProps> = ({
   visible,
   songIds,
   onClose,
@@ -215,6 +215,8 @@ export const BulkAddToPlaylistModal: React.FC<BulkAddToPlaylistModalProps> = ({
     </Modal>
   );
 };
+
+export const BulkAddToPlaylistModal = React.memo(BulkAddToPlaylistModalComponent);
 
 const styles = StyleSheet.create({
   backdrop: {

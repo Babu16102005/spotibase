@@ -1,5 +1,5 @@
 export { useAuthStore } from './authStore';
-export { usePlayerStore, setupTrackPlayer } from './playerStore';
+export { usePlayerStore, setupTrackPlayer, usePlayerState, usePlayerActions } from './playerStore';
 export { useThemeStore } from './themeStore';
 export { useDownloadStore } from './downloadStore';
 export { useNotificationStore } from './notificationStore';

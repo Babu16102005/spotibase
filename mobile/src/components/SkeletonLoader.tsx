@@ -9,7 +9,7 @@ interface SkeletonProps {
   style?: any;
 }
 
-const Skeleton: React.FC<SkeletonProps> = ({ width, height, borderRadius = 4, style }) => {
+const SkeletonComponent: React.FC<SkeletonProps> = ({ width, height, borderRadius = 4, style }) => {
   const { theme } = useThemeStore();
   const opacity = useRef(new Animated.Value(0.3)).current;
 
@@ -34,7 +34,9 @@ const Skeleton: React.FC<SkeletonProps> = ({ width, height, borderRadius = 4, st
   );
 };
 
-export const SongSkeleton: React.FC = () => {
+const Skeleton = React.memo(SkeletonComponent);
+
+export const SongSkeleton: React.FC = React.memo(() => {
   const { theme } = useThemeStore();
   return (
     <View style={[styles.songRow, { backgroundColor: theme.colors.background }]}>
@@ -46,9 +48,9 @@ export const SongSkeleton: React.FC = () => {
       <Skeleton width={32} height={12} />
     </View>
   );
-};
+});
 
-export const CardSkeleton: React.FC<{ count?: number }> = ({ count = 5 }) => {
+export const CardSkeleton: React.FC<{ count?: number }> = React.memo(({ count = 5 }) => {
   const { theme } = useThemeStore();
   const cardWidth = 140;
   return (
@@ -62,9 +64,9 @@ export const CardSkeleton: React.FC<{ count?: number }> = ({ count = 5 }) => {
       ))}
     </View>
   );
-};
+});
 
-export const HeaderSkeleton: React.FC = () => {
+export const HeaderSkeleton: React.FC = React.memo(() => {
   return (
     <View style={styles.headerSkeleton}>
       <Skeleton width={180} height={180} borderRadius={16} />
@@ -76,9 +78,9 @@ export const HeaderSkeleton: React.FC = () => {
       </View>
     </View>
   );
-};
+});
 
-export const DetailPageSkeleton: React.FC<{ rows?: number }> = ({ rows = 6 }) => {
+export const DetailPageSkeleton: React.FC<{ rows?: number }> = React.memo(({ rows = 6 }) => {
   return (
     <View style={styles.pageSkeletonContainer}>
       <HeaderSkeleton />
@@ -89,9 +91,9 @@ export const DetailPageSkeleton: React.FC<{ rows?: number }> = ({ rows = 6 }) =>
       </View>
     </View>
   );
-};
+});
 
-export const GridSkeleton: React.FC<{ count?: number }> = ({ count = 6 }) => {
+export const GridSkeleton: React.FC<{ count?: number }> = React.memo(({ count = 6 }) => {
   const cardWidth = 150;
   return (
     <View style={styles.gridContainer}>
@@ -104,9 +106,9 @@ export const GridSkeleton: React.FC<{ count?: number }> = ({ count = 6 }) => {
       ))}
     </View>
   );
-};
+});
 
-export const PageSkeleton: React.FC = () => {
+export const PageSkeleton: React.FC = React.memo(() => {
   return (
     <View style={styles.pageSkeletonContainer}>
       <View style={{ paddingHorizontal: 16, paddingTop: 24, paddingBottom: 16 }}>
@@ -121,7 +123,7 @@ export const PageSkeleton: React.FC = () => {
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   songRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16 },

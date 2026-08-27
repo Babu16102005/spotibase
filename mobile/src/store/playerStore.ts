@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import TrackPlayer, { State, RepeatMode as TpRepeatMode, Event, Capability } from 'react-native-track-player';
 import { SongResponse, RepeatMode, PlaybackState } from '../types';
 import { queueApi, songApi } from '../api/client';
@@ -71,6 +72,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   play: async (track) => {
     try {
+      const { currentTrack, playbackState } = get();
+      if (currentTrack?.id === track.id) {
+        if (playbackState === 'playing') {
+          return;
+        }
+        set({ playbackState: 'playing', isMiniPlayerVisible: true });
+        try {
+          await TrackPlayer.play();
+        } catch (e) {}
+        return;
+      }
+
       const trackDuration = (track.durationMs && track.durationMs > 0) ? track.durationMs / 1000 : 180;
       set({
         currentTrack: track,
@@ -134,8 +147,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (!tracks || tracks.length === 0) return;
       const validIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
       const targetSong = tracks[validIndex];
+      const { currentTrack, playbackState } = get();
+
+      if (currentTrack?.id === targetSong.id) {
+        if (playbackState === 'playing') {
+          return;
+        }
+        set({ playbackState: 'playing', isMiniPlayerVisible: true });
+        try {
+          await TrackPlayer.play();
+        } catch (e) {}
+        return;
+      }
+
       const boundedTracks = tracks.slice(0, MAX_QUEUE_CAPACITY);
-      
       const trackDuration = (targetSong.durationMs && targetSong.durationMs > 0) ? targetSong.durationMs / 1000 : 180;
       set({
         currentTrack: targetSong,
@@ -185,8 +210,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   togglePlayPause: async () => {
-    const currentState = get().playbackState;
-    if (currentState === 'playing') {
+    const { playbackState, currentTrack, queue } = get();
+    if (!currentTrack) {
+      if (queue && queue.length > 0) {
+        return get().play(queue[0]);
+      }
+      return;
+    }
+    if (playbackState === 'playing' || playbackState === 'loading') {
       set({ playbackState: 'paused' });
       try {
         await TrackPlayer.pause();
@@ -282,7 +313,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   previous: async () => {
-    const { queue, currentTrack, position, shuffle, repeat } = get();
+    const { queue, currentTrack, position, shuffle } = get();
     if (!currentTrack) return;
 
     // If more than 3 seconds in: restart current track
@@ -426,7 +457,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   updatePosition: (position, duration) => {
     const { position: curPos, duration: curDur } = get();
     const effectiveDur = duration > 0 ? duration : curDur;
-    if (Math.abs(position - curPos) >= 0.05 || (duration > 0 && Math.abs(duration - curDur) >= 0.1)) {
+    if (Math.abs(position - curPos) >= 0.15 || (duration > 0 && Math.abs(duration - curDur) >= 0.2)) {
       set({ position, duration: effectiveDur });
     }
   },
@@ -434,6 +465,57 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   expandPlayer: () => set({ isExpanded: true }),
   collapsePlayer: () => set({ isExpanded: false }),
 }));
+
+/**
+ * Selector-safe subscription to the player's data slice. Components that only
+ * display player state should use this (or a narrower per-field selector)
+ * instead of `usePlayerStore()` without a selector, which subscribes to the
+ * whole store and re-renders on every position/duration tick (~5x/sec).
+ */
+export const usePlayerState = () =>
+  usePlayerStore(
+    useShallow((s) => ({
+      currentTrack: s.currentTrack,
+      queue: s.queue,
+      playbackState: s.playbackState,
+      position: s.position,
+      duration: s.duration,
+      shuffle: s.shuffle,
+      repeat: s.repeat,
+      volume: s.volume,
+      isMiniPlayerVisible: s.isMiniPlayerVisible,
+      isExpanded: s.isExpanded,
+    }))
+  );
+
+/**
+ * Selector-safe subscription to the player's action functions. Actions are
+ * stable references, so this never re-renders on position/duration ticks.
+ */
+export const usePlayerActions = () =>
+  usePlayerStore(
+    useShallow((s) => ({
+      play: s.play,
+      playMultiple: s.playMultiple,
+      pause: s.pause,
+      resume: s.resume,
+      next: s.next,
+      previous: s.previous,
+      seekTo: s.seekTo,
+      setShuffle: s.setShuffle,
+      setRepeat: s.setRepeat,
+      setVolume: s.setVolume,
+      addToQueue: s.addToQueue,
+      removeFromQueue: s.removeFromQueue,
+      clearQueue: s.clearQueue,
+      setMiniPlayerVisible: s.setMiniPlayerVisible,
+      updatePlaybackState: s.updatePlaybackState,
+      updatePosition: s.updatePosition,
+      togglePlayPause: s.togglePlayPause,
+      expandPlayer: s.expandPlayer,
+      collapsePlayer: s.collapsePlayer,
+    }))
+  );
 
 export async function setupTrackPlayer() {
   try {
@@ -457,7 +539,12 @@ export async function setupTrackPlayer() {
       ],
     });
 
-    TrackPlayer.addEventListener(Event.PlaybackState, (event) => {
+    TrackPlayer.addEventListener(Event.PlaybackState, (event: any) => {
+      const rawState = typeof event === 'object' && event !== null && 'state' in event ? event.state : event;
+      if (rawState === undefined || rawState === null) return;
+      if (rawState === State.Ready || rawState === 'ready') {
+        return;
+      }
       const stateMap: Record<string, PlaybackState> = {
         [State.Playing]: 'playing',
         [State.Paused]: 'paused',
@@ -468,7 +555,12 @@ export async function setupTrackPlayer() {
         [State.Error]: 'error',
         [State.None]: 'idle',
       };
-      usePlayerStore.getState().updatePlaybackState(stateMap[event.state] || 'idle');
+      const mapped = stateMap[rawState];
+      if (mapped) {
+        usePlayerStore.getState().updatePlaybackState(mapped);
+      } else {
+        usePlayerStore.getState().updatePlaybackState('idle');
+      }
     });
 
     TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (event) => {
@@ -477,11 +569,11 @@ export async function setupTrackPlayer() {
       }
     });
 
-    TrackPlayer.addEventListener(Event.RemotePlay, () => TrackPlayer.play());
-    TrackPlayer.addEventListener(Event.RemotePause, () => TrackPlayer.pause());
+    TrackPlayer.addEventListener(Event.RemotePlay, () => TrackPlayer.play().catch(() => {}));
+    TrackPlayer.addEventListener(Event.RemotePause, () => TrackPlayer.pause().catch(() => {}));
     TrackPlayer.addEventListener(Event.RemoteNext, () => usePlayerStore.getState().next());
     TrackPlayer.addEventListener(Event.RemotePrevious, () => usePlayerStore.getState().previous());
-    TrackPlayer.addEventListener(Event.RemoteSeek, (event) => TrackPlayer.seekTo(event.position));
+    TrackPlayer.addEventListener(Event.RemoteSeek, (event) => TrackPlayer.seekTo(event.position).catch(() => {}));
 
     const handleTrackChange = async (event: any) => {
       try {
@@ -511,23 +603,6 @@ export async function setupTrackPlayer() {
       TrackPlayer.addEventListener((Event as any).PlaybackTrackChanged, handleTrackChange);
     }
 
-    // High frequency 200ms position check for smooth real-time timeline tracking
-    const timer = setInterval(async () => {
-      try {
-        const state = await TrackPlayer.getPlaybackState();
-        if (state.state === State.Playing) {
-          const progress = await TrackPlayer.getProgress();
-          const curDur = usePlayerStore.getState().duration;
-          if (progress && typeof progress.position === 'number' && progress.position >= 0) {
-            usePlayerStore.getState().updatePosition(progress.position, progress.duration > 0 ? progress.duration : curDur);
-          }
-        }
-      } catch (e) {}
-    }, 200);
-    if (timer && typeof (timer as any).unref === 'function') {
-      (timer as any).unref();
-    }
-
     // Web audio sync: attach directly to HTML5 <audio> element if in browser
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       const attachWebAudioListeners = () => {
@@ -535,6 +610,17 @@ export async function setupTrackPlayer() {
           document.querySelector('audio')) as HTMLAudioElement | null;
         if (audioElement && !(audioElement as any)._spotibase_listeners_attached) {
           (audioElement as any)._spotibase_listeners_attached = true;
+          const onPlay = () => usePlayerStore.getState().updatePlaybackState('playing');
+          const onPause = () => {
+            if (usePlayerStore.getState().playbackState === 'playing') {
+              usePlayerStore.getState().updatePlaybackState('paused');
+            }
+          };
+          const onWaiting = () => {
+            if (usePlayerStore.getState().playbackState === 'playing') {
+              usePlayerStore.getState().updatePlaybackState('loading');
+            }
+          };
           const onTimeUpdate = () => {
             const pos = audioElement.currentTime;
             const dur = audioElement.duration;
@@ -548,9 +634,18 @@ export async function setupTrackPlayer() {
               usePlayerStore.getState().updatePosition(audioElement.currentTime, dur);
             }
           };
+          const onEnded = () => {
+            usePlayerStore.getState().next();
+          };
+
+          audioElement.addEventListener('play', onPlay);
+          audioElement.addEventListener('playing', onPlay);
+          audioElement.addEventListener('pause', onPause);
+          audioElement.addEventListener('waiting', onWaiting);
           audioElement.addEventListener('timeupdate', onTimeUpdate);
           audioElement.addEventListener('durationchange', onDurationChange);
           audioElement.addEventListener('loadedmetadata', onDurationChange);
+          audioElement.addEventListener('ended', onEnded);
         }
       };
       attachWebAudioListeners();

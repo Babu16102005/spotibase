@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { libraryApi, playlistApi, songApi } from '../../api/client';
 import { useThemeStore, usePlayerStore } from '../../store';
 import { LibraryResponse } from '../../types';
@@ -30,7 +31,7 @@ const LibraryScreen = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [showLikedSongsList, setShowLikedSongsList] = useState(false);
   const { theme } = useThemeStore();
-  const { playMultiple } = usePlayerStore();
+  const playMultiple = usePlayerStore((s) => s.playMultiple);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -59,9 +60,14 @@ const LibraryScreen = ({ navigation }: any) => {
     }
   }, []);
 
-  useEffect(() => {
-    fetchLibrary();
-  }, [fetchLibrary]);
+  // Fetch on mount and gently refresh in the background whenever the tab regains
+  // focus. Cached library data stays visible while refetching; the error state
+  // still only surfaces when there is no data to show.
+  useFocusEffect(
+    useCallback(() => {
+      fetchLibrary();
+    }, [fetchLibrary])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -89,14 +95,14 @@ const LibraryScreen = ({ navigation }: any) => {
 
   const likedCount = data?.likedSongs?.length || 0;
 
-  const toggleSelect = (songId: string) => {
+  const toggleSelect = useCallback((songId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(songId)) next.delete(songId);
       else next.add(songId);
       return next;
     });
-  };
+  }, []);
 
   const selectAll = () => {
     if (!data?.likedSongs) return;
@@ -140,7 +146,7 @@ const LibraryScreen = ({ navigation }: any) => {
     );
   };
 
-  const renderMainContent = () => {
+  const renderMainContent = useCallback(() => {
     if (loading) return <CardSkeleton count={6} />;
     if (error && !data) {
       return (
@@ -305,7 +311,7 @@ const LibraryScreen = ({ navigation }: any) => {
         )}
       </View>
     );
-  };
+  }, [loading, error, data, theme, fetchLibrary, likedCount, showLikedSongsList, toggleSelect, selectionMode, selectedIds, navigation]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

@@ -10,7 +10,7 @@ interface AppSplashScreenProps {
   isReady?: boolean;
 }
 
-export default function AppSplashScreen({ onAnimationComplete, isReady = true }: AppSplashScreenProps) {
+function AppSplashScreen({ onAnimationComplete, isReady = true }: AppSplashScreenProps) {
   const { theme } = useThemeStore();
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
@@ -105,3 +105,5 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 });
+
+export default React.memo(AppSplashScreen);

@@ -53,7 +53,7 @@ export interface GlassButtonProps {
   testID?: string;
 }
 
-export const GlassButton: React.FC<GlassButtonProps> = ({
+const GlassButtonComponent: React.FC<GlassButtonProps> = ({
   title,
   children,
   onPress,
@@ -414,6 +414,7 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
 };
 
 // Aliases for compatibility
+export const GlassButton = React.memo(GlassButtonComponent);
 export const Button = GlassButton;
 export const LiquidButton = GlassButton;
 export const MetalButton = GlassButton;

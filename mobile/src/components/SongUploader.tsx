@@ -178,4 +178,4 @@ const styles = StyleSheet.create({
   status: { fontSize: 13, marginTop: 10, fontWeight: '600' },
 });
 
-export default SongUploader;
+export default React.memo(SongUploader);

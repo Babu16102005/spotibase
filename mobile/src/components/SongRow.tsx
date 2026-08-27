@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -86,6 +86,8 @@ const SongRow: React.FC<SongRowProps> = ({
   const [hovered, setHovered] = useState(false);
 
   const translateX = useRef(new Animated.Value(0)).current;
+
+  const handleCloseOptions = useCallback(() => setOptionsVisible(false), []);
 
   useEffect(() => {
     if (isCurrent && isPlaying) {
@@ -283,7 +285,7 @@ const SongRow: React.FC<SongRowProps> = ({
       <SongOptionsMenuModal
         visible={optionsVisible}
         song={song}
-        onClose={() => setOptionsVisible(false)}
+        onClose={handleCloseOptions}
         onSongUpdated={onSongUpdated || ((s) => onToggleLike(s))}
       />
     </View>

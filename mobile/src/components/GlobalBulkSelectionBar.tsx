@@ -5,7 +5,7 @@ import { songApi, adminApi } from '../api/client';
 import SongBulkActionBar from './SongBulkActionBar';
 import BulkAddToPlaylistModal from './BulkAddToPlaylistModal';
 
-export const GlobalBulkSelectionBar: React.FC = () => {
+const GlobalBulkSelectionBarComponent: React.FC = () => {
   const isSelectionMode = useSelectionStore((s) => s.isSelectionMode);
   const selectedSongIds = useSelectionStore((s) => s.selectedSongIds);
   const totalVisibleCount = useSelectionStore((s) => s.totalVisibleCount);
@@ -74,5 +74,7 @@ export const GlobalBulkSelectionBar: React.FC = () => {
     </>
   );
 };
+
+export const GlobalBulkSelectionBar = React.memo(GlobalBulkSelectionBarComponent);
 
 export default GlobalBulkSelectionBar;

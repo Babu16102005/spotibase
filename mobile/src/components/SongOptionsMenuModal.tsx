@@ -32,7 +32,8 @@ export const SongOptionsMenuModal: React.FC<SongOptionsMenuModalProps> = ({
   onSongUpdated,
 }) => {
   const { theme } = useThemeStore();
-  const { addToQueue, queue } = usePlayerStore();
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const queue = usePlayerStore((s) => s.queue);
 
   const [view, setView] = useState<'options' | 'playlists' | 'create_playlist'>('options');
   const [playlists, setPlaylists] = useState<PlaylistResponse[]>([]);

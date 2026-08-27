@@ -510,7 +510,7 @@ const generateShaderHTML = (vertSrc: string, fragSrc: string, config: any): stri
 </html>
 `;
 
-export const VelarisShader: React.FC<VelarisShaderProps> = ({
+const VelarisShaderComponent: React.FC<VelarisShaderProps> = ({
   bg = '#000000',
   colors,
   color1,
@@ -923,5 +923,8 @@ const styles = StyleSheet.create({
   },
 });
 
+export const VelarisShader = React.memo(VelarisShaderComponent);
+
+// Alias for compatibility
 export const Velaris = VelarisShader;
 export default VelarisShader;

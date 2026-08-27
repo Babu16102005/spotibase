@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import Slider from '@react-native-community/slider';
+import { useShallow } from 'zustand/react/shallow';
 import { usePlayerStore, useThemeStore } from '../store';
 import { formatDuration, coverSource } from '../utils';
 import Icon from './Icon';
@@ -17,11 +18,29 @@ interface PlayBarProps {
  * Includes a live equalizer when the current track is playing.
  */
 const PlayBar: React.FC<PlayBarProps> = ({ onOpenPlayer }) => {
-  const { currentTrack, playbackState, position, duration, shuffle, repeat,
-          togglePlayPause, next, previous, seekTo, setShuffle, setRepeat } = usePlayerStore();
+  const { currentTrack, playbackState, position, duration, shuffle, repeat } = usePlayerStore(
+    useShallow((s) => ({
+      currentTrack: s.currentTrack,
+      playbackState: s.playbackState,
+      position: s.position,
+      duration: s.duration,
+      shuffle: s.shuffle,
+      repeat: s.repeat,
+    }))
+  );
+  const { togglePlayPause, next, previous, seekTo, setShuffle, setRepeat } = usePlayerStore(
+    useShallow((s) => ({
+      togglePlayPause: s.togglePlayPause,
+      next: s.next,
+      previous: s.previous,
+      seekTo: s.seekTo,
+      setShuffle: s.setShuffle,
+      setRepeat: s.setRepeat,
+    }))
+  );
   const { theme } = useThemeStore();
 
-  const isPlaying = playbackState === 'playing';
+  const isPlaying = playbackState === 'playing' || playbackState === 'loading';
   const [liked, setLiked] = React.useState(currentTrack?.liked ?? false);
   const [seekingValue, setSeekingValue] = React.useState<number | null>(null);
 

@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { homeApi } from '../../api/client';
 import { useThemeStore, usePlayerStore } from '../../store';
 import { HomeSection, SongResponse, AlbumResponse, ArtistResponse, PlaylistResponse } from '../../types';
@@ -51,11 +52,18 @@ const HomeScreen = ({ navigation }: any) => {
     }
   }, []);
 
-  useEffect(() => { fetchHome(); }, [fetchHome]);
+  // Fetch on mount and gently refresh in the background whenever the tab regains
+  // focus. Cached `data` stays visible while fetching; skeletons only show when
+  // there is no data yet (identical first-paint behavior, but data stays fresh).
+  useFocusEffect(
+    useCallback(() => {
+      fetchHome();
+    }, [fetchHome])
+  );
 
   const onRefresh = () => { setRefreshing(true); fetchHome(); };
 
-  const renderSection = (section: HomeSection) => {
+  const renderSection = useCallback((section: HomeSection) => {
     if (!section.items || section.items.length === 0) return null;
 
     switch (section.type) {
@@ -120,7 +128,7 @@ const HomeScreen = ({ navigation }: any) => {
       default:
         return null;
     }
-  };
+  }, [playMultiple, theme, navigation]);
 
   return (
     <ScrollView

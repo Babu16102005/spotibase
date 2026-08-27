@@ -115,4 +115,4 @@ const styles = StyleSheet.create({
   listSubtitle: { fontSize: 12, marginTop: 2 },
 });
 
-export default AlbumCard;
+export default React.memo(AlbumCard);

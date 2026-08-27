@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, Image, StyleSheet, Platform, Dimensions
 } from 'react-native';
 import Animated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, withSpring, withTiming } from 'react-native-reanimated';
+import { useShallow } from 'zustand/react/shallow';
 import { usePlayerStore, useThemeStore } from '../store';
 import { songApi } from '../api/client';
 import {
@@ -30,11 +31,25 @@ interface MiniPlayerProps {
 }
 
 const MiniPlayer: React.FC<MiniPlayerProps> = ({ testID }) => {
-  const { currentTrack, playbackState, position, duration, togglePlayPause, next, expandPlayer } = usePlayerStore();
+  const { currentTrack, playbackState, position, duration } = usePlayerStore(
+    useShallow((s) => ({
+      currentTrack: s.currentTrack,
+      playbackState: s.playbackState,
+      position: s.position,
+      duration: s.duration,
+    }))
+  );
+  const { togglePlayPause, next, expandPlayer } = usePlayerStore(
+    useShallow((s) => ({
+      togglePlayPause: s.togglePlayPause,
+      next: s.next,
+      expandPlayer: s.expandPlayer,
+    }))
+  );
   const { theme } = useThemeStore();
   const [liked, setLiked] = useState(currentTrack?.liked ?? false);
 
-  const isPlaying = playbackState === 'playing';
+  const isPlaying = playbackState === 'playing' || playbackState === 'loading';
   const progress = duration > 0 ? Math.min(Math.max(position / duration, 0), 1) : 0;
 
   useEffect(() => {
@@ -53,8 +68,6 @@ const MiniPlayer: React.FC<MiniPlayerProps> = ({ testID }) => {
     }
   };
 
-  if (!currentTrack) return null;
-
   // Animate MiniPlayer opacity/translateY as PlayerSheet opens
   const miniStyle = useAnimatedStyle(() => {
     // When playerTranslateY approaches 0 (fully open), fade mini player out
@@ -71,7 +84,7 @@ const MiniPlayer: React.FC<MiniPlayerProps> = ({ testID }) => {
   });
 
   // Swipe-up gesture: drives the PlayerSheet in real time
-  const panGesture = Gesture.Pan()
+  const panGesture = useMemo(() => Gesture.Pan()
     .activeOffsetY([-8, 8]) // activate fast on vertical intent
     .failOffsetX([-12, 12]) // bail if horizontal
     .onBegin(() => {
@@ -108,7 +121,9 @@ const MiniPlayer: React.FC<MiniPlayerProps> = ({ testID }) => {
         playerContentOpacity.value = withTiming(0, { duration: 150 });
         playerBackdropOpacity.value = withTiming(0, { duration: 150 });
       }
-    });
+    }), [expandPlayer]);
+
+  if (!currentTrack) return null;
 
   return (
     <GestureDetector gesture={panGesture}>

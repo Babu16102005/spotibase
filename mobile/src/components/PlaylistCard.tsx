@@ -66,4 +66,4 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, marginTop: 2 },
 });
 
-export default PlaylistCard;
+export default React.memo(PlaylistCard);

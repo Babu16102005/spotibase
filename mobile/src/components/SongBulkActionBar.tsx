@@ -14,7 +14,7 @@ export interface SongBulkActionBarProps {
   deleteLabel?: string;
 }
 
-export const SongBulkActionBar: React.FC<SongBulkActionBarProps> = ({
+const SongBulkActionBarComponent: React.FC<SongBulkActionBarProps> = ({
   selectedCount,
   totalCount,
   onSelectAll,
@@ -97,6 +97,8 @@ export const SongBulkActionBar: React.FC<SongBulkActionBarProps> = ({
     </View>
   );
 };
+
+export const SongBulkActionBar = React.memo(SongBulkActionBarComponent);
 
 const styles = StyleSheet.create({
   bar: {

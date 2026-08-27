@@ -309,7 +309,7 @@ const generateSoftAuroraHTML = (config: any): string => `
 </html>
 `;
 
-export const SoftAurora: React.FC<SoftAuroraProps> = ({
+const SoftAuroraComponent: React.FC<SoftAuroraProps> = ({
   speed = 0.6,
   scale = 1.5,
   brightness = 1.0,
@@ -639,5 +639,8 @@ const styles = StyleSheet.create({
   },
 });
 
+export const SoftAurora = React.memo(SoftAuroraComponent);
+
+// Alias for compatibility
 export const Aurora = SoftAurora;
 export default SoftAurora;

@@ -9,7 +9,7 @@ export interface TimelineLoadingBeamProps {
   style?: any;
 }
 
-export const TimelineLoadingBeam: React.FC<TimelineLoadingBeamProps> = ({
+const TimelineLoadingBeamComponent: React.FC<TimelineLoadingBeamProps> = ({
   height = 3,
   backgroundColor = 'rgba(255, 255, 255, 0.25)',
   beamColor = '#FFFFFF',
@@ -90,5 +90,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
 });
+
+export const TimelineLoadingBeam = React.memo(TimelineLoadingBeamComponent);
 
 export default TimelineLoadingBeam;

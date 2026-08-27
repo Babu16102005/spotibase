@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, Platform, Animated, PanResponder } from 'react-native';
 import { SongResponse } from '../types';
 import { usePlayerStore, useThemeStore, useSelectionStore } from '../store';
@@ -119,9 +119,22 @@ const SongCard: React.FC<SongCardProps> = ({
     })
   ).current;
 
-  // Get featuring artists for display
-  const featuringArtists = song.contributingArtists?.filter(ca => ca.role === 'FEATURING') || [];
-  const featuringNames = featuringArtists.map(ca => ca.artistName).join(', ');
+  // Get featuring artists for display (memoized: derived from song data only)
+  const featuringNames = useMemo(() => {
+    const featuringArtists = song.contributingArtists?.filter(ca => ca.role === 'FEATURING') || [];
+    return featuringArtists.map(ca => ca.artistName).join(', ');
+  }, [song.contributingArtists]);
+
+  // Memoized derived label for the contributing-artists line (derived from song data only)
+  const contributingArtistsLabel = useMemo(() => {
+    if (!song.contributingArtists || song.contributingArtists.length === 0) return '';
+    return song.contributingArtists
+      .filter(ca => ca.role !== 'PRIMARY')
+      .map(ca => `${ca.role.charAt(0) + ca.role.slice(1).toLowerCase()}: ${ca.artistName}`)
+      .join(' \u2022 ');
+  }, [song.contributingArtists]);
+
+  const handleCloseOptions = useCallback(() => setOptionsVisible(false), []);
 
   const onHoverProps = Platform.OS === 'web' ? {
     onMouseEnter: () => setHovered(true),
@@ -192,7 +205,7 @@ const SongCard: React.FC<SongCardProps> = ({
         <SongOptionsMenuModal
           visible={optionsVisible}
           song={song}
-          onClose={() => setOptionsVisible(false)}
+          onClose={handleCloseOptions}
           onSongUpdated={onSongUpdated}
         />
       </>
@@ -282,10 +295,7 @@ const SongCard: React.FC<SongCardProps> = ({
             )}
             {showContributingArtists && song.contributingArtists && song.contributingArtists.length > 0 && (
               <Text style={[styles.contribArtists, { color: theme.colors.textTertiary }]} numberOfLines={1}>
-                {song.contributingArtists
-                  .filter(ca => ca.role !== 'PRIMARY')
-                  .map(ca => `${ca.role.charAt(0) + ca.role.slice(1).toLowerCase()}: ${ca.artistName}`)
-                  .join(' \u2022 ')}
+                {contributingArtistsLabel}
               </Text>
             )}
           </View>
@@ -329,7 +339,7 @@ const SongCard: React.FC<SongCardProps> = ({
       <SongOptionsMenuModal
         visible={optionsVisible}
         song={song}
-        onClose={() => setOptionsVisible(false)}
+        onClose={handleCloseOptions}
         onSongUpdated={onSongUpdated}
       />
     </View>

@@ -291,7 +291,7 @@ const generateMoltenHTML = (config: any): string => `
 </html>
 `;
 
-export const MoltenMetal: React.FC<MoltenMetalProps> = ({
+const MoltenMetalComponent: React.FC<MoltenMetalProps> = ({
   color1 = '#5227FF',
   color2 = '#FF9FFC',
   color3 = '#FFFFFF',
@@ -645,5 +645,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 });
+
+export const MoltenMetal = React.memo(MoltenMetalComponent);
 
 export default MoltenMetal;

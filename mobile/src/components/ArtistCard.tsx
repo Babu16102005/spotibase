@@ -68,4 +68,4 @@ const styles = StyleSheet.create({
   listeners: { fontSize: 11, marginTop: 2, textAlign: 'center' },
 });
 
-export default ArtistCard;
+export default React.memo(ArtistCard);
