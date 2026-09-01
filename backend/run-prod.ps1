@@ -47,7 +47,7 @@ Write-Host "  DB:     $env:SPRING_DATASOURCE_URL"
 
 $proc = Start-Process -FilePath "java" `
     -ArgumentList @(
-        "-Xms512m", "-Xmx1024m",
+        "-Xms256m", "-Xmx512m",
         "-jar", (Join-Path $scriptDir 'target\spotibase-backend-1.0.0.jar')
     ) `
     -WorkingDirectory $scriptDir `

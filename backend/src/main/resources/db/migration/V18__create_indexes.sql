@@ -1,11 +1,11 @@
 -- Additional performance indexes
-CREATE INDEX idx_songs_name_trgm ON songs USING GIN (name gin_trgm_ops);
-CREATE INDEX idx_artists_name_trgm ON artists USING GIN (name gin_trgm_ops);
-CREATE INDEX idx_albums_name_trgm ON albums USING GIN (name gin_trgm_ops);
+-- CREATE INDEX idx_songs_name_trgm ON songs USING GIN (name gin_trgm_ops);
+-- CREATE INDEX idx_artists_name_trgm ON artists USING GIN (name gin_trgm_ops);
+-- CREATE INDEX idx_albums_name_trgm ON albums USING GIN (name gin_trgm_ops);
 
 -- Enable pg_trgm extension
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

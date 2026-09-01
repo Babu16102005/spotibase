@@ -287,14 +287,24 @@ public class R2StorageService {
         if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
             String spec = rangeHeader.substring("bytes=".length()).trim();
             int dash = spec.indexOf('-');
-            if (dash > 0) {
-                start = Long.parseLong(spec.substring(0, dash).trim());
-                String endPart = spec.substring(dash + 1).trim();
+            if (dash >= 0) {
+                String startPart = dash > 0 ? spec.substring(0, dash).trim() : "0";
+                start = startPart.isEmpty() ? 0 : Long.parseLong(startPart);
+                String endPart = dash + 1 < spec.length() ? spec.substring(dash + 1).trim() : "";
                 if (!endPart.isEmpty()) {
                     end = Long.parseLong(endPart);
                 }
+                // For low-latency, if client asks for open-ended bytes=0- , limit to 1MB
+                if (end < 0 && start == 0) {
+                    end = 1048575;
+                }
                 builder.range("bytes=" + start + "-" + (end >= 0 ? end : ""));
             }
+        } else if (rangeHeader == null) {
+            // No range - default to first 1MB for instant start
+            start = 0;
+            end = 1048575;
+            builder.range("bytes=0-1048575");
         }
 
         ResponseInputStream<GetObjectResponse> response = s3Client.getObject(builder.build());

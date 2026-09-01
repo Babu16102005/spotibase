@@ -1,6 +1,6 @@
 import { usePlayerStore, setupTrackPlayer } from './playerStore';
 import TrackPlayer, { State, Event, RepeatMode as TpRepeatMode } from 'react-native-track-player';
-import { queueApi, BASE_URL } from '../api/client';
+import { queueApi, BASE_URL, getTrackStreamUrl } from '../api/client';
 import { makeSong } from '../test/fixtures';
 
 jest.mock('../api/client', () => ({
@@ -16,6 +16,11 @@ jest.mock('../api/client', () => ({
     unlike: jest.fn(),
   },
   BASE_URL: 'http://localhost:8088/api/v1',
+  getBaseUrl: () => 'http://localhost:8088/api/v1',
+  getTrackStreamUrl: (track: any) =>
+    track?.fileUrl && (track.fileUrl.startsWith('http://') || track.fileUrl.startsWith('https://'))
+      ? track.fileUrl
+      : `http://localhost:8088/api/v1/songs/${track?.id}/stream`,
 }));
 
 const initialPlayerState = {
@@ -69,7 +74,7 @@ describe('playerStore', () => {
       expect(TrackPlayer.reset).toHaveBeenCalledTimes(1);
       expect(TrackPlayer.add).toHaveBeenCalledWith({
         id: 's1',
-        url: `${BASE_URL}/songs/s1/stream`,
+        url: getTrackStreamUrl(song),
         title: 'Test Song',
         artist: 'Test Artist',
         artwork: song.coverUrl,
@@ -111,13 +116,14 @@ describe('playerStore', () => {
       expect(TrackPlayer.add).toHaveBeenCalledWith(
         tracks.map((t) => ({
           id: t.id,
-          url: `${BASE_URL}/songs/${t.id}/stream`,
+          url: getTrackStreamUrl(t),
           title: t.title,
           artist: t.artistName,
           artwork: t.coverUrl,
           duration: t.durationMs / 1000,
         }))
       );
+
       expect(TrackPlayer.skip).toHaveBeenCalledWith(1);
       expect(TrackPlayer.play).toHaveBeenCalledTimes(1);
 

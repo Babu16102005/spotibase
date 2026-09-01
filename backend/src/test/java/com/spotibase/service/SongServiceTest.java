@@ -277,6 +277,32 @@ class SongServiceTest {
         verify(songRepository).save(argThat(song -> song.getReleaseDate().equals(LocalDate.now())));
     }
 
+    @Test
+    void createSong_withGenre_autoTagsSongWithAiMetadata() {
+        CreateSongRequest request = CreateSongRequest.builder()
+                .title("Sad Gym Workout Love")
+                .artistId("artist-1")
+                .genreId("genre-1")
+                .releaseDate(LocalDate.of(2025, 5, 1))
+                .build();
+        Artist artist = buildArtist("artist-1", "The Band");
+        Genre genre = buildGenre("genre-1", "Rock");
+
+        when(artistRepository.findById("artist-1")).thenReturn(Optional.of(artist));
+        when(genreRepository.findById("genre-1")).thenReturn(Optional.of(genre));
+        when(songRepository.save(any(Song.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        SongResponse response = songService.createSong(request, null, null);
+
+        assertThat(response.isAiTagged()).isTrue();
+        assertThat(response.getMoodTags()).contains("ENERGETIC", "MOTIVATED", "SAD", "ROMANTIC");
+        assertThat(response.getVibeTags()).contains("INTENSE", "DARK", "DREAMY");
+        assertThat(response.getActivityTags()).contains("WORKOUT", "GYM");
+        assertThat(response.getEnergyScore()).isGreaterThan(0.5f);
+        assertThat(response.getBpm()).isEqualTo(125.0f);
+        assertThat(response.getAiTaggedAt()).isNotNull();
+    }
+
     // ---------- updateSong / delete / restore ----------
 
     @Test

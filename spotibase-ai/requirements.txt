@@ -1,0 +1,25 @@
+# SpotiBase AI - FastAPI AI Server
+# Python 3.10+  (mock mode needs only these 6)
+
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-multipart
+httpx
+
+# LLM - Qwen2.5-3B-Instruct via transformers (local) OR via HuggingFace Inference API
+# For MOCK mode (default) you DON'T need torch/transformers — only fastapi/uvicorn
+# For local real mode: pip install transformers accelerate torch faster-whisper
+# Requires ~8GB RAM, ~6GB GPU VRAM or CPU offload
+# transformers==4.41.0
+# accelerate==0.30.0
+# torch>=2.6.0  # 2.3.0 not available for Python 3.13, use >=2.6
+# faster-whisper==1.0.1
+# webrtcvad==2.0.10
+
+# TTS - optional, Piper or gTTS
+# piper-tts==1.2.0
+
+# Utils
+python-dotenv

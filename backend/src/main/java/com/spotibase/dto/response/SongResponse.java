@@ -49,6 +49,16 @@ public class SongResponse {
     private boolean liked;
     private LocalDateTime createdAt;
 
+    // AI generated metadata tags
+    private List<String> moodTags;
+    private List<String> vibeTags;
+    private List<String> activityTags;
+    private Float energyScore;
+    private Float valenceScore;
+    private Float bpm;
+    private boolean aiTagged;
+    private LocalDateTime aiTaggedAt;
+
     // NEW: Contributing artists for display
     private List<ContributingArtistDto> contributingArtists;
 

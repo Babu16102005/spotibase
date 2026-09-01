@@ -15,7 +15,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.spotibase.app",
       "infoPlist": {
-        "UIBackgroundModes": ["audio", "remote-notification"],
+        "UIBackgroundModes": [
+          "audio",
+          "remote-notification"
+        ],
+        "NSMicrophoneUsageDescription": "SpotiBase uses your microphone for AI voice commands like 'Play calm Tamil songs' and 'Next song'.",
+        "NSSpeechRecognitionUsageDescription": "SpotiBase uses speech recognition for AI voice assistance.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         }
@@ -32,10 +37,14 @@
       "predictiveBackGestureEnabled": true,
       "permissions": [
         "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.WAKE_LOCK",
-        "android.permission.MEDIA_CONTENT_CONTROL"
+        "android.permission.MEDIA_CONTENT_CONTROL",
+        "android.permission.VIBRATE",
+        "android.permission.USE_EXACT_ALARM"
       ]
     },
     "web": {
@@ -44,7 +53,10 @@
       "output": "single",
       "build": {
         "babel": {
-          "include": ["@react-native", "react-native-track-player"]
+          "include": [
+            "@react-native",
+            "react-native-track-player"
+          ]
         }
       },
       "meta": {
@@ -68,6 +80,16 @@
             "image": "./assets/word.png",
             "backgroundColor": "#09090b"
           }
+        }
+      ],
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1DB954",
+          "sounds": [],
+          "mode": "production"
         }
       ]
     ],

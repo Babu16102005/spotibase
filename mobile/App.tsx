@@ -117,6 +117,49 @@ function AppContent() {
     loadSession();
     setupTrackPlayer();
     registerServiceWorker();
+    // Request permissions on install/first launch: Notifications + MIC for AI voice
+    (async () => {
+      try {
+        if (Platform.OS === 'android' || Platform.OS === 'ios') {
+          // 1) Notifications (POST_NOTIFICATIONS)
+          try {
+            const Notifications = await import('expo-notifications');
+            if (Platform.OS === 'android') {
+              await Notifications.setNotificationChannelAsync('spotibase-default', {
+                name: 'SpotiBase',
+                importance: Notifications.AndroidImportance.MAX,
+                vibrationPattern: [0, 250, 250, 250],
+                lightColor: '#1DB954',
+              });
+            }
+            const { status: existing } = await Notifications.getPermissionsAsync();
+            let finalStatus = existing;
+            if (existing !== 'granted') {
+              const { status } = await Notifications.requestPermissionsAsync({
+                ios: { allowAlert: true, allowBadge: true, allowSound: true },
+                android: {},
+              } as any);
+              finalStatus = status;
+            }
+            if (finalStatus === 'granted') {
+              try {
+                const token = (await Notifications.getExpoPushTokenAsync()).data;
+                console.log('[Notifications] granted, token:', token?.slice(0, 20) + '...');
+              } catch {}
+            }
+            Notifications.setNotificationHandler({
+              handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: true, shouldShowBanner: true, shouldShowList: true } as any),
+            });
+          } catch (e) { console.log('[Notifications] skip', e); }
+
+          // 2) MIC for AI voice - NOT requested at launch (must be user gesture for web getUserMedia)
+          // Will be requested on orb tap via AiOrb's AudioModule.requestRecordingPermissionsAsync
+          console.log('[Mic] will be requested on orb tap (user gesture)');
+        }
+      } catch (e) {
+        console.log('[Permissions] setup skip', e);
+      }
+    })();
 
     // Real-time: notifications, queue sync, presence
     setupRealtime({

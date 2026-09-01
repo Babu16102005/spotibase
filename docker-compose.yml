@@ -25,7 +25,7 @@ services:
       dockerfile: Dockerfile
     container_name: spotibase-backend
     ports:
-      - "8080:8080"
+      - "8080:8088"
     environment:
       - SUPABASE_PROJECT_REF=${SUPABASE_PROJECT_REF}
       - SUPABASE_DB_USERNAME=spotibase
@@ -43,7 +43,8 @@ services:
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USERNAME=${SMTP_USERNAME}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8080}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8088}
+      - SERVER_PORT=8088
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8081,exp://localhost:19000}
       # Cloudflare R2 (songs)
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
@@ -51,12 +52,43 @@ services:
       - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
       - R2_BUCKET_NAME=${R2_BUCKET_NAME}
       - R2_PUBLIC_URL=${R2_PUBLIC_URL:-}
+      # SpotiBase AI (FastAPI) - individual Python AI server
+      - AI_ENABLED=${AI_ENABLED:-true}
+      - AI_SERVICE_URL=http://spotibase-ai:7860
+      - AI_MODE=${AI_MODE:-mock}
+      - QWEN_MODEL=${QWEN_MODEL:-Qwen/Qwen2.5-3B-Instruct}
+      - STT_MODE=${STT_MODE:-mock}
+      - STT_MODEL=${STT_MODEL:-small}
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       - spotibase-db
       - redis
+      - spotibase-ai
     restart: unless-stopped
     networks:
       - spotibase-network
+
+  spotibase-ai:
+    build:
+      context: ./spotibase-ai
+      dockerfile: Dockerfile
+    container_name: spotibase-ai
+    ports:
+      - "7860:7860"
+    environment:
+      - AI_MODE=${AI_MODE:-mock}
+      - STT_MODE=${STT_MODE:-mock}
+      - STT_MODEL=${STT_MODEL:-small}
+      - QWEN_MODEL=${QWEN_MODEL:-Qwen/Qwen2.5-3B-Instruct}
+      - HF_TOKEN=${HF_TOKEN:-}
+    restart: unless-stopped
+    networks:
+      - spotibase-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7860/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine

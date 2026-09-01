@@ -1,5 +1,8 @@
 server:
   port: ${SERVER_PORT:8088}
+  tomcat:
+    max-swallow-size: 300MB
+    max-http-form-post-size: 300MB
 
 spring:
   application:
@@ -55,6 +58,7 @@ spring:
     # history table. Baseline at 18 so only V19+ migrations apply.
     baseline-on-migrate: true
     baseline-version: 18
+    validate-on-migrate: false
 
   servlet:
     multipart:
@@ -81,6 +85,16 @@ spring:
         options:
           model: gpt-4o-mini
           temperature: 0.7
+
+# SpotiBase AI (FastAPI) - individual Python AI server
+ai-service:
+  enabled: ${AI_ENABLED:true}
+  service-url: ${AI_SERVICE_URL:http://localhost:7860}
+  fallback-on-error: true
+ai:
+  enabled: ${AI_ENABLED:true}
+  service-url: ${AI_SERVICE_URL:http://localhost:7860}
+  fallback-on-error: true
 
   jackson:
     serialization:

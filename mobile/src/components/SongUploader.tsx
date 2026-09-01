@@ -34,6 +34,7 @@ const SongUploader = ({ onUploaded }: { onUploaded?: (count: number) => void }) 
         name: a.name,
         size: a.size ?? 0,
         mimeType: a.mimeType || 'audio/flac',
+        file: a.file,
       }));
       setPicked((prev) => [...prev, ...files]);
       setStatus(null);

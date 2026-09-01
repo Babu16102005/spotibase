@@ -46,12 +46,18 @@ const getDefaultBaseUrl = () => {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
-    const hostname = window.location.hostname || 'localhost';
-    return `http://${hostname}:8088/api/v1`;
+  // Web: if accessed from a network IP (e.g. mobile browser), use that hostname instead of localhost
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      const host = window.location.hostname;
+      if (host && host !== 'localhost' && host !== '127.0.0.1') {
+        return `http://${host}:8088/api/v1`;
+      }
+    }
+    return 'http://localhost:8088/api/v1';
   }
   const devIp = getDevHostIp();
-  if (devIp && devIp !== '10.225.134.105') {
+  if (devIp) {
     return `http://${devIp}:8088/api/v1`;
   }
   if (Platform.OS === 'android') {
@@ -70,6 +76,20 @@ export const setBaseUrl = (newUrl: string): void => {
 };
 
 export const BASE_URL = activeBaseUrl;
+
+/**
+ * Returns the direct stream URL for a song.
+ * When a song has a direct Cloudflare R2 / Storage URL (fileUrl), native mobile
+ * and web players can stream it directly from the CDN with 0 backend latency,
+ * avoiding localhost/IP routing failures and 302 redirect stalls on mobile.
+ */
+export const getTrackStreamUrl = (track: { id?: string; fileUrl?: string }): string => {
+  if (track?.fileUrl && (track.fileUrl.startsWith('http://') || track.fileUrl.startsWith('https://'))) {
+    return track.fileUrl;
+  }
+  return `${getBaseUrl()}/songs/${track?.id}/stream`;
+};
+
 const storage = getStorage('spotibase-auth');
 
 const apiClient: AxiosInstance = axios.create({
@@ -215,9 +235,13 @@ export const songApi = {
     const formData = new FormData();
     for (const file of files) {
       if (Platform.OS === 'web') {
-        // Web needs a real File/Blob (document picker returns a blob: URI)
-        const blob = await fetch(file.uri).then((r) => r.blob());
-        formData.append('files', new File([blob], file.name, { type: file.mimeType || 'audio/flac' }));
+        // Web needs a real File/Blob (use mapped File directly, or fallback to fetch blob)
+        if (file.file instanceof File) {
+          formData.append('files', file.file);
+        } else {
+          const blob = await fetch(file.uri).then((r) => r.blob());
+          formData.append('files', new File([blob], file.name, { type: file.mimeType || 'audio/flac' }));
+        }
       } else {
         // React Native accepts { uri, name, type } objects in FormData
         formData.append('files', {
@@ -365,3 +389,25 @@ export const downloadApi = {
 
 export { storage };
 export default apiClient;
+
+export const aiApi = {
+  text: (text: string, context?: any) =>
+    apiClient.post("/ai/text", { text, context }),
+
+  voice: (audioUri: string, transcriptFallback?: string, context?: any, filename = "audio.webm") => {
+    const formData = new FormData();
+    formData.append("audio", {
+      uri: audioUri,
+      name: filename,
+      type: "audio/webm",
+    } as unknown as Blob);
+    if (transcriptFallback) formData.append("transcript_fallback", transcriptFallback);
+    if (context) formData.append("context", JSON.stringify(context));
+    return apiClient.post("/ai/voice", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+  },
+
+  health: () => apiClient.get("/ai/health"),
+};

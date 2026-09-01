@@ -1,9 +1,14 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import TrackPlayer, { State, RepeatMode as TpRepeatMode, Event, Capability } from 'react-native-track-player';
 import { SongResponse, RepeatMode, PlaybackState } from '../types';
-import { queueApi, songApi } from '../api/client';
-import { BASE_URL } from '../api/client';
+import { queueApi, songApi, getTrackStreamUrl, getBaseUrl } from '../api/client';
+
+const getWebAudio = (): HTMLAudioElement | null => {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return null;
+  return document.querySelector('audio[data-spotibase]') as HTMLAudioElement | null;
+};
 
 import { getStorage } from '../utils';
 
@@ -13,7 +18,14 @@ const queueStorage = getStorage('spotibase-cache');
 const getInitialCachedQueue = (): SongResponse[] => {
   try {
     const raw = queueStorage.getString('spotibase_queue_cache');
-    return raw ? JSON.parse(raw).slice(0, MAX_QUEUE_CAPACITY) : [];
+    if (!raw) return [];
+    const parsed: SongResponse[] = JSON.parse(raw);
+    // Deduplicate and fix old cache that had all songs (causing duplicate key warnings)
+    const map = new Map<string, SongResponse>();
+    for (const s of parsed) {
+      if (s && s.id && !map.has(s.id)) map.set(s.id, s);
+    }
+    return Array.from(map.values()).slice(0, MAX_QUEUE_CAPACITY);
   } catch {
     return [];
   }
@@ -92,25 +104,86 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         position: 0,
         duration: trackDuration,
       });
-      await TrackPlayer.reset();
-      const streamUrl = `${BASE_URL}/songs/${track.id}/stream`;
-      await TrackPlayer.add({
-        id: track.id,
-        url: streamUrl,
-        title: track.title,
-        artist: track.artistName,
-        artwork: track.coverUrl,
-        duration: trackDuration,
-      });
-      await TrackPlayer.play();
-      const existingQueue = get().queue || [];
-      const isAlreadyInQueue = existingQueue.some(t => t.id === track.id);
-      let nextQueue: SongResponse[];
-      if (isAlreadyInQueue && existingQueue.length > 1) {
-        nextQueue = existingQueue;
+      const streamUrl = getTrackStreamUrl(track);
+
+      // Web low-latency fast path: use HTML Audio directly for instant play (<300ms)
+      if (Platform.OS === 'web') {
+        try {
+          // Ensure any existing audio is cleaned up
+          try { await TrackPlayer.reset(); } catch {}
+          // Create hidden audio element with low-latency preload
+          let audio = document.querySelector('audio[data-spotibase]') as HTMLAudioElement | null;
+          if (!audio) {
+            audio = document.createElement('audio');
+            audio.setAttribute('data-spotibase', 'true');
+            audio.preload = 'auto';
+            audio.style.display = 'none';
+            document.body.appendChild(audio);
+          }
+          audio.src = streamUrl;
+          audio.currentTime = 0;
+          // Optimistic playing - don't wait for buffering
+          set({ playbackState: 'playing' });
+          const playPromise = audio.play();
+          if (playPromise) await playPromise.catch(() => {});
+          audio.onended = () => get().next();
+          audio.ontimeupdate = () => {
+            if (!isNaN(audio!.currentTime) && !isNaN(audio!.duration)) {
+              get().updatePosition(audio!.currentTime, audio!.duration || trackDuration);
+            }
+          };
+          audio.onpause = () => {
+            if (get().playbackState === 'playing') set({ playbackState: 'paused' });
+          };
+          audio.onplaying = () => set({ playbackState: 'playing' });
+          audio.onwaiting = () => set({ playbackState: 'loading' });
+          audio.onerror = () => {
+            console.warn('[WebAudio] Stream error for URL:', streamUrl);
+          };
+          // Also keep TrackPlayer queue in sync for next/previous compatibility
+          try {
+            await TrackPlayer.add({
+              id: track.id,
+              url: streamUrl,
+              title: track.title,
+              artist: track.artistName,
+              artwork: track.coverUrl,
+              duration: trackDuration,
+            });
+          } catch {}
+          // optimistic already set
+        } catch (e) {
+          console.warn('Web audio fast path failed, falling back to TrackPlayer', e);
+          await TrackPlayer.reset();
+          await TrackPlayer.add({
+            id: track.id,
+            url: streamUrl,
+            title: track.title,
+            artist: track.artistName,
+            artwork: track.coverUrl,
+            duration: trackDuration,
+          });
+          await TrackPlayer.play();
+          set({ playbackState: 'playing' });
+        }
       } else {
-        nextQueue = [track, ...existingQueue.filter(t => t.id !== track.id)].slice(0, MAX_QUEUE_CAPACITY);
+        await TrackPlayer.reset();
+        await TrackPlayer.add({
+          id: track.id,
+          url: streamUrl,
+          title: track.title,
+          artist: track.artistName,
+          artwork: track.coverUrl,
+          duration: trackDuration,
+        });
+        await TrackPlayer.play();
+        // Optimistic: show playing state immediately; TrackPlayer events will sync real state
+        set({ playbackState: 'playing', isMiniPlayerVisible: true });
       }
+
+      // FIX: Single play should NOT auto-queue all songs - queue = only current track + manually added via addToQueue
+      // Previously this auto-enriched queue with all catalog songs causing "queue shows for all"
+      const nextQueue: SongResponse[] = [track];
       saveQueueCache(nextQueue);
       set({
         currentTrack: track,
@@ -121,19 +194,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         duration: trackDuration,
       });
 
-      // Background non-blocking sync & queue enrichment
+      // Background non-blocking sync (no auto-enrichment)
       queueApi.addToQueue(track.id, track.albumId ? 'ALBUM' : 'SONG').catch(() => {});
-      if (nextQueue.length <= 1) {
-        songApi.getAll(0, 20).then(res => {
-          const catalogSongs = res?.data?.content || (Array.isArray(res?.data) ? res?.data : []);
-          const additional = catalogSongs.filter((s: SongResponse) => s.id !== track.id);
-          if (additional.length > 0) {
-            const enriched = [track, ...additional].slice(0, MAX_QUEUE_CAPACITY);
-            set({ queue: enriched });
-            saveQueueCache(enriched);
-          }
-        }).catch(() => {});
-      }
     } catch (err: any) {
       set({ playbackState: 'idle', currentTrack: null });
       if (err?.name !== 'AbortError') {
@@ -171,10 +233,58 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         duration: trackDuration,
       });
 
+      // Web low-latency fast path (bypass TrackPlayer stub)
+      if (Platform.OS === 'web') {
+        try {
+          try { await TrackPlayer.reset(); } catch {}
+          const streamUrl = getTrackStreamUrl(targetSong);
+          let audio = getWebAudio();
+          if (!audio) {
+            audio = document.createElement('audio') as HTMLAudioElement;
+            audio.setAttribute('data-spotibase', 'true');
+            audio.preload = 'auto';
+            (audio as any).style = 'display:none';
+            document.body.appendChild(audio);
+          }
+          audio.src = streamUrl;
+          audio.currentTime = 0;
+          set({ playbackState: 'playing' });
+          const p = audio.play();
+          if (p) await p.catch(() => {});
+          audio.onended = () => get().next();
+          audio.ontimeupdate = () => {
+            if (!isNaN(audio!.currentTime) && !isNaN(audio!.duration)) {
+              get().updatePosition(audio!.currentTime, audio!.duration || trackDuration);
+            }
+          };
+          audio.onpause = () => { if (get().playbackState === 'playing') set({ playbackState: 'paused' }); };
+          audio.onplaying = () => set({ playbackState: 'playing' });
+          audio.onerror = () => {
+            console.warn('[WebAudio] playMultiple stream error for URL:', streamUrl);
+          };
+          try {
+            const playerTracks = boundedTracks.map(t => ({
+              id: t.id,
+              url: getTrackStreamUrl(t),
+              title: t.title,
+              artist: t.artistName,
+              artwork: t.coverUrl,
+              duration: (t.durationMs && t.durationMs > 0) ? t.durationMs / 1000 : 180,
+            }));
+            await TrackPlayer.add(playerTracks);
+          } catch {}
+          saveQueueCache(boundedTracks);
+          set({ currentTrack: targetSong, queue: boundedTracks, playbackState: 'playing', isMiniPlayerVisible: true, position: 0, duration: trackDuration });
+          return;
+        } catch (e) {
+          console.warn('Web playMultiple fast path failed, falling back', e);
+        }
+      }
+
       await TrackPlayer.reset();
       const playerTracks = boundedTracks.map(t => ({
         id: t.id,
-        url: `${BASE_URL}/songs/${t.id}/stream`,
+        url: getTrackStreamUrl(t),
         title: t.title,
         artist: t.artistName,
         artwork: t.coverUrl,
@@ -198,6 +308,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   pause: async () => {
     set({ playbackState: 'paused' });
     try {
+      const wa = getWebAudio();
+      if (wa) wa.pause();
       await TrackPlayer.pause();
     } catch (e) {}
   },
@@ -205,6 +317,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   resume: async () => {
     set({ playbackState: 'playing' });
     try {
+      const wa = getWebAudio();
+      if (wa) await wa.play().catch(()=>{});
       await TrackPlayer.play();
     } catch (e) {}
   },
@@ -220,11 +334,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     if (playbackState === 'playing' || playbackState === 'loading') {
       set({ playbackState: 'paused' });
       try {
+        const wa = getWebAudio();
+        if (wa) wa.pause();
         await TrackPlayer.pause();
       } catch (e) {}
     } else {
       set({ playbackState: 'playing' });
       try {
+        const wa = getWebAudio();
+        if (wa) await wa.play().catch(()=>{});
         await TrackPlayer.play();
       } catch (e) {}
     }
@@ -246,19 +364,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     let activeQueue = queue && queue.length > 0 ? [...queue] : [currentTrack];
 
-    // If single track in queue, try fetching more songs from the catalog/API
-    if (activeQueue.length <= 1) {
-      try {
-        const res = await songApi.getAll(0, 20);
-        const catalogSongs = res?.data?.content || (Array.isArray(res?.data) ? res?.data : []);
-        const additional = catalogSongs.filter((s: SongResponse) => s.id !== currentTrack.id);
-        if (additional.length > 0) {
-          activeQueue = [currentTrack, ...additional].slice(0, MAX_QUEUE_CAPACITY);
-          set({ queue: activeQueue });
-          saveQueueCache(activeQueue);
-        }
-      } catch (e) {}
-    }
+    // FIX: Don't auto-fill queue with all catalog songs (was causing "queue shows for all")
+    // Single track queue stays single - Next will just restart or stop
 
     const currentIndex = activeQueue.findIndex((t) => t.id === currentTrack.id);
     let nextIndex: number;
@@ -288,9 +395,31 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const nextSong = activeQueue[nextIndex];
     if (!nextSong) return;
 
-    const streamUrl = `${BASE_URL}/songs/${nextSong.id}/stream`;
+    const streamUrl = getTrackStreamUrl(nextSong);
     const trackDuration = (nextSong.durationMs && nextSong.durationMs > 0) ? nextSong.durationMs / 1000 : 180;
     set({ currentTrack: nextSong, queue: activeQueue, position: 0, duration: trackDuration, playbackState: 'loading' });
+
+    if (Platform.OS === 'web') {
+      try {
+        try { await TrackPlayer.reset(); } catch {}
+        let audio = getWebAudio();
+        if (!audio) {
+          audio = document.createElement('audio') as HTMLAudioElement;
+          audio.setAttribute('data-spotibase', 'true');
+          audio.preload = 'auto';
+          (audio as any).style = 'display:none';
+          document.body.appendChild(audio);
+        }
+        audio.src = streamUrl;
+        audio.currentTime = 0;
+        set({ playbackState: 'playing' });
+        await audio.play().catch(()=>{});
+        audio.onended = () => get().next();
+        try { await TrackPlayer.add({ id: nextSong.id, url: streamUrl, title: nextSong.title, artist: nextSong.artistName, artwork: nextSong.coverUrl, duration: trackDuration }); } catch {}
+        set({ playbackState: 'playing' });
+        return;
+      } catch (e) { console.warn('Web next fast path failed', e); }
+    }
 
     try {
       await TrackPlayer.reset();
@@ -328,19 +457,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     let activeQueue = queue && queue.length > 0 ? [...queue] : [currentTrack];
 
-    // If single track in queue, try fetching more songs
-    if (activeQueue.length <= 1) {
-      try {
-        const res = await songApi.getAll(0, 20);
-        const catalogSongs = res?.data?.content || (Array.isArray(res?.data) ? res?.data : []);
-        const additional = catalogSongs.filter((s: SongResponse) => s.id !== currentTrack.id);
-        if (additional.length > 0) {
-          activeQueue = [currentTrack, ...additional].slice(0, MAX_QUEUE_CAPACITY);
-          set({ queue: activeQueue });
-          saveQueueCache(activeQueue);
-        }
-      } catch (e) {}
-    }
+    // FIX: Don't auto-fill queue
 
     const currentIndex = activeQueue.findIndex((t) => t.id === currentTrack.id);
     let prevIndex: number;
@@ -365,9 +482,31 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const prevSong = activeQueue[prevIndex];
     if (!prevSong) return;
 
-    const streamUrl = `${BASE_URL}/songs/${prevSong.id}/stream`;
+    const streamUrl = getTrackStreamUrl(prevSong);
     const trackDuration = (prevSong.durationMs && prevSong.durationMs > 0) ? prevSong.durationMs / 1000 : 180;
     set({ currentTrack: prevSong, queue: activeQueue, position: 0, duration: trackDuration, playbackState: 'loading' });
+
+    if (Platform.OS === 'web') {
+      try {
+        try { await TrackPlayer.reset(); } catch {}
+        let audio = getWebAudio();
+        if (!audio) {
+          audio = document.createElement('audio') as HTMLAudioElement;
+          audio.setAttribute('data-spotibase', 'true');
+          audio.preload = 'auto';
+          (audio as any).style = 'display:none';
+          document.body.appendChild(audio);
+        }
+        audio.src = streamUrl;
+        audio.currentTime = 0;
+        set({ playbackState: 'playing' });
+        await audio.play().catch(()=>{});
+        audio.onended = () => get().next();
+        try { await TrackPlayer.add({ id: prevSong.id, url: streamUrl, title: prevSong.title, artist: prevSong.artistName, artwork: prevSong.coverUrl, duration: trackDuration }); } catch {}
+        set({ playbackState: 'playing' });
+        return;
+      } catch (e) { console.warn('Web previous fast path failed', e); }
+    }
 
     try {
       await TrackPlayer.reset();
@@ -392,6 +531,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   seekTo: async (position) => {
     set({ position });
     try {
+      const wa = getWebAudio();
+      if (wa) wa.currentTime = position;
       await TrackPlayer.seekTo(position);
     } catch (e) {}
   },
@@ -422,7 +563,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     try {
       await TrackPlayer.add({
         id: track.id,
-        url: `${BASE_URL}/songs/${track.id}/stream`,
+        url: getTrackStreamUrl(track),
         title: track.title,
         artist: track.artistName,
         artwork: track.coverUrl,
@@ -434,6 +575,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     saveQueueCache(nextQueue);
     set({ queue: nextQueue });
   },
+
 
   removeFromQueue: async (index) => {
     try {
@@ -529,7 +671,7 @@ export async function setupTrackPlayer() {
 
   try {
     await TrackPlayer.updateOptions({
-      progressUpdateEventInterval: 0.25,
+      progressUpdateEventInterval: Platform.OS === 'web' ? 1.0 : 0.5,
       capabilities: [
         Capability.Play,
         Capability.Pause,
@@ -542,12 +684,11 @@ export async function setupTrackPlayer() {
     TrackPlayer.addEventListener(Event.PlaybackState, (event: any) => {
       const rawState = typeof event === 'object' && event !== null && 'state' in event ? event.state : event;
       if (rawState === undefined || rawState === null) return;
-      if (rawState === State.Ready || rawState === 'ready') {
-        return;
-      }
       const stateMap: Record<string, PlaybackState> = {
         [State.Playing]: 'playing',
         [State.Paused]: 'paused',
+        [State.Ready as any]: 'playing',
+        ['ready' as any]: 'playing',
         [State.Buffering]: 'loading',
         [((State as any).Loading || 'loading')]: 'loading',
         [((State as any).Connecting || 'connecting')]: 'loading',
@@ -561,6 +702,19 @@ export async function setupTrackPlayer() {
       } else {
         usePlayerStore.getState().updatePlaybackState('idle');
       }
+      // Mobile fallback: if we get Buffering for >5s, force 'playing' to avoid
+      // infinite loading spinner. The backend redirect means audio is loading
+      // from R2 directly; TrackPlayer may not emit State.Playing until buffered.
+      if (mapped === 'loading') {
+        setTimeout(() => {
+          const cur = usePlayerStore.getState().playbackState;
+          if (cur === 'loading') {
+            console.warn('[Player] Playback stuck at loading >5s - forcing playing state');
+            usePlayerStore.getState().updatePlaybackState('playing');
+          }
+        }, 5000);
+      }
+
     });
 
     TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (event) => {

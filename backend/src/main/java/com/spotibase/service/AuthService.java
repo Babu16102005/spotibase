@@ -100,17 +100,32 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmailWithFavoriteGenres(request.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 
-        if (user.getPasswordHash() == null
-                || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        boolean authenticated = false;
+        if (user.getPasswordHash() != null && passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            authenticated = true;
+        } else {
+            // Fallback to Supabase cloud auth for legacy/external users
             boolean supabaseValid = verifySupabasePassword(request.getEmail(), request.getPassword());
-            if (!supabaseValid) {
-                throw new UnauthorizedException("Invalid email or password");
+            if (supabaseValid) {
+                authenticated = true;
+                // Auto-fill local password hash so all future logins run fast locally (<50ms) without cloud latency!
+                try {
+                    user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+                    userRepository.save(user);
+                    log.info("Cached password hash locally for fast login: {}", user.getEmail());
+                } catch (Exception e) {
+                    log.warn("Failed to update local password hash: {}", e.getMessage());
+                }
             }
+        }
+
+        if (!authenticated) {
+            throw new UnauthorizedException("Invalid email or password");
         }
 
         if (!user.isActive()) {

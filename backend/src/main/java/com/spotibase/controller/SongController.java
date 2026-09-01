@@ -217,10 +217,25 @@ public class SongController {
             return ResponseEntity.notFound().build();
         }
 
-        // R2: proxy the bytes through the backend so browsers get Range
-        // support AND CORS headers. r2.dev public URLs do not send CORS
-        // headers, so a direct redirect is unusable from the web client.
+        // R2 streaming: browsers need a CORS-aware proxy; native mobile clients
+        // (React Native / TrackPlayer) can consume a direct redirect to the R2
+        // public URL without any CORS concern, which eliminates the >2s proxy
+        // download overhead that was causing songs to not play on mobile.
         if (fileUrl.contains("r2.cloudflarestorage.com") || fileUrl.contains("r2.dev")) {
+            String userAgent = request.getHeader("User-Agent");
+            boolean isBrowser = userAgent != null &&
+                    (userAgent.contains("Mozilla") || userAgent.contains("Chrome") ||
+                     userAgent.contains("Safari") || userAgent.contains("Firefox") ||
+                     userAgent.contains("Edge"));
+            if (!isBrowser) {
+                // Native mobile client: redirect directly to R2 public URL for instant start
+                log.info("Redirecting native client to R2 URL for song: {}", id);
+                HttpHeaders redirectHeaders = new HttpHeaders();
+                redirectHeaders.set("Accept-Ranges", "bytes");
+                redirectHeaders.set("Cache-Control", "public, max-age=3600");
+                redirectHeaders.setLocation(URI.create(fileUrl));
+                return ResponseEntity.status(HttpStatus.FOUND).headers(redirectHeaders).build();
+            }
             return handleR2Streaming(song, fileUrl, request);
         }
 
@@ -243,11 +258,17 @@ public class SongController {
         }
 
         String rangeHeader = request.getHeader("Range");
+        // Low-latency: if client sends no Range, stream first 1MB chunk (512KB min) so audio starts <300ms instead of 12s full-file
+        if (rangeHeader == null || rangeHeader.isBlank()) {
+            rangeHeader = "bytes=0-1048575"; // 1MB initial chunk for instant playback
+        }
         R2StorageService.R2ObjectStream os = r2StorageService.readRange(key, rangeHeader);
         headers.setContentType(MediaType.parseMediaType(resolveContentType(song, os.contentType())));
         headers.setContentLength(os.end() - os.start() + 1);
         headers.set("Content-Range", "bytes " + os.start() + "-" + os.end() + "/" + os.objectSize());
-        HttpStatus status = os.isPartial() ? HttpStatus.PARTIAL_CONTENT : HttpStatus.OK;
+        headers.set("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length, Content-Type");
+        headers.set("X-Content-Type-Options", "nosniff");
+        HttpStatus status = HttpStatus.PARTIAL_CONTENT; // always 206 for streaming - enables seek
         return ResponseEntity.status(status).headers(headers).body(new InputStreamResource(os.stream()));
     }
 

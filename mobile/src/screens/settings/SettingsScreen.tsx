@@ -1,10 +1,14 @@
 import React from 'react';
-import { View, Text, ScrollView, Switch, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Switch, StyleSheet, TouchableOpacity } from 'react-native';
 import { useThemeStore, usePlayerStore } from '../../store';
+import { useAiOrbStore, AI_ORB_VARIANTS } from '../../store/aiOrbStore';
+import { SiriOrb } from '../../components/SiriOrb';
+import { StarOrb } from '../../components/StarOrb';
 import GlassButton from '../../components/GlassButton';
 
 const SettingsScreen = ({ navigation }: any) => {
   const { theme, themeMode, setThemeMode, greetingPattern, setGreetingPattern } = useThemeStore();
+  const { variant: aiVariant, setVariant: setAiVariant } = useAiOrbStore();
   const shuffle = usePlayerStore((s) => s.shuffle);
   const repeat = usePlayerStore((s) => s.repeat);
   const setShuffle = usePlayerStore((s) => s.setShuffle);
@@ -60,6 +64,35 @@ const SettingsScreen = ({ navigation }: any) => {
       </View>
 
       <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>AI Orb Style</Text>
+        <Text style={[styles.aboutText, { color: theme.colors.textTertiary, marginBottom: 12 }]}>Choose your AI assistant orb (Siri design) - default is Classic</Text>
+        <View style={styles.orbGrid}>
+          {(Object.entries(AI_ORB_VARIANTS) as Array<[keyof typeof AI_ORB_VARIANTS, typeof AI_ORB_VARIANTS[keyof typeof AI_ORB_VARIANTS]]>).map(([key, v]) => {
+            const selected = aiVariant === key;
+            return (
+              <TouchableOpacity
+                key={key}
+                onPress={() => setAiVariant(key)}
+                style={[
+                  styles.orbCard,
+                  { backgroundColor: theme.colors.surface, borderColor: selected ? theme.colors.primary : theme.colors.border, borderWidth: selected ? 2 : 1 },
+                ]}
+              >
+                {key === 'midnight' ? (
+                  <StarOrb size="72px" />
+                ) : (
+                  <SiriOrb size="72px" colors={v.colors} animationDuration={12} />
+                )}
+                <Text style={[styles.orbLabel, { color: theme.colors.text }]}>{v.label}</Text>
+                <Text style={[styles.orbDesc, { color: theme.colors.textTertiary }]}>{v.desc}</Text>
+                {selected && <Text style={[styles.orbCheck, { color: theme.colors.primary }]}>✓ Selected</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Playback</Text>
         <View style={[styles.settingRow, { borderBottomColor: theme.colors.border }]}>
           <Text style={[styles.settingLabel, { color: theme.colors.text }]}>Shuffle</Text>
@@ -104,6 +137,11 @@ const styles = StyleSheet.create({
   settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 0.5 },
   settingLabel: { fontSize: 16 },
   aboutText: { fontSize: 14, marginTop: 4 },
+  orbGrid: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  orbCard: { width: 105, alignItems: 'center', padding: 12, borderRadius: 16, gap: 6 },
+  orbLabel: { fontSize: 12, fontWeight: '700', marginTop: 4 },
+  orbDesc: { fontSize: 10, textAlign: 'center' },
+  orbCheck: { fontSize: 10, fontWeight: '800', marginTop: 2 },
 });
 
 export default SettingsScreen;

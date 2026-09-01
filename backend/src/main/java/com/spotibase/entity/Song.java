@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -141,6 +143,38 @@ public class Song {
     @UpdateTimestamp
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    // AI generated metadata columns
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "mood_tags")
+    @Builder.Default
+    private List<String> moodTags = new ArrayList<>();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "vibe_tags")
+    @Builder.Default
+    private List<String> vibeTags = new ArrayList<>();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "activity_tags")
+    @Builder.Default
+    private List<String> activityTags = new ArrayList<>();
+
+    @Column(name = "energy_score")
+    private Float energyScore;
+
+    @Column(name = "valence_score")
+    private Float valenceScore;
+
+    @Column(name = "bpm")
+    private Float bpm;
+
+    @Column(name = "ai_tagged", nullable = false)
+    @Builder.Default
+    private boolean aiTagged = false;
+
+    @Column(name = "ai_tagged_at")
+    private LocalDateTime aiTaggedAt;
 
     // Relationships
     @ManyToMany(mappedBy = "songs")

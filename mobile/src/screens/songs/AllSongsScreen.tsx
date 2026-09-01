@@ -57,7 +57,13 @@ const AllSongsScreen = () => {
       const res = await songApi.getAll(pageNum, PAGE_SIZE);
       const content = res.data.content;
       setSongs((prev) => {
-        const nextSongs = replace ? content : [...prev, ...content];
+        // Deduplicate by id to prevent React duplicate key warnings (was causing "Encountered two children with same key")
+        const map = new Map<string, SongResponse>();
+        const base = replace ? [] : prev;
+        for (const s of [...base, ...content]) {
+          if (!map.has(s.id)) map.set(s.id, s);
+        }
+        const nextSongs = Array.from(map.values());
         if (replace) {
           try { songsCache.set('allSongsData', JSON.stringify(content)); } catch {}
         }
@@ -126,12 +132,6 @@ const AllSongsScreen = () => {
     fetchPage(page + 1, false);
   }, [searchQuery, hasMore, loadingMore, loading, fetchPage, page]);
 
-  const handlePlay = useCallback((index: number) => {
-    const list = searchQuery.trim() ? searchResults : songs;
-    if (list.length === 0) return;
-    playMultiple(list, index);
-  }, [searchQuery, searchResults, songs, playMultiple]);
-
   const handleToggleLike = useCallback(async (song: SongResponse) => {
     const nextLiked = !song.liked;
     // Optimistic update
@@ -185,6 +185,17 @@ const AllSongsScreen = () => {
     });
     return Array.from(map.values());
   }, [searchQuery, songs, searchResults, filteredLocalSongs]);
+
+  const handlePlay = React.useCallback((index: number) => {
+    const list = searchQuery.trim() ? activeSongs : songs;
+    if (list.length === 0) return;
+    // FIX: Play single track only - don't auto-queue all songs
+    const track = list[index];
+    if (track) {
+      const { play } = usePlayerStore.getState();
+      play(track);
+    }
+  }, [searchQuery, activeSongs, songs]);
 
   const isPlaying = playbackState === 'playing' || playbackState === 'loading';
 
@@ -319,7 +330,13 @@ const AllSongsScreen = () => {
             icon="play"
             iconSize={16}
             iconColor="#000000"
-            onPress={() => activeSongs.length > 0 && handlePlay(0)}
+            onPress={() => {
+              if (activeSongs.length > 0) {
+                // Explicit Play All: queue all
+                const { playMultiple } = usePlayerStore.getState();
+                playMultiple(activeSongs, 0);
+              }
+            }}
             accessibilityLabel="Play all songs"
           />
         </View>

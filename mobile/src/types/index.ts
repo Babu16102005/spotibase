@@ -278,6 +278,7 @@ export interface PickedSongFile {
   name: string;
   size?: number;
   mimeType?: string;
+  file?: any;
 }
 
 /**

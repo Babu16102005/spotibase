@@ -52,18 +52,19 @@ public class SearchService {
     }
 
     public List<String> getSuggestions(String query, int limit) {
+        // Use ILIKE for portability (pg_trgm % requires extension). Falls back gracefully if pg_trgm not enabled.
         String sql = """
             SELECT name, type FROM (
-                SELECT s.name, 'song' as type, s.play_count as rank FROM songs s WHERE s.name % :query AND s.archived = false
+                SELECT s.name, 'song' as type, s.play_count as rank FROM songs s WHERE s.name ILIKE :pattern AND s.archived = false
                 UNION ALL
-                SELECT a.name, 'artist' as type, a.monthly_listeners as rank FROM artists a WHERE a.name % :query
+                SELECT a.name, 'artist' as type, a.monthly_listeners as rank FROM artists a WHERE a.name ILIKE :pattern
                 UNION ALL
-                SELECT al.name, 'album' as type, al.song_count as rank FROM albums al WHERE al.name % :query AND al.archived = false
+                SELECT al.name, 'album' as type, al.song_count as rank FROM albums al WHERE al.name ILIKE :pattern AND al.archived = false
             ) combined ORDER BY rank DESC LIMIT :limit
         """;
 
         Query q = entityManager.createNativeQuery(sql);
-        q.setParameter("query", query);
+        q.setParameter("pattern", "%" + query + "%");
         q.setParameter("limit", limit);
 
         List<String> results = new ArrayList<>();

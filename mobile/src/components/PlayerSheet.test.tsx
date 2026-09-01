@@ -8,7 +8,14 @@ import { makeSong } from '../test/fixtures';
 jest.mock('../api/client', () => ({
   queueApi: { addToQueue: jest.fn() },
   songApi: { like: jest.fn(), unlike: jest.fn() },
+  BASE_URL: 'http://localhost:8088/api/v1',
+  getBaseUrl: () => 'http://localhost:8088/api/v1',
+  getTrackStreamUrl: (track: any) =>
+    track?.fileUrl && (track.fileUrl.startsWith('http://') || track.fileUrl.startsWith('https://'))
+      ? track.fileUrl
+      : `http://localhost:8088/api/v1/songs/${track?.id}/stream`,
 }));
+
 
 const initialPlayerState = {
   currentTrack: null,

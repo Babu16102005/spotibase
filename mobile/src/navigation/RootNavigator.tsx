@@ -25,6 +25,7 @@ import Sidebar, { TabKey } from '../components/Sidebar';
 import PlayBar from '../components/PlayBar';
 import Icon from '../components/Icon';
 import GlobalBulkSelectionBar from '../components/GlobalBulkSelectionBar';
+import AiOrb from '../components/AiOrb';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -168,6 +169,8 @@ const MainTabs = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {tabBar}
+      {/* AI Orb - Center Illusion - Floating above tabBar */}
+      <AiOrb />
       {isMiniPlayerVisible && <MiniPlayer />}
     </View>
   );

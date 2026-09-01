@@ -3,7 +3,7 @@
 -- ============================================================
 
 -- Enable pg_trgm for fuzzy search (if not already enabled)
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- ============================================================
 -- 1. Song ↔ Contributing Artists (many-to-many with roles)
@@ -76,12 +76,12 @@ CREATE INDEX IF NOT EXISTS idx_songs_album_artist_page
     WHERE archived = FALSE AND album_artist_id IS NOT NULL;
 
 -- Search: trigram indexes for fuzzy matching on denormalized fields
-CREATE INDEX IF NOT EXISTS idx_songs_name_trgm 
-    ON songs USING GIN (name gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_songs_primary_artist_name_trgm 
-    ON songs USING GIN (primary_artist_name gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_songs_album_name_trgm 
-    ON songs USING GIN (album_name gin_trgm_ops);
+-- CREATE INDEX IF NOT EXISTS idx_songs_name_trgm 
+--     ON songs USING GIN (name gin_trgm_ops);
+-- CREATE INDEX IF NOT EXISTS idx_songs_primary_artist_name_trgm 
+--     ON songs USING GIN (primary_artist_name gin_trgm_ops);
+-- CREATE INDEX IF NOT EXISTS idx_songs_album_name_trgm 
+--     ON songs USING GIN (album_name gin_trgm_ops);
 
 -- Genre filtering
 CREATE INDEX IF NOT EXISTS idx_songs_genre_listing 
@@ -91,40 +91,40 @@ CREATE INDEX IF NOT EXISTS idx_songs_genre_listing
 -- ============================================================
 -- 4. Trigger to keep denormalized fields in sync
 -- ============================================================
-CREATE OR REPLACE FUNCTION sync_song_denormalized_fields() RETURNS trigger AS $$
-BEGIN
-    -- Sync primary artist name
-    IF NEW.artist_id IS DISTINCT FROM OLD.artist_id OR NEW.primary_artist_name IS NULL THEN
-        SELECT name INTO NEW.primary_artist_name 
-        FROM artists WHERE id = NEW.artist_id;
-    END IF;
-
-    -- Sync album name and cover
-    IF NEW.album_id IS DISTINCT FROM OLD.album_id OR NEW.album_name IS NULL THEN
-        SELECT name, cover_url INTO NEW.album_name, NEW.cover_url_cached
-        FROM albums WHERE id = NEW.album_id;
-    END IF;
-
-    -- Sync album artist name if needed
-    IF NEW.album_artist_id IS DISTINCT FROM OLD.album_artist_id THEN
-        -- album_artist_name would need a separate column if denormalized
-        NULL; -- placeholder
-    END IF;
-
-    -- Fallback cover: song cover > album cover
-    IF NEW.cover_url_cached IS NULL THEN
-        NEW.cover_url_cached := COALESCE(NEW.cover_url, 
-            (SELECT cover_url FROM albums WHERE id = NEW.album_id));
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS sync_song_denormalized ON songs;
-CREATE TRIGGER sync_song_denormalized 
-    BEFORE INSERT OR UPDATE ON songs
-    FOR EACH ROW EXECUTE FUNCTION sync_song_denormalized_fields();
+-- CREATE OR REPLACE FUNCTION sync_song_denormalized_fields() RETURNS trigger AS $$
+-- BEGIN
+--     -- Sync primary artist name
+--     IF NEW.artist_id IS DISTINCT FROM OLD.artist_id OR NEW.primary_artist_name IS NULL THEN
+--         SELECT name INTO NEW.primary_artist_name 
+--         FROM artists WHERE id = NEW.artist_id;
+--     END IF;
+-- 
+--     -- Sync album name and cover
+--     IF NEW.album_id IS DISTINCT FROM OLD.album_id OR NEW.album_name IS NULL THEN
+--         SELECT name, cover_url INTO NEW.album_name, NEW.cover_url_cached
+--         FROM albums WHERE id = NEW.album_id;
+--     END IF;
+-- 
+--     -- Sync album artist name if needed
+--     IF NEW.album_artist_id IS DISTINCT FROM OLD.album_artist_id THEN
+--         -- album_artist_name would need a separate column if denormalized
+--         NULL; -- placeholder
+--     END IF;
+-- 
+--     -- Fallback cover: song cover > album cover
+--     IF NEW.cover_url_cached IS NULL THEN
+--         NEW.cover_url_cached := COALESCE(NEW.cover_url, 
+--             (SELECT cover_url FROM albums WHERE id = NEW.album_id));
+--     END IF;
+-- 
+--     RETURN NEW;
+-- END;
+-- $$ LANGUAGE plpgsql;
+-- 
+-- DROP TRIGGER IF EXISTS sync_song_denormalized ON songs;
+-- CREATE TRIGGER sync_song_denormalized 
+--     BEFORE INSERT OR UPDATE ON songs
+--     FOR EACH ROW EXECUTE FUNCTION sync_song_denormalized_fields();
 
 -- ============================================================
 -- 5. Trigger to update album stats when contributing artists change

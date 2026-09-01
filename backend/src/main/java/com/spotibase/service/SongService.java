@@ -28,6 +28,7 @@ import java.io.File;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -139,6 +140,7 @@ public class SongService {
         }
 
         Song song = builder.build();
+        autoTagSongWithAiMetadata(song, genre);
 
         // Track any storage objects we upload so we can roll them back if the DB save fails.
         List<String> uploadedStorageKeys = new ArrayList<>();
@@ -737,6 +739,14 @@ public class SongService {
                 .archived(song.isArchived())
                 .featured(song.isFeatured())
                 .playCount(song.getPlayCount())
+                .moodTags(song.getMoodTags())
+                .vibeTags(song.getVibeTags())
+                .activityTags(song.getActivityTags())
+                .energyScore(song.getEnergyScore())
+                .valenceScore(song.getValenceScore())
+                .bpm(song.getBpm())
+                .aiTagged(song.isAiTagged())
+                .aiTaggedAt(song.getAiTaggedAt())
                 .createdAt(song.getCreatedAt());
 
         // Album info (use denormalized fields for speed)
@@ -851,5 +861,106 @@ public class SongService {
                 .first(historyPage.isFirst())
                 .last(historyPage.isLast())
                 .build();
+    }
+
+    private void autoTagSongWithAiMetadata(Song song, Genre genre) {
+        String genreName = (genre != null && genre.getName() != null) ? genre.getName().toUpperCase() : "UNKNOWN";
+        String title = song.getName() != null ? song.getName().toLowerCase() : "";
+
+        List<String> moods = new ArrayList<>();
+        List<String> vibes = new ArrayList<>();
+        List<String> activities = new ArrayList<>();
+        float energy = 0.5f;
+        float valence = 0.5f;
+        float bpm = 100.0f;
+
+        switch (genreName) {
+            case "ROCK":
+            case "METAL":
+                moods.addAll(List.of("ENERGETIC", "MOTIVATED"));
+                vibes.addAll(List.of("INTENSE", "DARK"));
+                activities.addAll(List.of("WORKOUT", "GYM"));
+                energy = 0.85f;
+                valence = 0.45f;
+                bpm = 125.0f;
+                break;
+            case "POP":
+            case "DANCE":
+                moods.addAll(List.of("HAPPY", "ENERGETIC"));
+                vibes.addAll(List.of("CHILL", "PARTY"));
+                activities.addAll(List.of("PARTY", "DANCE"));
+                energy = 0.80f;
+                valence = 0.75f;
+                bpm = 120.0f;
+                break;
+            case "HIP_HOP":
+            case "HIP HOP":
+            case "RAP":
+                moods.addAll(List.of("ENERGETIC", "MOTIVATED"));
+                vibes.addAll(List.of("DARK", "CHILL"));
+                activities.addAll(List.of("WORKOUT", "GYM"));
+                energy = 0.75f;
+                valence = 0.60f;
+                bpm = 95.0f;
+                break;
+            case "MELODY":
+            case "CLASSICAL":
+            case "JAZZ":
+            case "BLUES":
+                moods.addAll(List.of("CALM", "ROMANTIC", "MELANCHOLIC"));
+                vibes.addAll(List.of("PEACEFUL", "DREAMY"));
+                activities.addAll(List.of("FOCUS", "STUDY", "RELAXING"));
+                energy = 0.30f;
+                valence = 0.40f;
+                bpm = 80.0f;
+                break;
+            case "CHILL":
+            case "AMBIENT":
+            case "LOFI":
+            case "LO-FI":
+                moods.addAll(List.of("CALM", "FOCUSED"));
+                vibes.addAll(List.of("CHILL", "PEACEFUL", "DREAMY"));
+                activities.addAll(List.of("STUDY", "RELAXING", "SLEEP"));
+                energy = 0.25f;
+                valence = 0.50f;
+                bpm = 75.0f;
+                break;
+            default:
+                moods.addAll(List.of("HAPPY", "CHILL"));
+                vibes.addAll(List.of("CHILL"));
+                activities.addAll(List.of("RELAXING"));
+                energy = 0.50f;
+                valence = 0.50f;
+                bpm = 100.0f;
+                break;
+        }
+
+        if (title.contains("sad") || title.contains("lone") || title.contains("pain") || title.contains("cry")) {
+            moods.add("SAD");
+            moods.add("MELANCHOLIC");
+            moods.remove("HAPPY");
+            valence = Math.min(valence, 0.25f);
+            energy = Math.max(energy - 0.2f, 0.1f);
+        }
+        if (title.contains("love") || title.contains("sweet") || title.contains("heart") || title.contains("darling")) {
+            moods.add("ROMANTIC");
+            vibes.add("DREAMY");
+            valence = Math.max(valence, 0.70f);
+        }
+        if (title.contains("gym") || title.contains("workout") || title.contains("power") || title.contains("beast")) {
+            moods.add("ENERGETIC");
+            moods.add("MOTIVATED");
+            activities.add("WORKOUT");
+            energy = Math.min(energy + 0.15f, 0.99f);
+        }
+
+        song.setMoodTags(new ArrayList<>(new LinkedHashSet<>(moods)));
+        song.setVibeTags(new ArrayList<>(new LinkedHashSet<>(vibes)));
+        song.setActivityTags(new ArrayList<>(new LinkedHashSet<>(activities)));
+        song.setEnergyScore(energy);
+        song.setValenceScore(valence);
+        song.setBpm(bpm);
+        song.setAiTagged(true);
+        song.setAiTaggedAt(LocalDateTime.now());
     }
 }
