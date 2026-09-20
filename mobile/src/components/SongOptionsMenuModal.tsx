@@ -10,6 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import { SongResponse, PlaylistResponse } from '../types';
 import { useThemeStore, usePlayerStore } from '../store';
@@ -23,6 +24,9 @@ interface SongOptionsMenuModalProps {
   song: SongResponse | null;
   onClose: () => void;
   onSongUpdated?: (updatedSong: SongResponse) => void;
+  /** When set (inside a playlist), shows "Remove from This Playlist" (link-only, song stays in library). */
+  contextPlaylistId?: string;
+  onRemovedFromPlaylist?: (songId: string) => void;
 }
 
 export const SongOptionsMenuModal: React.FC<SongOptionsMenuModalProps> = ({
@@ -30,6 +34,8 @@ export const SongOptionsMenuModal: React.FC<SongOptionsMenuModalProps> = ({
   song,
   onClose,
   onSongUpdated,
+  contextPlaylistId,
+  onRemovedFromPlaylist,
 }) => {
   const { theme } = useThemeStore();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
@@ -127,6 +133,31 @@ export const SongOptionsMenuModal: React.FC<SongOptionsMenuModalProps> = ({
     await addToQueue(song);
     const capacityText = `Added to Queue (Capacity: ${Math.min(queue.length + 1, 5)}/5)`;
     showToast(capacityText);
+  };
+
+  const handleRemoveFromPlaylist = () => {
+    if (!song || !contextPlaylistId) return;
+    Alert.alert(
+      'Remove from Playlist',
+      `Remove "${song.title}" from this playlist? The song stays in your library.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await playlistApi.removeSong(contextPlaylistId, song.id);
+              if (onRemovedFromPlaylist) onRemovedFromPlaylist(song.id);
+              showToast('Removed from playlist');
+            } catch (err) {
+              console.error('Failed removing song from playlist:', err);
+              showToast('Failed to remove song');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (!song) return null;
@@ -238,6 +269,27 @@ export const SongOptionsMenuModal: React.FC<SongOptionsMenuModalProps> = ({
                   </Text>
                 </View>
               </TouchableOpacity>
+
+              {/* Option 4: Remove from This Playlist (only inside a playlist context) */}
+              {contextPlaylistId ? (
+                <TouchableOpacity
+                  style={[styles.optionItem, { backgroundColor: theme.colors.glass }]}
+                  onPress={handleRemoveFromPlaylist}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.iconBubble, { backgroundColor: theme.colors.surfaceLight }]}>
+                    <Icon name="close" size={16} color={theme.colors.error || '#EF4444'} />
+                  </View>
+                  <View style={styles.optionTextContainer}>
+                    <Text style={[styles.optionTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                      Remove from This Playlist
+                    </Text>
+                    <Text style={[styles.optionSub, { color: theme.colors.textTertiary }]} numberOfLines={2}>
+                      Song stays in your library
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ) : null}
             </ScrollView>
           )}
 

@@ -1,6 +1,7 @@
 package com.spotibase.dto.response;
 
 import lombok.AllArgsConstructor;
+import java.io.Serializable;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,7 +13,7 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AdminDashboardResponse {
+public class AdminDashboardResponse implements Serializable {
     private long totalUsers;
     private long activeUsers;
     private long totalSongs;

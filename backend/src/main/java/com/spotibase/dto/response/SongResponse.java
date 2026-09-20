@@ -1,6 +1,7 @@
 package com.spotibase.dto.response;
 
 import com.spotibase.entity.ContributionRole;
+import java.io.Serializable;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,7 +15,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SongResponse {
+public class SongResponse implements Serializable {
     private String id;
     private String title;  // renamed from name
     private String artistId;
@@ -66,7 +67,7 @@ public class SongResponse {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class ContributingArtistDto {
+    public static class ContributingArtistDto implements Serializable {
         private String artistId;
         private String artistName;
         private ContributionRole role;    // FEATURING, REMIXER, PRODUCER, WRITER, etc.

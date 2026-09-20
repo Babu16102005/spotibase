@@ -24,6 +24,7 @@ import MiniPlayer from '../components/MiniPlayer';
 import Sidebar, { TabKey } from '../components/Sidebar';
 import PlayBar from '../components/PlayBar';
 import Icon from '../components/Icon';
+import CenterNotchTabBar from '../components/CenterNotchTabBar';
 import GlobalBulkSelectionBar from '../components/GlobalBulkSelectionBar';
 import AiOrb from '../components/AiOrb';
 
@@ -91,24 +92,22 @@ const MainTabs = () => {
 
   const tabBar = (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
+      screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: theme.colors.tabBar,
-          borderTopColor: theme.colors.border,
-          borderTopWidth: 0.5,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
-          ...(isDesktop ? { display: 'none' } : {}),
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
         },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textSecondary,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '700' },
-        tabBarIcon: ({ color, size }) => (
-          <Icon name={TAB_ICONS[route.name as keyof MainTabParamList] || 'music'} size={size} color={color} />
-        ),
-      })}
+      }}
+      tabBar={(props) =>
+        // Desktop uses Sidebar instead - no bottom bar at all.
+        isDesktop ? null : <CenterNotchTabBar {...props} icons={TAB_ICONS} />
+      }
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Home' }} />
       <Tab.Screen name="Songs" component={AllSongsScreen} options={{ tabBarLabel: 'Songs' }} />

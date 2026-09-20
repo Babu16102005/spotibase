@@ -11,9 +11,10 @@ const CARD_WIDTH = Math.min((width - 48) / 2, 200);
 interface PlaylistCardProps {
   playlist: PlaylistResponse;
   onPress: () => void;
+  onLongPress?: () => void;
 }
 
-const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist, onPress }) => {
+const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist, onPress, onLongPress }) => {
   const { theme } = useThemeStore();
   const [hovered, setHovered] = useState(false);
 
@@ -36,6 +37,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist, onPress }) => {
         } as any
       ]}
       onPress={onPress}
+      onLongPress={onLongPress}
       activeOpacity={0.8}
       {...onHover}
     >

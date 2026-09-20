@@ -36,6 +36,18 @@ jest.mock('react-native-webview', () => {
   };
 });
 
+jest.mock('expo-speech-recognition', () => ({
+  ExpoSpeechRecognitionModule: {
+    start: jest.fn(),
+    stop: jest.fn(),
+    abort: jest.fn(),
+    requestPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+    getPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+    isRecognitionAvailable: jest.fn(() => true),
+  },
+  useSpeechRecognitionEvent: jest.fn(),
+}));
+
 // RN's Animated.loop/timing would keep JS timers alive and fire state updates
 // after test teardown (act warnings, "import after teardown" failures).
 // Replace the animation primitives with inert no-ops for the test environment.

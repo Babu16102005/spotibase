@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.routes import assistant, speech, health
+from app.routes import assistant, speech, health, audio_tag
 
 app = FastAPI(
     title="SpotiBase AI - FastAPI AI Server",
@@ -25,6 +25,7 @@ app.add_middleware(
 app.include_router(health.router, tags=["health"])
 app.include_router(assistant.router, prefix="/assistant", tags=["assistant"])
 app.include_router(speech.router, prefix="/speech", tags=["speech"])
+app.include_router(audio_tag.router, prefix="/audio", tags=["audio"])
 
 @app.get("/")
 def root():

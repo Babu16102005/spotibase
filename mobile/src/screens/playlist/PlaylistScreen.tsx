@@ -170,8 +170,20 @@ const PlaylistScreen = ({ route, navigation }: any) => {
       isSelected={selectedIds.has(item.id)}
       onToggleSelect={() => toggleSelect(item.id)}
       onLongPress={() => toggleSelect(item.id)}
+      contextPlaylistId={id}
+      onRemovedFromPlaylist={(songId) =>
+        setPlaylist((prev) =>
+          prev
+            ? {
+                ...prev,
+                songs: (prev.songs || []).filter((s) => s.id !== songId),
+                songCount: Math.max(0, (prev.songCount || 0) - 1),
+              }
+            : prev
+        )
+      }
     />
-  ), [selectionMode, selectedIds, toggleSelect, playMultiple, playlist]);
+  ), [selectionMode, selectedIds, toggleSelect, playMultiple, playlist, id]);
 
   if (error || (!playlist && !loading)) {
     return (

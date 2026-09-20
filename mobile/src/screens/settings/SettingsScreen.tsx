@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, Switch, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, Switch, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useThemeStore, usePlayerStore } from '../../store';
 import { useAiOrbStore, AI_ORB_VARIANTS } from '../../store/aiOrbStore';
 import { SiriOrb } from '../../components/SiriOrb';
@@ -108,6 +108,42 @@ const SettingsScreen = ({ navigation }: any) => {
             textStyle={{ color: theme.colors.primary }}
           />
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Microphone (AI Voice)</Text>
+        <Text style={[styles.aboutText, { color: theme.colors.textTertiary, marginBottom: 12 }]}>AI voice needs microphone. If it says unavailable, test here.</Text>
+        <GlassButton
+          variant="primary"
+          size="sm"
+          title="Test Microphone"
+          onPress={async () => {
+            try {
+              if (Platform.OS === 'web') {
+                const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+                s.getTracks().forEach(t => t.stop());
+                Alert.alert('Mic OK', 'Browser microphone works! Use orb on http://localhost:8081 and Allow.');
+              } else {
+                const { AudioModule } = await import('expo-audio');
+                const AM: any = (AudioModule as any).AudioModule || AudioModule;
+                const req = AM.requestRecordingPermissionsAsync || (AudioModule as any).requestRecordingPermissionsAsync;
+                const perm = req ? await req() : await (AudioModule as any).getPermissionsAsync?.();
+                Alert.alert('Mic Status', `Status: ${perm?.status || 'unknown'}\n\nIf denied, go to Phone Settings -> Apps -> SpotiBase -> Permissions -> Microphone -> Allow, then tap again.\n\nIf using Expo Go, allow for Expo Go app.` );
+                if (perm?.status === 'denied') {
+                  const { Linking } = await import('react-native');
+                  Alert.alert('Open Settings?', 'Go to app settings to allow mic?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                  ]);
+                }
+              }
+            } catch (e: any) {
+              Alert.alert('Mic Error', e?.message || String(e));
+            }
+          }}
+          style={{ alignSelf: 'flex-start' }}
+        />
+        <Text style={[styles.aboutText, { color: theme.colors.textTertiary, marginTop: 8, fontSize: 12 }]}>Web: must open http://localhost:8081 (not 10.247...) and click Allow. Android: must be installed APK (not browser) → Settings → Apps → SpotiBase → Allow.</Text>
       </View>
 
       <View style={styles.section}>

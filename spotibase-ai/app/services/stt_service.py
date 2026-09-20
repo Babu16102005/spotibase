@@ -29,11 +29,21 @@ def transcribe(audio_bytes: bytes, filename: str = "audio.webm") -> str:
     """
     audio_bytes -> transcript
     In mock mode returns placeholder; in real mode uses faster-whisper.
+    Repeat clips are served from shared Redis (see cache_service).
     """
     if STT_MODE == "mock":
         # For dev without model, return a deterministic placeholder based on size
         # Client should send real transcript via fallback field if needed
         return ""
+
+    # Cache hit skips Whisper entirely (keyed by audio bytes + model).
+    try:
+        from app.services import cache_service
+        hit = cache_service.get_transcript(audio_bytes, STT_MODEL)
+        if isinstance(hit, str) and hit:
+            return hit
+    except Exception:
+        pass
 
     model = _load_whisper()
     if model is None:
@@ -49,6 +59,11 @@ def transcribe(audio_bytes: bytes, filename: str = "audio.webm") -> str:
         segments, info = model.transcribe(tmp_path, beam_size=5, language=None)
         text = " ".join([s.text.strip() for s in segments]).strip()
         print(f"[STT] lang={info.language} prob={info.language_probability:.2f} text={text[:120]}")
+        try:
+            from app.services import cache_service
+            cache_service.put_transcript(audio_bytes, STT_MODEL, text)
+        except Exception:
+            pass
         return text
     finally:
         try:

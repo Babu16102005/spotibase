@@ -1,6 +1,7 @@
 package com.spotibase.dto.response;
 
 import lombok.AllArgsConstructor;
+import java.io.Serializable;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,7 +14,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AlbumResponse {
+public class AlbumResponse implements Serializable {
     private String id;
     private String name;
     private String description;

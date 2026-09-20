@@ -38,6 +38,21 @@ export const AI_ORB_VARIANTS: Record<AiOrbVariant, { label: string; desc: string
   },
 };
 
+export const AI_ORB_GLOW_COLORS: Record<AiOrbVariant, { outer: string; inner: string }> = {
+  classic: {
+    outer: '#e879f9', // Matching classic pink/magenta aura
+    inner: '#38bdf8', // Matching classic sky cyan core
+  },
+  midnight: {
+    outer: '#ff3e1c', // Matching star duo red
+    inner: '#1c8cff', // Matching star duo electric blue
+  },
+  neon: {
+    outer: '#4ade80', // Matching neon green
+    inner: '#2dd4bf', // Matching neon teal
+  },
+};
+
 const DEFAULT_VARIANT: AiOrbVariant = 'classic';
 
 interface AiOrbState {

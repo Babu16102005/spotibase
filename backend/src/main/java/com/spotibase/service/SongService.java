@@ -9,12 +9,15 @@ import com.spotibase.exception.ResourceNotFoundException;
 import com.spotibase.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.jaudiotagger.audio.AudioFile;
 import org.jaudiotagger.audio.AudioFileIO;
 import org.jaudiotagger.audio.AudioHeader;
 import org.jaudiotagger.tag.FieldKey;
 import org.jaudiotagger.tag.Tag;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,10 +31,14 @@ import java.io.File;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -50,6 +57,12 @@ public class SongService {
     private final StorageService storageService;
     private final SongContributingArtistRepository contributingArtistRepository;
     private final UserRepository userRepository;
+    private final com.spotibase.ai.service.AiTaggingService aiTaggingService;
+
+    // Self-reference for @Cacheable: same-bean calls bypass the cache proxy.
+    @Autowired
+    @Lazy
+    private SongService self;
 
     public SongResponse getSongById(String id, String userId) {
         Song song = songRepository.findByIdWithDetails(id)
@@ -65,21 +78,47 @@ public class SongService {
     public PagedResponse<SongResponse> getAllSongs(int page, int size, String userId) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Song> songPage = songRepository.findAllActive(pageable);
-        List<SongResponse> songs = songPage.getContent().stream()
-                .map(song -> toSongResponse(song, userId))
+        List<String> ids = songPage.getContent().stream()
+                .map(Song::getId)
                 .collect(Collectors.toList());
+        // Cached base (no user data) + per-request liked overlay (1 fast query).
+        List<SongResponse> songs = new ArrayList<>(self.getSongsBase(ids));
+        if (userId != null && !songs.isEmpty()) {
+            Set<String> likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, ids));
+            songs.forEach(s -> s.setLiked(likedIds.contains(s.getId())));
+        }
         return toPagedResponse(songPage, songs);
     }
 
+    /**
+     * Cached song-list base: plain batch fetch + per-song mapping (measured ~0.5s cold
+     * for 10 songs on this stack; the 6-join fetch shape costs 3-4s and must not be
+     * used here). Liked flags are overlaid per request, so this cache holds no user data.
+     * Evicted on every song mutation. Oversized pages bypass the cache (memory guard).
+     */
+    @Cacheable(value = "songs", key = "#ids", condition = "#ids.size() <= 50")
+    public List<SongResponse> getSongsBase(List<String> ids) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Song> byId = songRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Song::getId, Function.identity(), (a, b) -> a));
+        return ids.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .map(song -> toSongResponse(song, false))
+                .collect(Collectors.toList());
+    }
+
     @Transactional
-    @CacheEvict(value = {"home", "recommendations"}, allEntries = true)
+    @CacheEvict(value = {"home", "recommendations", "songs"}, allEntries = true)
     public SongResponse createSong(CreateSongRequest request, MultipartFile audioFile, MultipartFile coverFile) {
         ParsedAudioTags tags = (audioFile != null && !audioFile.isEmpty()) ? parseAudioMetadata(audioFile) : ParsedAudioTags.EMPTY;
         return createSongInternal(request, audioFile, coverFile, tags);
     }
 
     @Transactional
-    @CacheEvict(value = {"home", "recommendations"}, allEntries = true)
+    @CacheEvict(value = {"home", "recommendations", "songs"}, allEntries = true)
     public SongResponse createSongInternal(CreateSongRequest request, MultipartFile audioFile, MultipartFile coverFile, ParsedAudioTags tags) {
         // Resolve primary artist (optional - create "Unknown Artist" if not provided)
         Artist artist;
@@ -178,6 +217,22 @@ public class SongService {
                 song.setCoverUrl(artist.getImageUrl());
             }
 
+            // AI tagging - accurate mood/energy/vibe on upload (FastAPI Qwen -> fallback rule)
+            try {
+                String tagTitle = request.getTitle() != null && !request.getTitle().isBlank() ? request.getTitle() : tags.title;
+                String tagGenre = genre != null ? genre.getName() : tags.genre;
+                String tagLang = request.getLanguage() != null ? request.getLanguage() : tags.language;
+                var tag = aiTaggingService.tag(song, tagTitle, artist.getName(), tagGenre, tagLang, tags.durationMs > 0 ? tags.durationMs : null, tags.bitrate > 0 ? tags.bitrate : null);
+                song.setMoodTags(new ArrayList<>(tag.moodTags()));
+                song.setVibeTags(new ArrayList<>(tag.vibeTags()));
+                try { song.setActivityTags(new ArrayList<>(tag.activityTags())); } catch (Exception ex) {}
+                try { song.setEnergyScore(tag.energyScore()); } catch (Exception ex) {}
+                try { song.setValenceScore(tag.valenceScore()); } catch (Exception ex) {}
+                try { song.setBpm(tag.bpm()); } catch (Exception ex) {}
+                try { song.setAiTagged(tag.aiTagged()); if (tag.aiTagged()) song.setAiTaggedAt(java.time.LocalDateTime.now()); } catch (Exception ex) {}
+            } catch (Exception e) {
+                log.warn("AI tagging failed for '{}', will save without tags: {}", song.getName(), e.getMessage());
+            }
             // Save to DB - if this throws, the catch block will clean up storage
             song = songRepository.save(song);
 
@@ -242,7 +297,7 @@ public class SongService {
      * are stored as-is (FLAC stays FLAC).
      */
     @Transactional
-    @CacheEvict(value = {"home", "recommendations"}, allEntries = true)
+    @CacheEvict(value = {"home", "recommendations", "songs"}, allEntries = true)
     public List<SongResponse> createSongsBulk(List<MultipartFile> files, List<CreateSongRequest> requests) {
         if (files == null || files.isEmpty()) {
             throw new BadRequestException("At least one audio file is required for bulk upload");
@@ -509,7 +564,7 @@ public class SongService {
     }
 
     @Transactional
-    @CacheEvict(value = {"home", "recommendations"}, allEntries = true)
+    @CacheEvict(value = {"home", "recommendations", "songs"}, allEntries = true)
     public SongResponse updateSong(String id, CreateSongRequest request, MultipartFile audioFile, MultipartFile coverFile) {
         Song song = songRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Song", id));
@@ -603,7 +658,7 @@ public class SongService {
     }
 
     @Transactional
-    @CacheEvict(value = {"home", "recommendations"}, allEntries = true)
+    @CacheEvict(value = {"home", "recommendations", "songs"}, allEntries = true)
     public void deleteSong(String id) {
         Song song = songRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Song", id));
@@ -633,6 +688,7 @@ public class SongService {
     }
 
     @Transactional
+    @CacheEvict(value = {"home", "recommendations", "songs"}, allEntries = true)
     public void restoreSong(String id) {
         Song song = songRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Song", id));
@@ -716,6 +772,11 @@ public class SongService {
     }
 
     public SongResponse toSongResponse(Song song, String userId) {
+        boolean liked = userId != null && likeRepository.existsByUserIdAndSongId(userId, song.getId());
+        return toSongResponse(song, liked);
+    }
+
+    public SongResponse toSongResponse(Song song, boolean liked) {
         SongResponse.SongResponseBuilder builder = SongResponse.builder()
                 .id(song.getId())
                 .title(song.getName())
@@ -765,9 +826,7 @@ public class SongService {
             builder.genreId(song.getGenre().getId());
             builder.genreName(song.getGenre().getName());
         }
-        if (userId != null) {
-            builder.liked(likeRepository.existsByUserIdAndSongId(userId, song.getId()));
-        }
+        builder.liked(liked);
 
         // Contributing artists
         if (song.getContributingArtists() != null && !song.getContributingArtists().isEmpty()) {

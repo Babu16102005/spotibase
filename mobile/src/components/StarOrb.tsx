@@ -21,8 +21,8 @@ export const StarOrb: React.FC<StarOrbProps> = ({ size = "58px", style }) => {
   if (Platform.OS !== "web" && WebView) {
     const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
       html,body{margin:0;padding:0;background:transparent;overflow:hidden;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
-      .orb-container{position:relative;width:${orbSize}px;height:${orbSize}px;display:flex;justify-content:center;align-items:center;overflow:hidden;border-radius:50%;transform:rotate(90deg);filter:drop-shadow(0 0 6px #ff3e1c88) drop-shadow(0 0 6px #1c8cff88)}
-      .orb{position:absolute;width:${orbSize}px;aspect-ratio:1;border-radius:50%;background:#060606;filter:blur(24px)}
+      .orb-container{position:relative;width:${orbSize}px;height:${orbSize}px;display:flex;justify-content:center;align-items:center;overflow:hidden;border-radius:50%;transform:rotate(90deg);filter:drop-shadow(0 0 10px #ff3e1caa) drop-shadow(0 0 10px #1c8cffaa)}
+      .orb{position:absolute;width:${orbSize}px;aspect-ratio:1;border-radius:50%;background:#060606;filter:blur(8px)}
       .orb-inner{position:absolute;left:-120%;top:-25%;width:${innerScale * 100}%;aspect-ratio:1;border-radius:50%;background:#ff3e1c;clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);animation:rotate 6s linear infinite}
       .orb-inner:nth-child(2){left:auto;right:-120%;top:auto;bottom:-25%;background:#1c8cff;animation-duration:8s;clip-path:polygon(20% 0%,0% 20%,30% 50%,0% 80%,20% 100%,50% 70%,80% 100%,100% 80%,70% 50%,100% 20%,80% 0%,50% 30%)}
       @keyframes rotate{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
@@ -51,6 +51,7 @@ export const StarOrb: React.FC<StarOrbProps> = ({ size = "58px", style }) => {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
+        borderRadius: "50%",
         ...(style || {}),
       }}
     >
@@ -72,7 +73,7 @@ export const StarOrb: React.FC<StarOrbProps> = ({ size = "58px", style }) => {
           border-radius: 50%;
           rotate: 90deg;
           cursor: pointer;
-          filter: drop-shadow(0 0 6px #ff3e1c88) drop-shadow(0 0 6px #1c8cff88);
+          filter: drop-shadow(0 0 10px #ff3e1caa) drop-shadow(0 0 10px #1c8cffaa);
           transition: all 0.3s ease;
         }
         .orb {
@@ -81,7 +82,7 @@ export const StarOrb: React.FC<StarOrbProps> = ({ size = "58px", style }) => {
           aspect-ratio: 1;
           border-radius: 50%;
           background: #060606;
-          filter: blur(24px);
+          filter: blur(8px);
           transition: all 0.3s ease;
         }
         .orb-container:hover .orb {

@@ -346,6 +346,14 @@ public class RecommendationService {
         }
 
         try {
+            if (userId != null) {
+                sections.add(buildUserPlaylistsSection(userId));
+            }
+        } catch (Exception e) {
+            log.error("Failed to build user playlists section: {}", e.getMessage());
+        }
+
+        try {
             sections.add(buildTrendingSection());
         } catch (Exception e) {
             log.error("Failed to build trending section: {}", e.getMessage());
@@ -497,6 +505,20 @@ public class RecommendationService {
                 .type("SONG")
                 .subtitle("Your listening history")
                 .items(items)
+                .build();
+    }
+
+    private HomeResponse.Section buildUserPlaylistsSection(String userId) {
+        List<PlaylistResponse> playlists = playlistService.getUserPlaylists(userId);
+        if (playlists == null || playlists.isEmpty()) {
+            return null;
+        }
+        return HomeResponse.Section.builder()
+                .id("your-playlists")
+                .title("Your Playlists")
+                .type("PLAYLIST")
+                .subtitle("Quick access to your collections")
+                .items(playlists.stream().limit(10).collect(Collectors.toList()))
                 .build();
     }
 

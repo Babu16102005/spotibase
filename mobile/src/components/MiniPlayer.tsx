@@ -193,7 +193,7 @@ const MiniPlayer: React.FC<MiniPlayerProps> = ({ testID }) => {
 const styles = StyleSheet.create({
   outerWrap: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 68,
     left: 0,
     right: 0,
     borderTopLeftRadius: 16,

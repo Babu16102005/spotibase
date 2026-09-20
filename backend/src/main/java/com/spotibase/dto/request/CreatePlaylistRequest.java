@@ -17,7 +17,7 @@ public class CreatePlaylistRequest {
 
     private String description;
     @Builder.Default
-    private boolean isPublic = true;
+    private boolean isPublic = false;
     @Builder.Default
     private boolean isCollaborative = false;
 }

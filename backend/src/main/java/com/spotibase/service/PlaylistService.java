@@ -18,9 +18,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -223,21 +227,56 @@ public class PlaylistService {
 
         List<PlaylistSong> playlistSongs = playlistSongRepository.findByPlaylistIdOrderByPositionAsc(playlistId);
         Map<String, PlaylistSong> songMap = playlistSongs.stream()
-                .collect(Collectors.toMap(PlaylistSong::getSongId, Function.identity()));
+                .collect(Collectors.toMap(PlaylistSong::getSongId, Function.identity(), (a, b) -> a));
 
+        // Validate before touching any row: negative positions and unknown songs are client errors (400, not 500).
         for (ReorderItem item : reorderItems) {
-            PlaylistSong ps = songMap.get(item.getSongId());
-            if (ps != null) {
-                ps.setPosition(item.getNewPosition());
-                playlistSongRepository.save(ps);
+            if (item.getNewPosition() < 0) {
+                throw new BadRequestException("Invalid position: " + item.getNewPosition());
+            }
+            if (!songMap.containsKey(item.getSongId())) {
+                throw new BadRequestException("Song not in playlist: " + item.getSongId());
             }
         }
 
-        List<PlaylistSong> reordered = playlistSongRepository.findByPlaylistIdOrderByPositionAsc(playlistId);
-        for (int i = 0; i < reordered.size(); i++) {
-            reordered.get(i).setPosition(i);
-            playlistSongRepository.save(reordered.get(i));
+        // UNIQUE(playlist_id, position) is checked per-statement by Postgres, so writing final
+        // positions directly can collide mid-flush (e.g. swapping 0<->1). Park every row at a
+        // unique temporary slot first, flush, then write the final contiguous positions.
+        int tmp = -1;
+        for (PlaylistSong ps : playlistSongs) {
+            ps.setPosition(tmp--);
         }
+        playlistSongRepository.saveAll(playlistSongs);
+        playlistSongRepository.flush();
+
+        // Mentioned songs take their requested slots (stable for ties); unmentioned keep
+        // old relative order in the remaining free slots. All targets are distinct and every
+        // row currently sits at a negative temp slot, so the flush cannot collide. Gaps are
+        // harmless: all reads order by position, appends use max+1.
+        List<ReorderItem> ordered = new ArrayList<>(reorderItems);
+        ordered.sort(Comparator.comparingInt(ReorderItem::getNewPosition));
+        Set<String> placed = new HashSet<>();
+        Set<Integer> taken = new HashSet<>();
+        for (ReorderItem item : ordered) {
+            if (!placed.add(item.getSongId())) {
+                continue;
+            }
+            int target = item.getNewPosition();
+            while (!taken.add(target)) {
+                target++;
+            }
+            songMap.get(item.getSongId()).setPosition(target);
+        }
+        for (PlaylistSong ps : playlistSongs) {
+            if (!placed.contains(ps.getSongId())) {
+                int target = 0;
+                while (!taken.add(target)) {
+                    target++;
+                }
+                ps.setPosition(target);
+            }
+        }
+        playlistSongRepository.saveAll(playlistSongs);
 
         updatePlaylistStats(playlistId);
         log.info("Songs reordered in playlist {} by user {}", playlistId, userId);

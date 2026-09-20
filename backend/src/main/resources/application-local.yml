@@ -1,0 +1,70 @@
+# ──────────────────────────────────────────────────────────────
+# LOCAL DEV profile  –  loaded when you run with -Dspring.profiles.active=local
+# DO NOT COMMIT this file (it is in .gitignore already via *.local.yml,
+# or add "application-local.yml" to .gitignore manually).
+# ──────────────────────────────────────────────────────────────
+
+spring:
+  datasource:
+    url: jdbc:postgresql://aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=disable
+    username: postgres.yuwyzyvwxbwzlhrbyaqe
+    password: sathishbabu16102005
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 18
+    validate-on-migrate: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  mail:
+    host: smtp.sendgrid.net
+    port: 587
+    username: noreply@spotibase.local
+    password: dummy-local-password
+
+supabase:
+  url: https://yuwyzyvwxbwzlhrbyaqe.supabase.co
+  anon-key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1d3l6eXZ3eGJ3emxocmJ5YXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxODIyOTEsImV4cCI6MjEwMTc1ODI5MX0.UoMLTBXrWgzAIKlH9xfuJlXAlxATFoocGjSu3RRnaA8
+  service-role-key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1d3l6eXZ3eGJ3emxocmJ5YXFlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjE4MjI5MSwiZXhwIjoyMTAxNzU4MjkxfQ.eAuWgOtvmn84_0K_8s1lHR2ocgMAG_re9EiMIjyK16c
+  jwt-secret: 6b6ef574-d3bf-40d0-8702-a334ed659ef4
+  storage:
+    bucket: spotibase
+    songs-path: songs
+    covers-path: covers
+    avatars-path: avatars
+
+jwt:
+  expiration: 86400000
+  refresh-expiration: 2592000000
+
+r2:
+  account-id: a8bb2d3760581ae283864f0bfae655bd
+  access-key-id: 520481a431fb87db7bb4ed9c24d10226
+  secret-access-key: 4f5071d683827ee32f69ca8524c51ca9fe44a8ae33fdb5a545565e8ca8122693
+  bucket-name: spotibase-songs
+  public-url: https://pub-2f649fd1c9734b909de6fe60db01e12d.r2.dev
+  region: auto
+  songs-path: songs
+
+ai-service:
+  enabled: true
+  service-url: http://localhost:7860
+  fallback-on-error: true
+
+ai:
+  enabled: true
+  service-url: http://localhost:7860
+  fallback-on-error: true
+
+spring.ai.openai.api-key: "dummy-not-used-locally"
+
+app:
+  base-url: http://localhost:8088
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:8081,exp://localhost:19000

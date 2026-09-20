@@ -81,6 +81,9 @@ services:
       - STT_MODEL=${STT_MODEL:-small}
       - QWEN_MODEL=${QWEN_MODEL:-Qwen/Qwen2.5-3B-Instruct}
       - HF_TOKEN=${HF_TOKEN:-}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
     restart: unless-stopped
     networks:
       - spotibase-network

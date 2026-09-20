@@ -1,6 +1,7 @@
 package com.spotibase.dto.response;
 
 import lombok.AllArgsConstructor;
+import java.io.Serializable;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,7 +13,7 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserResponse {
+public class UserResponse implements Serializable {
     private String id;
     private String email;
     private String username;

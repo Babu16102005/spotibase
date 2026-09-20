@@ -1,6 +1,7 @@
 package com.spotibase.dto.response;
 
 import lombok.AllArgsConstructor;
+import java.io.Serializable;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,7 +12,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DownloadResponse {
+public class DownloadResponse implements Serializable {
     private String id;
     private String songId;
     private String filePath;

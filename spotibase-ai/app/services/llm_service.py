@@ -197,6 +197,31 @@ def understand(text: str, context=None) -> dict:
     """
     Main entry: text -> {actions, response, clarificationNeeded?}
     Tries real Qwen if configured, else mock.
+    Repeat inputs are served from shared Redis (see cache_service).
+    """
+    # 0. Shared-cache lookup (deterministic per normalized text + context)
+    try:
+        from app.services import cache_service
+        hit = cache_service.get_understand(text, AI_MODE, context)
+        if isinstance(hit, dict) and "actions" in hit:
+            return hit
+    except Exception:
+        pass
+
+    result = _understand_uncached(text, context)
+
+    try:
+        from app.services import cache_service
+        cache_service.put_understand(text, AI_MODE, context, result)
+    except Exception:
+        pass
+    return result
+
+
+def _understand_uncached(text: str, context=None) -> dict:
+    """
+    Main entry: text -> {actions, response, clarificationNeeded?}
+    Tries real Qwen if configured, else mock.
     """
     # 1. Simple detector bypass (no LLM)
     simple = _simple_detect(text)

@@ -22,6 +22,9 @@ interface SongCardProps {
   isSelected?: boolean;
   onToggleSelect?: () => void;
   onLongPress?: () => void;
+  /** Playlist context: enables "Remove from This Playlist" in the options menu (link-only). */
+  contextPlaylistId?: string;
+  onRemovedFromPlaylist?: (songId: string) => void;
 }
 
 const SongCard: React.FC<SongCardProps> = ({
@@ -38,6 +41,8 @@ const SongCard: React.FC<SongCardProps> = ({
   isSelected = false,
   onToggleSelect,
   onLongPress,
+  contextPlaylistId,
+  onRemovedFromPlaylist,
 }) => {
   const play = usePlayerStore((s) => s.play);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
@@ -207,6 +212,8 @@ const SongCard: React.FC<SongCardProps> = ({
           song={song}
           onClose={handleCloseOptions}
           onSongUpdated={onSongUpdated}
+          contextPlaylistId={contextPlaylistId}
+          onRemovedFromPlaylist={onRemovedFromPlaylist}
         />
       </>
     );
@@ -341,6 +348,8 @@ const SongCard: React.FC<SongCardProps> = ({
         song={song}
         onClose={handleCloseOptions}
         onSongUpdated={onSongUpdated}
+        contextPlaylistId={contextPlaylistId}
+        onRemovedFromPlaylist={onRemovedFromPlaylist}
       />
     </View>
   );

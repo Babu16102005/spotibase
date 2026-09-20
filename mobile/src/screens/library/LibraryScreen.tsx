@@ -12,8 +12,8 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { libraryApi, playlistApi, songApi } from '../../api/client';
-import { useThemeStore, usePlayerStore } from '../../store';
+import { libraryApi, playlistApi, songApi, adminApi } from '../../api/client';
+import { useThemeStore, usePlayerStore, useAuthStore } from '../../store';
 import { LibraryResponse } from '../../types';
 import PlaylistCard from '../../components/PlaylistCard';
 import AlbumCard from '../../components/AlbumCard';
@@ -32,6 +32,8 @@ const LibraryScreen = ({ navigation }: any) => {
   const [showLikedSongsList, setShowLikedSongsList] = useState(false);
   const { theme } = useThemeStore();
   const playMultiple = usePlayerStore((s) => s.playMultiple);
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === 'ADMIN';
 
   const [error, setError] = useState<string | null>(null);
 
@@ -74,8 +76,37 @@ const LibraryScreen = ({ navigation }: any) => {
     fetchLibrary();
   };
 
-  const handleCreatePlaylist = async () => {
-    if (!playlistTitle.trim()) return;
+  // Long-press a playlist (like songs) to delete it completely.
+  const handleDeletePlaylist = useCallback(
+    (playlistId: string, playlistName: string) => {
+    Alert.alert(
+      'Delete Playlist',
+      `Permanently delete "${playlistName}" and all its songs links? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (isAdmin) await adminApi.forceDeletePlaylist(playlistId);
+              else await playlistApi.delete(playlistId);
+              setData((prev) =>
+                prev ? { ...prev, playlists: (prev.playlists || []).filter((p) => p.id !== playlistId) } : prev
+              );
+              fetchLibrary();
+            } catch (err: any) {
+              Alert.alert('Delete Failed', err?.response?.data?.message || err?.message || 'Could not delete playlist');
+            }
+          },
+        },
+      ]
+    );
+    },
+    [isAdmin, fetchLibrary]
+  );
+
+  const handleCreatePlaylist = async () => {    if (!playlistTitle.trim()) return;
     setCreating(true);
     try {
       await playlistApi.create({
@@ -277,6 +308,7 @@ const LibraryScreen = ({ navigation }: any) => {
               key={p.id}
               playlist={p}
               onPress={() => navigation?.navigate('Playlist', { id: p.id })}
+              onLongPress={() => handleDeletePlaylist(p.id, p.name)}
             />
           ))}
           {data.playlists?.length === 0 && (
@@ -311,7 +343,7 @@ const LibraryScreen = ({ navigation }: any) => {
         )}
       </View>
     );
-  }, [loading, error, data, theme, fetchLibrary, likedCount, showLikedSongsList, toggleSelect, selectionMode, selectedIds, navigation]);
+  }, [loading, error, data, theme, fetchLibrary, likedCount, showLikedSongsList, toggleSelect, selectionMode, selectedIds, navigation, handleDeletePlaylist, playMultiple]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>

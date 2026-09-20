@@ -91,7 +91,8 @@
           "sounds": [],
           "mode": "production"
         }
-      ]
+      ],
+      "expo-speech-recognition"
     ],
     "extra": {
       "eas": {

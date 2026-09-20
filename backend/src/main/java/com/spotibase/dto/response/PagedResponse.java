@@ -1,6 +1,7 @@
 package com.spotibase.dto.response;
 
 import lombok.AllArgsConstructor;
+import java.io.Serializable;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,7 +12,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PagedResponse<T> {
+public class PagedResponse<T> implements Serializable {
     private List<T> content;
     private int page;
     private int size;

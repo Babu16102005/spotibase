@@ -36,7 +36,7 @@ public class Playlist {
 
     @Column(nullable = false)
     @Builder.Default
-    private boolean isPublic = true;
+    private boolean isPublic = false;
 
     @Column(nullable = false)
     @Builder.Default

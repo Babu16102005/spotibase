@@ -16,7 +16,7 @@ public interface PlaylistRepository extends JpaRepository<Playlist, String> {
 
     List<Playlist> findByUserIdAndIsPublicTrue(String userId);
 
-    @Query("SELECT p FROM Playlist p WHERE p.isPublic = true AND p.archived = false ORDER BY p.likeCount DESC")
+    @Query("SELECT p FROM Playlist p JOIN p.user u WHERE p.isPublic = true AND p.archived = false AND u.active = true ORDER BY p.likeCount DESC")
     List<Playlist> findFeaturedPlaylists(Pageable pageable);
 
     @Query("SELECT p FROM Playlist p WHERE p.isPublic = true AND p.archived = false ORDER BY p.updatedAt DESC")

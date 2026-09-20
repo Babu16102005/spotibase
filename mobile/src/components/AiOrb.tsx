@@ -24,11 +24,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import { usePlayerStore, useThemeStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
-import { useAiOrbStore, AI_ORB_VARIANTS } from '../store/aiOrbStore';
+import { useAiOrbStore, AI_ORB_VARIANTS, AI_ORB_GLOW_COLORS } from '../store/aiOrbStore';
 import apiClient, { aiApi } from '../api/client';
 import { SiriOrb } from './SiriOrb';
 import { StarOrb } from './StarOrb';
 import Icon from './Icon';
+import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
 
 // Platform-specific audio
 let AudioModule: any = null;
@@ -78,33 +79,65 @@ export const AiOrb: React.FC = () => {
   const rotation = useSharedValue(0);
   const pulse = useSharedValue(1);
   const orbScale = useSharedValue(1);
-  const glowOpacity = useSharedValue(0.6);
+  const glowOpacity = useSharedValue(0.5);
+  const glowScale = useSharedValue(1);
 
   useEffect(() => {
-    // idle slow rotation
-    rotation.value = withRepeat(withTiming(360, { duration: 8000, easing: Easing.linear }), -1, false);
-    pulse.value = withRepeat(withSequence(withTiming(1.15, { duration: 1500, easing: Easing.inOut(Easing.ease) }), withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) })), -1, true);
-    glowOpacity.value = withRepeat(withSequence(withTiming(0.9, { duration: 1200 }), withTiming(0.4, { duration: 1200 })), -1, true);
+    // Idle: slow rotation and bright natural light breathing
+    rotation.value = withRepeat(withTiming(360, { duration: 12000, easing: Easing.linear }), -1, false);
+    pulse.value = withRepeat(withSequence(withTiming(1.06, { duration: 2400, easing: Easing.inOut(Easing.sin) }), withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.sin) })), -1, true);
+    glowScale.value = withRepeat(
+      withSequence(
+        withTiming(1.10, { duration: 2600, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.98, { duration: 2600, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+    glowOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.68, { duration: 2600, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.38, { duration: 2600, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
   }, []);
 
   useEffect(() => {
     if (state === 'listening') {
-      rotation.value = withRepeat(withTiming(360, { duration: 1200, easing: Easing.linear }), -1, false);
-      orbScale.value = withRepeat(withSequence(withTiming(1.08, { duration: 400 }), withTiming(1, { duration: 400 })), -1, true);
-      pulse.value = withRepeat(withTiming(1.35, { duration: 600, easing: Easing.inOut(Easing.ease) }), -1, true);
-      glowOpacity.value = withTiming(1, { duration: 300 });
+      rotation.value = withRepeat(withTiming(360, { duration: 1600, easing: Easing.linear }), -1, false);
+      orbScale.value = withRepeat(withSequence(withTiming(1.06, { duration: 500 }), withTiming(1, { duration: 500 })), -1, true);
+      glowScale.value = withRepeat(withSequence(withTiming(1.18, { duration: 600, easing: Easing.inOut(Easing.ease) }), withTiming(1.04, { duration: 600, easing: Easing.inOut(Easing.ease) })), -1, true);
+      glowOpacity.value = withRepeat(withSequence(withTiming(0.85, { duration: 600 }), withTiming(0.55, { duration: 600 })), -1, true);
     } else if (state === 'thinking') {
-      rotation.value = withRepeat(withTiming(360, { duration: 600, easing: Easing.linear }), -1, false);
-      pulse.value = withRepeat(withTiming(1.25, { duration: 400 }), -1, true);
-      glowOpacity.value = withRepeat(withSequence(withTiming(1, { duration: 300 }), withTiming(0.6, { duration: 300 })), -1, true);
+      rotation.value = withRepeat(withTiming(360, { duration: 800, easing: Easing.linear }), -1, false);
+      glowScale.value = withRepeat(withTiming(1.12, { duration: 400, easing: Easing.inOut(Easing.ease) }), -1, true);
+      glowOpacity.value = withRepeat(withSequence(withTiming(0.75, { duration: 400 }), withTiming(0.45, { duration: 400 })), -1, true);
     } else if (state === 'idle') {
-      rotation.value = withRepeat(withTiming(360, { duration: 8000, easing: Easing.linear }), -1, false);
+      rotation.value = withRepeat(withTiming(360, { duration: 12000, easing: Easing.linear }), -1, false);
       orbScale.value = withTiming(1, { duration: 400 });
-      pulse.value = withRepeat(withSequence(withTiming(1.15, { duration: 1500 }), withTiming(1, { duration: 1500 })), -1, true);
-      glowOpacity.value = withRepeat(withSequence(withTiming(0.9, { duration: 1200 }), withTiming(0.4, { duration: 1200 })), -1, true);
+      glowScale.value = withRepeat(
+        withSequence(
+          withTiming(1.10, { duration: 2600, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.98, { duration: 2600, easing: Easing.inOut(Easing.sin) })
+        ),
+        -1,
+        true
+      );
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.68, { duration: 2600, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.38, { duration: 2600, easing: Easing.inOut(Easing.sin) })
+        ),
+        -1,
+        true
+      );
     } else {
       // done/error - settle
       orbScale.value = withTiming(1, { duration: 300 });
+      glowScale.value = withTiming(1, { duration: 300 });
+      glowOpacity.value = withTiming(0.40, { duration: 300 });
     }
   }, [state]);
 
@@ -114,11 +147,20 @@ export const AiOrb: React.FC = () => {
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
-    opacity: glowOpacity.value,
   }));
 
   const orbScaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: orbScale.value }],
+  }));
+
+  const naturalGlowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: glowScale.value }],
+    opacity: glowOpacity.value,
+  }));
+
+  const innerGlowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: glowScale.value * 0.95 }],
+    opacity: glowOpacity.value * 1.25,
   }));
 
   // Web Speech Recognition fallback
@@ -681,19 +723,42 @@ export const AiOrb: React.FC = () => {
     setState('idle');
   };
 
+  const glowColors = AI_ORB_GLOW_COLORS[variant] || AI_ORB_GLOW_COLORS.classic;
+
   return (
     <>
-      {/* Floating Orb - Siri style, colors from Settings - no outer glow */}
+      {/* Floating Orb with Natural Dynamic Light Glow Matching Orb Colors */}
       <View style={styles.orbWrapper} pointerEvents="box-none">
+        {/* Seamless Borderless Volumetric Light Glow */}
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.radialGlowWrapper, naturalGlowStyle]}
+        >
+          <Svg width={112} height={112} viewBox="0 0 112 112">
+            <Defs>
+              <RadialGradient id={`orbRadialGlow_${variant}`} cx="50%" cy="50%" rx="50%" ry="50%">
+                <Stop offset="0%" stopColor={glowColors.inner} stopOpacity="0.95" />
+                <Stop offset="35%" stopColor={glowColors.outer} stopOpacity="0.65" />
+                <Stop offset="65%" stopColor={glowColors.outer} stopOpacity="0.25" />
+                <Stop offset="88%" stopColor={glowColors.outer} stopOpacity="0.06" />
+                <Stop offset="100%" stopColor={glowColors.outer} stopOpacity="0" />
+              </RadialGradient>
+            </Defs>
+            <Circle cx="56" cy="56" r="56" fill={`url(#orbRadialGlow_${variant})`} />
+          </Svg>
+        </Animated.View>
 
         {/* Orb - switches between Siri and Star Duo based on Settings variant */}
         <Animated.View style={[orbScaleStyle]}>
           <TouchableOpacity
             onPress={onOrbPress}
             onLongPress={onLongPress}
-            activeOpacity={0.92}
+            activeOpacity={1}
             style={styles.siriTouch}
           >
+            {/* Thick 100% opaque base shield */}
+            <View style={styles.thickBaseLayer} pointerEvents="none" />
+
             {variant === 'midnight' ? (
               <StarOrb size="58px" />
             ) : (
@@ -875,6 +940,15 @@ const styles = StyleSheet.create({
     zIndex: 99,
     elevation: 12,
   },
+  radialGlowWrapper: {
+    position: 'absolute',
+    width: 112,
+    height: 112,
+    top: -20,
+    left: -20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   glow: {
     position: 'absolute',
     width: 72,
@@ -927,7 +1001,23 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  siriTouch: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  siriTouch: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  thickBaseLayer: {
+    position: 'absolute',
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#000',
+    zIndex: 0,
+  },
   siriOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   listeningBars: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   bar: { width: 3, borderRadius: 2, minHeight: 8 },

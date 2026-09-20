@@ -10,18 +10,20 @@ spring:
 
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
       - org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
 
   cache:
-    type: simple
+    # Shared Redis (same server the AI service uses). Falls back gracefully:
+    # cache ops time out fast; song pages still load, just uncached.
+    type: redis
+    redis:
+      time-to-live: 90s
 
   datasource:
-    # Supabase direct hosts (db.<ref>.supabase.co) are IPv6-only; the pooler is reachable over IPv4.
-    # Session mode (6543) is recommended for Hibernate/JPA; username needs the project-ref suffix on the pooler.
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://aws-1-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require}
-    username: ${SPRING_DATASOURCE_USERNAME:${SUPABASE_DB_USERNAME:postgres}.${SUPABASE_PROJECT_REF}}
+    # Host/dev runs must provide this explicitly. A stale hardcoded Supabase
+    # pooler URL caused repeated auth failures that looked like bean failures.
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres.${SUPABASE_PROJECT_REF}}
     password: ${SPRING_DATASOURCE_PASSWORD:${SUPABASE_DB_PASSWORD}}
     driver-class-name: org.postgresql.Driver
     hikari:
@@ -66,17 +68,17 @@ spring:
       max-file-size: 250MB
       max-request-size: 300MB
 
-  # Redis is disabled - using simple in-memory cache instead
-  # data:
-  #   redis:
-  #     host: ${REDIS_HOST:localhost}
-  #     port: ${REDIS_PORT:6379}
-  #     timeout: 2000ms
-  #     lettuce:
-  #       pool:
-  #         max-active: 16
-  #         max-idle: 8
-  #         min-idle: 4
+  # Shared Redis cache server (localhost for host runs, `redis` in compose).
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
 
   ai:
     openai:

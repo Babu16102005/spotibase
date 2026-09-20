@@ -14,6 +14,9 @@ public interface LikeRepository extends JpaRepository<Song, String> {
     @Query(value = "SELECT CASE WHEN COUNT(*) > 0 THEN true ELSE false END FROM liked_songs WHERE user_id = :userId AND song_id = :songId", nativeQuery = true)
     boolean existsByUserIdAndSongId(@Param("userId") String userId, @Param("songId") String songId);
 
+    @Query(value = "SELECT song_id FROM liked_songs WHERE user_id = :userId AND song_id IN :songIds", nativeQuery = true)
+    List<String> findLikedSongIds(@Param("userId") String userId, @Param("songIds") List<String> songIds);
+
     @Query(value = "SELECT CASE WHEN COUNT(*) > 0 THEN true ELSE false END FROM liked_albums WHERE user_id = :userId AND album_id = :albumId", nativeQuery = true)
     boolean existsByUserIdAndAlbumId(@Param("userId") String userId, @Param("albumId") String albumId);
 
