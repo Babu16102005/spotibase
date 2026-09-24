@@ -60,8 +60,9 @@ class QueueControllerTest extends BaseWebMvcTest {
 
     @Test
     void getQueue_unauthenticated_isRejected() throws Exception {
+        // Production + TestSecurityConfig entryPoint: unauthenticated => 401 (not 403).
         mockMvc.perform(get("/api/v1/queue"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -10,6 +10,9 @@ jest.mock('../api/client', () => ({
     socialAuth: jest.fn(),
     refresh: jest.fn(),
   },
+  homeApi: {
+    getHome: jest.fn().mockResolvedValue({ data: { greeting: 'Good Evening', sections: [] } }),
+  },
 }));
 
 const storage = getStorage('spotibase-auth');

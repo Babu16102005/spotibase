@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Svg, { Path } from 'react-native-svg';
-import { usePlayerStore, useThemeStore } from '../store';
+import { useThemeStore } from '../store';
 import Icon from './Icon';
 
 type Props = BottomTabBarProps & {
@@ -23,9 +23,10 @@ const CenterNotchTabBar: React.FC<Props> = ({ state, navigation, icons }) => {
   const { theme } = useThemeStore();
   const { width: W } = useWindowDimensions();
   const cx = W / 2;
-  // When the MiniPlayer is up it spans the full width - a scooped top edge would
-  // leave a notch-shaped gap of background between player and bar, so go flat.
-  const miniPlayerUp = usePlayerStore((s) => s.isMiniPlayerVisible);
+  // Scoop is ALWAYS on (even when MiniPlayer is up): MiniPlayer overlaps the
+  // bar by CRADLE_GAP so its background covers the seam. No store subscription
+  // here on purpose — subscribing to isMiniPlayerVisible re-renders + recalcs
+  // the SVG path on first play, causing a visible flicker.
 
   // Smooth cradle with tangent shoulder fillets:
   // 1. Left flat bar smoothly rounds down via a shoulder arc (radius r)
@@ -48,14 +49,12 @@ const CenterNotchTabBar: React.FC<Props> = ({ state, navigation, icons }) => {
   const rightContactX = cx + dx - dx * t;
   const rightContactY = leftContactY;
 
-  const scoop = !miniPlayerUp
-    ? [
-        `L ${leftTopX} ${EDGE_TOP}`,
-        `A ${r} ${r} 0 0 1 ${leftContactX} ${leftContactY}`,
-        `A ${R} ${R} 0 1 0 ${rightContactX} ${rightContactY}`,
-        `A ${r} ${r} 0 0 1 ${rightTopX} ${EDGE_TOP}`,
-      ]
-    : [];
+  const scoop = [
+    `L ${leftTopX} ${EDGE_TOP}`,
+    `A ${r} ${r} 0 0 1 ${leftContactX} ${leftContactY}`,
+    `A ${R} ${R} 0 1 0 ${rightContactX} ${rightContactY}`,
+    `A ${r} ${r} 0 0 1 ${rightTopX} ${EDGE_TOP}`,
+  ];
   const bgPath = [
     `M 0 ${BAR_HEIGHT}`,
     `L 0 ${EDGE_TOP + 8}`,
@@ -138,6 +137,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: 'transparent',
+    zIndex: 1,
+    elevation: 1,
   },
   row: {
     flex: 1,

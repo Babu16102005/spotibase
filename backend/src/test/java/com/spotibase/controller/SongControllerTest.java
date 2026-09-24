@@ -7,6 +7,7 @@ import com.spotibase.dto.response.SongResponse;
 import com.spotibase.entity.Role;
 import com.spotibase.exception.ResourceNotFoundException;
 import com.spotibase.service.LikeService;
+import com.spotibase.service.R2StorageService;
 import com.spotibase.service.SongService;
 import com.spotibase.support.BaseWebMvcTest;
 import com.spotibase.support.TestSecurityConfig;
@@ -19,6 +20,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+
+import java.io.ByteArrayInputStream;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -28,6 +34,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -97,10 +104,9 @@ class SongControllerTest extends BaseWebMvcTest {
 
     @Test
     void getSongById_unauthenticated_isRejected() throws Exception {
-        // Production returns 403: no AuthenticationEntryPoint is configured, so Spring Security
-        // uses the default Http403ForbiddenEntryPoint.
+        // Production + TestSecurityConfig entryPoint: unauthenticated => 401.
         mockMvc.perform(get("/api/v1/songs/song-1"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -166,8 +172,9 @@ class SongControllerTest extends BaseWebMvcTest {
 
     @Test
     void likeSong_unauthenticated_isRejected() throws Exception {
+        // Production + TestSecurityConfig entryPoint: unauthenticated => 401 (not 403).
         mockMvc.perform(post("/api/v1/songs/song-1/like"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         verify(likeService, org.mockito.Mockito.never()).likeSong(anyString(), anyString());
     }
@@ -183,51 +190,251 @@ class SongControllerTest extends BaseWebMvcTest {
 
     // ---------- stream ----------
 
-    @Test
-    void streamSong_isPermitAll_streamsFromR2() throws Exception {
-        com.spotibase.entity.Song song = com.spotibase.entity.Song.builder()
+    private static final String BROWSER_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+    private static final String STREAM_URL = "https://pub-example.r2.dev/songs/artist-1/song-1.mp3";
+    private static final String STREAM_KEY = "songs/artist-1/song-1.mp3";
+
+    private com.spotibase.entity.Song buildStreamSong() {
+        return com.spotibase.entity.Song.builder()
                 .id("song-1")
                 .name("Hit Song")
-                .fileUrl("https://pub-example.r2.dev/songs/artist-1/song-1.mp3")
+                .fileUrl(STREAM_URL)
                 .durationMs(180000)
                 .fileFormat("MP3")
                 .build();
-        when(songService.getSongEntityById("song-1")).thenReturn(song);
-        when(r2StorageService.resolveKey("https://pub-example.r2.dev/songs/artist-1/song-1.mp3"))
-                .thenReturn("songs/artist-1/song-1.mp3");
-        when(r2StorageService.readRange("songs/artist-1/song-1.mp3", null))
-                .thenReturn(new com.spotibase.service.R2StorageService.R2ObjectStream(
-                        mock(software.amazon.awssdk.core.ResponseInputStream.class),
-                        100000, 0, 99999, "audio/mpeg"));
+    }
 
-        mockMvc.perform(get("/api/v1/songs/song-1/stream"))
-                .andExpect(status().isOk())
+    // Real (empty) R2 stream: exercises the production 64KB copy loop and
+    // try-with-resources close path without Mockito final-class stubbing.
+    private ResponseInputStream<GetObjectResponse> emptyR2Stream() {
+        return new ResponseInputStream<>(GetObjectResponse.builder().build(),
+                new ByteArrayInputStream(new byte[0]));
+    }
+
+    private void stubR2Head(long size, String eTag) {
+        when(r2StorageService.resolveKey(STREAM_URL)).thenReturn(STREAM_KEY);
+        when(r2StorageService.headObject(STREAM_KEY))
+                .thenReturn(new R2StorageService.R2ObjectInfo(size, "audio/mpeg", eTag));
+    }
+
+    private void stubR2Read(String s3Range, long size, long start, long end, String eTag) throws Exception {
+        when(r2StorageService.readRange(eq(STREAM_KEY), eq(s3Range)))
+                .thenReturn(new R2StorageService.R2ObjectStream(
+                        emptyR2Stream(), size, start, end, "audio/mpeg", eTag));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions dispatchStream(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder requestBuilder) throws Exception {
+        MvcResult result = mockMvc.perform(requestBuilder)
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        return mockMvc.perform(asyncDispatch(result));
+    }
+
+    @Test
+    void streamSong_noRange_browserUA_returns206FirstChunkAndCountsPlay() throws Exception {
+        // No Range header: always-206 contract serves the first 1MB chunk for
+        // instant start (documented fast-start behavior, not a full 200).
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(10000000L, "abc123");
+        stubR2Read("bytes=0-1048575", 10000000L, 0, 1048575, "\"abc123\"");
+
+        dispatchStream(get("/api/v1/songs/song-1/stream").header("User-Agent", BROWSER_UA))
+                .andExpect(status().isPartialContent())
                 .andExpect(header().string("Accept-Ranges", "bytes"))
-                .andExpect(header().string("Content-Type", "audio/mpeg"));
+                .andExpect(header().string("Content-Type", "audio/mpeg"))
+                .andExpect(header().string("Content-Range", "bytes 0-1048575/10000000"))
+                .andExpect(header().string("Content-Length", "1048576"))
+                .andExpect(header().string("ETag", "\"abc123\""))
+                .andExpect(header().string("Cache-Control", "public, max-age=3600"))
+                .andExpect(header().string("Access-Control-Expose-Headers",
+                        "Content-Range, Accept-Ranges, Content-Length, Content-Type, ETag"));
 
         verify(songService).incrementPlayCount("song-1");
     }
 
     @Test
-    void streamSong_withRange_returnsPartialContent() throws Exception {
-        com.spotibase.entity.Song song = com.spotibase.entity.Song.builder()
-                .id("song-1")
-                .name("Hit Song")
-                .fileUrl("https://pub-example.r2.dev/songs/artist-1/song-1.mp3")
-                .fileFormat("MP3")
-                .build();
-        when(songService.getSongEntityById("song-1")).thenReturn(song);
-        when(r2StorageService.resolveKey("https://pub-example.r2.dev/songs/artist-1/song-1.mp3"))
-                .thenReturn("songs/artist-1/song-1.mp3");
-        when(r2StorageService.readRange(eq("songs/artist-1/song-1.mp3"), any()))
-                .thenReturn(new com.spotibase.service.R2StorageService.R2ObjectStream(
-                        mock(software.amazon.awssdk.core.ResponseInputStream.class),
-                        100000, 0, 1023, "audio/mpeg"));
+    void streamSong_isPermitAll_unauthenticatedCanStream() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+        stubR2Read("bytes=0-1023", 100000L, 0, 1023, "\"abc123\"");
 
-        mockMvc.perform(get("/api/v1/songs/song-1/stream").header("Range", "bytes=0-1023"))
+        // No credentials at all: the stream endpoint stays permitAll.
+        dispatchStream(get("/api/v1/songs/song-1/stream")
+                        .header("User-Agent", BROWSER_UA)
+                        .header("Range", "bytes=0-1023"))
+                .andExpect(status().isPartialContent())
+                .andExpect(header().string("Content-Range", "bytes 0-1023/100000"));
+    }
+
+    @Test
+    void streamSong_withRange_returnsPartialContent() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+        stubR2Read("bytes=0-1023", 100000L, 0, 1023, "\"abc123\"");
+
+        dispatchStream(get("/api/v1/songs/song-1/stream")
+                        .header("User-Agent", BROWSER_UA)
+                        .header("Range", "bytes=0-1023"))
                 .andExpect(status().isPartialContent())
                 .andExpect(header().string("Accept-Ranges", "bytes"))
                 .andExpect(header().string("Content-Range", "bytes 0-1023/100000"));
+
+        // Range starting at 0 counts as a play.
+        verify(songService).incrementPlayCount("song-1");
+    }
+
+    @Test
+    void streamSong_usesCachedStreamRef_withoutLoadingEntity() throws Exception {
+        // Cheap path: cached fileUrl+fileFormat projection, no full entity load.
+        when(songService.getSongStreamRef("song-1"))
+                .thenReturn(new SongService.SongStreamRef(STREAM_URL, "MP3"));
+        stubR2Head(100000L, "abc123");
+        stubR2Read("bytes=0-99999", 100000L, 0, 99999, "\"abc123\"");
+
+        dispatchStream(get("/api/v1/songs/song-1/stream").header("User-Agent", BROWSER_UA))
+                .andExpect(status().isPartialContent())
+                .andExpect(header().string("Content-Range", "bytes 0-99999/100000"));
+
+        verify(songService, never()).getSongEntityById(anyString());
+        verify(songService).incrementPlayCount("song-1");
+    }
+
+    @Test
+    void streamSong_seekRange_doesNotCountPlay() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+        stubR2Read("bytes=5000-99999", 100000L, 5000, 99999, "\"abc123\"");
+
+        dispatchStream(get("/api/v1/songs/song-1/stream")
+                        .header("User-Agent", BROWSER_UA)
+                        .header("Range", "bytes=5000-")
+                        .with(user(TestUsers.regularUser("user-1"))))
+                .andExpect(status().isPartialContent())
+                .andExpect(header().string("Content-Range", "bytes 5000-99999/100000"));
+
+        // Seeks never inflate play counts, even for logged-in users.
+        verify(songService, never()).incrementPlayCount(anyString());
+        verify(songService, never()).recordPlayback(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void streamSong_seekWithCountParam_countsPlay() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+        stubR2Read("bytes=5000-99999", 100000L, 5000, 99999, "\"abc123\"");
+
+        dispatchStream(get("/api/v1/songs/song-1/stream")
+                        .param("count", "1")
+                        .header("User-Agent", BROWSER_UA)
+                        .header("Range", "bytes=5000-")
+                        .with(user(TestUsers.regularUser("user-1"))))
+                .andExpect(status().isPartialContent());
+
+        verify(songService).incrementPlayCount("song-1");
+        verify(songService).recordPlayback("user-1", "song-1", "STREAM");
+    }
+
+    @Test
+    void streamSong_suffixRange_servesTailWithoutCounting() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+        stubR2Read("bytes=99500-99999", 100000L, 99500, 99999, "\"abc123\"");
+
+        dispatchStream(get("/api/v1/songs/song-1/stream")
+                        .header("User-Agent", BROWSER_UA)
+                        .header("Range", "bytes=-500"))
+                .andExpect(status().isPartialContent())
+                .andExpect(header().string("Content-Range", "bytes 99500-99999/100000"));
+
+        verify(songService, never()).incrementPlayCount(anyString());
+    }
+
+    @Test
+    void streamSong_rangeBeyondSize_returns416() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+
+        mockMvc.perform(get("/api/v1/songs/song-1/stream")
+                        .header("User-Agent", BROWSER_UA)
+                        .header("Range", "bytes=200000-"))
+                .andExpect(status().isRequestedRangeNotSatisfiable())
+                .andExpect(header().string("Content-Range", "bytes */100000"))
+                .andExpect(header().string("Accept-Ranges", "bytes"));
+
+        verify(r2StorageService, never()).readRange(anyString(), anyString());
+        verify(songService, never()).incrementPlayCount(anyString());
+    }
+
+    @Test
+    void streamSong_malformedRange_returns416Not500() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+
+        mockMvc.perform(get("/api/v1/songs/song-1/stream")
+                        .header("User-Agent", BROWSER_UA)
+                        .header("Range", "bytes=abc-def"))
+                .andExpect(status().isRequestedRangeNotSatisfiable())
+                .andExpect(header().string("Content-Range", "bytes */100000"));
+
+        verify(r2StorageService, never()).readRange(anyString(), anyString());
+    }
+
+    @Test
+    void streamSong_head_returns200WithMetadataAndNeverCounts() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+
+        // Unauthenticated: HEAD stays permitAll like GET.
+        mockMvc.perform(head("/api/v1/songs/song-1/stream").header("User-Agent", BROWSER_UA))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Accept-Ranges", "bytes"))
+                .andExpect(header().string("Content-Type", "audio/mpeg"))
+                .andExpect(header().string("Content-Length", "100000"))
+                .andExpect(header().string("ETag", "\"abc123\""));
+
+        verify(r2StorageService, never()).readRange(anyString(), anyString());
+        verify(songService, never()).incrementPlayCount(anyString());
+        verify(songService, never()).recordPlayback(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void streamSong_ifNoneMatch_returns304WithoutBodyOrCount() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+        stubR2Head(100000L, "abc123");
+
+        mockMvc.perform(get("/api/v1/songs/song-1/stream")
+                        .header("User-Agent", BROWSER_UA)
+                        .header("If-None-Match", "\"abc123\""))
+                .andExpect(status().isNotModified())
+                .andExpect(header().string("ETag", "\"abc123\""));
+
+        verify(r2StorageService, never()).readRange(anyString(), anyString());
+        verify(songService, never()).incrementPlayCount(anyString());
+    }
+
+    @Test
+    void streamSong_nativeClient_redirectsAndCountsFirstPlay() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+
+        // No browser User-Agent: native mobile client gets a direct redirect.
+        mockMvc.perform(get("/api/v1/songs/song-1/stream"))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", STREAM_URL));
+
+        verify(songService).incrementPlayCount("song-1");
+    }
+
+    @Test
+    void streamSong_nativeClientSeek_doesNotCount() throws Exception {
+        when(songService.getSongEntityById("song-1")).thenReturn(buildStreamSong());
+
+        mockMvc.perform(get("/api/v1/songs/song-1/stream")
+                        .header("Range", "bytes=5000-"))
+                .andExpect(status().isFound());
+
+        verify(songService, never()).incrementPlayCount(anyString());
     }
 
     @Test
@@ -238,7 +445,7 @@ class SongControllerTest extends BaseWebMvcTest {
                 .build();
         when(songService.getSongEntityById("song-1")).thenReturn(song);
 
-        mockMvc.perform(get("/api/v1/songs/song-1/stream"))
+        mockMvc.perform(get("/api/v1/songs/song-1/stream").header("User-Agent", BROWSER_UA))
                 .andExpect(status().isNotFound());
     }
 

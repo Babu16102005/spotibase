@@ -120,25 +120,91 @@ const SettingsScreen = ({ navigation }: any) => {
           onPress={async () => {
             try {
               if (Platform.OS === 'web') {
-                const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-                s.getTracks().forEach(t => t.stop());
-                Alert.alert('Mic OK', 'Browser microphone works! Use orb on http://localhost:8081 and Allow.');
+                const host = typeof window !== 'undefined' ? (window.location?.hostname || '') : '';
+                const protocol = typeof window !== 'undefined' ? (window.location?.protocol || '') : '';
+                const isSecure =
+                  typeof window !== 'undefined'
+                    ? Boolean((window as any).isSecureContext) || protocol === 'https:' || host === 'localhost' || host === '127.0.0.1' || host === ''
+                    : true;
+                if (!isSecure) {
+                  Alert.alert(
+                    'Mic Blocked (Insecure Context)',
+                    `Browser blocks the mic on insecure origin "${host}". Open via http://localhost:8081 (secure context, not a 10.247... LAN IP) and click Allow, then test again.`
+                  );
+                  return;
+                }
+                try {
+                  const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+                  s.getTracks().forEach(t => t.stop());
+                  Alert.alert('Mic OK', 'Browser microphone works! Use orb on http://localhost:8081 (secure context) and Allow when prompted.');
+                } catch (e: any) {
+                  const name = e?.name || 'Error';
+                  const hint =
+                    name === 'NotAllowedError'
+                      ? ' Permission denied — click the lock icon → Allow, then retry.'
+                      : name === 'NotFoundError'
+                        ? ' No microphone device found.'
+                        : name === 'NotReadableError'
+                          ? ' Mic is held by another app — close it and retry.'
+                          : '';
+                  Alert.alert(
+                    'Mic Error',
+                    `Browser mic failed (${name}): ${e?.message || e}.${hint} Use http://localhost:8081 (secure context), not a LAN IP.`
+                  );
+                }
               } else {
-                const { AudioModule } = await import('expo-audio');
-                const AM: any = (AudioModule as any).AudioModule || AudioModule;
-                const req = AM.requestRecordingPermissionsAsync || (AudioModule as any).requestRecordingPermissionsAsync;
-                const perm = req ? await req() : await (AudioModule as any).getPermissionsAsync?.();
-                Alert.alert('Mic Status', `Status: ${perm?.status || 'unknown'}\n\nIf denied, go to Phone Settings -> Apps -> SpotiBase -> Permissions -> Microphone -> Allow, then tap again.\n\nIf using Expo Go, allow for Expo Go app.` );
-                if (perm?.status === 'denied') {
+                const { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } = await import('expo-audio');
+                const { ExpoSpeechRecognitionModule } = await import('expo-speech-recognition');
+                // BOTH permissions: audio recorder + speech recognizer (Expo v57 needs each).
+                const audioCurrent = await getRecordingPermissionsAsync();
+                const audioPerm = audioCurrent.status === 'granted' ? audioCurrent : await requestRecordingPermissionsAsync();
+                let speechPerm: any = null;
+                try {
+                  const cur = await (ExpoSpeechRecognitionModule as any).getPermissionsAsync?.();
+                  speechPerm = cur?.granted ? cur : await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+                } catch {
+                  try {
+                    speechPerm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+                  } catch (e: any) {
+                    speechPerm = { status: 'unavailable', granted: false };
+                  }
+                }
+                // Recognition service availability (network / device service).
+                let recognitionAvailable: boolean | null = null;
+                try {
+                  recognitionAvailable = (ExpoSpeechRecognitionModule as any).isRecognitionAvailable?.() ?? null;
+                } catch {
+                  recognitionAvailable = null;
+                }
+                const audioStatus = (audioPerm as any)?.status || 'unknown';
+                const speechStatus = (speechPerm as any)?.status || 'unknown';
+                const availLine =
+                  recognitionAvailable === true
+                    ? 'Speech service: available'
+                    : recognitionAvailable === false
+                      ? 'Speech service: UNAVAILABLE (check network / device recognition service)'
+                      : 'Speech service: unknown';
+                const body =
+                  `Audio mic: ${audioStatus}\nSpeech recognition: ${speechStatus}\n${availLine}\n\n` +
+                  `If denied, go to Phone Settings -> Apps -> SpotiBase -> Permissions -> Microphone -> Allow, then tap again.\n\n` +
+                  `If using Expo Go, allow for Expo Go app.\n\n` +
+                  `Web hint: use http://localhost:8081 (secure context), not a LAN IP, and Allow.`;
+                Alert.alert('Mic Status', body);
+                if ((audioPerm as any)?.status === 'denied' || (speechPerm as any)?.status === 'denied') {
                   const { Linking } = await import('react-native');
-                  Alert.alert('Open Settings?', 'Go to app settings to allow mic?', [
+                  Alert.alert('Open Settings?', 'Mic or speech permission is denied. Go to app settings to allow?', [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Open Settings', onPress: () => Linking.openSettings() },
                   ]);
+                } else if (recognitionAvailable === false) {
+                  Alert.alert(
+                    'Speech Service Unavailable',
+                    'Recognition service reports unavailable. Check network connection and device speech service, then retry.'
+                  );
                 }
               }
             } catch (e: any) {
-              Alert.alert('Mic Error', e?.message || String(e));
+              Alert.alert('Mic Error', `Microphone test failed: ${e?.message || String(e)}. Check permissions and secure context (localhost:8081 on web), then retry.`);
             }
           }}
           style={{ alignSelf: 'flex-start' }}

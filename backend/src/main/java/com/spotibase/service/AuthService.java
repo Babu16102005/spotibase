@@ -46,6 +46,20 @@ public class AuthService {
     private static final String APPLE_OIDC_DISCOVERY_URL = "https://appleid.apple.com/.well-known/openid-configuration";
     private static final String APPLE_ISSUER = "https://appleid.apple.com";
 
+    /**
+     * In-memory Apple JWKS cache (24h TTL). Apple's signing keys rotate
+     * infrequently, so refetching discovery + JWKS on every social login
+     * adds ~300-800ms of latency for no security benefit. Entries expire
+     * after 24h so rotation is always honored within a day; a signature
+     * that fails against cached keys is retried once against fresh keys
+     * (see {@link #verifyAppleToken(String)}) to handle rotation promptly.
+     * Guarded by the synchronized accessor below.
+     */
+    private static final long APPLE_JWKS_TTL_MS = 24 * 60 * 60 * 1000L;
+    private volatile Map<String, Object> cachedAppleJwks;
+    private volatile String cachedAppleJwksUri;
+    private volatile long appleJwksExpiresAtMs = 0;
+
     private final UserRepository userRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
@@ -96,23 +110,36 @@ public class AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
-                .user(userService.toUserResponse(user))
+                .user(userService.toUserResponseBasic(user))
                 .build();
     }
 
-    @Transactional
+    /**
+     * Login is intentionally NOT @Transactional: the legacy Supabase password
+     * fallback is a network call (up to the RestTemplate timeout) and must not
+     * hold a DB connection/transaction open. Reads use the repository's own
+     * read transaction (favoriteGenres is fetch-joined), and the hash backfill
+     * save runs in its own repository transaction.
+     */
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmailWithFavoriteGenres(request.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 
-        boolean authenticated = false;
-        if (user.getPasswordHash() != null && passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            authenticated = true;
+        // Fast path: a local BCrypt hash exists → verify locally only (<50ms).
+        // A wrong password fails immediately WITHOUT calling Supabase: this
+        // saves 500-1500ms of cloud round-trip on every failed login and
+        // avoids turning Supabase into a password oracle for local accounts.
+        if (user.getPasswordHash() != null) {
+            if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+                throw new UnauthorizedException("Invalid email or password");
+            }
         } else {
-            // Fallback to Supabase cloud auth for legacy/external users
+            // Legacy/social-only account with no local hash: Supabase fallback
+            // is the only way to verify. Bounded by the RestTemplate timeouts
+            // in AppConfig; any failure (including timeout) maps to the
+            // generic BadCredentials message below — no user enumeration.
             boolean supabaseValid = verifySupabasePassword(request.getEmail(), request.getPassword());
             if (supabaseValid) {
-                authenticated = true;
                 // Auto-fill local password hash so all future logins run fast locally (<50ms) without cloud latency!
                 try {
                     user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
@@ -121,11 +148,9 @@ public class AuthService {
                 } catch (Exception e) {
                     log.warn("Failed to update local password hash: {}", e.getMessage());
                 }
+            } else {
+                throw new UnauthorizedException("Invalid email or password");
             }
-        }
-
-        if (!authenticated) {
-            throw new UnauthorizedException("Invalid email or password");
         }
 
         if (!user.isActive()) {
@@ -139,7 +164,7 @@ public class AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
-                .user(userService.toUserResponse(user))
+                .user(userService.toUserResponseBasic(user))
                 .build();
     }
 
@@ -163,7 +188,7 @@ public class AuthService {
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .tokenType("Bearer")
-                .user(userService.toUserResponse(user))
+                .user(userService.toUserResponseBasic(user))
                 .build();
     }
 
@@ -204,7 +229,7 @@ public class AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
-                .user(userService.toUserResponse(user))
+                .user(userService.toUserResponseBasic(user))
                 .build();
     }
 
@@ -245,6 +270,15 @@ public class AuthService {
         return null;
     }
 
+    /**
+     * Legacy-account fallback only (no local BCrypt hash). Callers must NOT
+     * invoke this when a local hash exists — see {@link #login(LoginRequest)}.
+     * Bounded by the AppConfig RestTemplate timeouts (3s connect / 5s read);
+     * any failure — network error, timeout, non-2xx — returns false and the
+     * caller maps it to a generic "Invalid email or password" (no credential
+     * or error details are ever logged: only the exception message, which
+     * never contains the password).
+     */
     private boolean verifySupabasePassword(String email, String password) {
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -262,6 +296,10 @@ public class AuthService {
                     Map.class);
 
             return response.getStatusCode().is2xxSuccessful();
+        } catch (org.springframework.web.client.ResourceAccessException timeoutOrIo) {
+            // Connect/read timeout or I/O failure: fail closed, fast.
+            log.warn("Supabase password verification timed out or unreachable: {}", timeoutOrIo.getMessage());
+            return false;
         } catch (Exception e) {
             log.warn("Supabase password verification failed: {}", e.getMessage());
             return false;
@@ -296,7 +334,8 @@ public class AuthService {
      * Verifies a Sign in with Apple identity token end-to-end:
      * <ol>
      *   <li>Fetches Apple's OIDC discovery document to locate the JWKS URI.</li>
-     *   <li>Fetches Apple's public keys (JWKS) and selects the RSA key matching
+     *   <li>Loads Apple's public keys (JWKS) via the 24h in-memory cache
+     *       ({@link #getAppleJwks(String)}) and selects the RSA key matching
      *       the token's {@code kid} header.</li>
      *   <li>Verifies the token's RS256 signature with that key and validates
      *       {@code iss}, {@code aud} (configured Apple client id) and
@@ -305,8 +344,9 @@ public class AuthService {
      *       to the {@code sub} claim, since Apple only includes {@code name}
      *       in the initial authorization response, not in the id_token.</li>
      * </ol>
-     * No cached keys are trusted: discovery + JWKS are fetched per verification,
-     * so Apple key rotation is always honored.
+     * On signature failure with cached keys, the JWKS is refreshed once and
+     * verification retried, so an Apple key rotation between cache refreshes
+     * never locks users out.
      */
     private Map<String, Object> verifyAppleToken(String idToken) {
         if (appleClientId == null || appleClientId.isBlank()) {
@@ -319,8 +359,8 @@ public class AuthService {
             throw new UnauthorizedException("Invalid social token");
         }
 
-        // 2. Apple public keys (JWKS)
-        Map<String, Object> jwks = restTemplate.getForObject(jwksUri, Map.class);
+        // 2. Apple public keys (JWKS, cached 24h)
+        Map<String, Object> jwks = getAppleJwks(jwksUri);
 
         // 3. Verify RS256 signature and validate iss/aud/exp claims.
         //    jjwt's keyLocator picks the JWKS key by the token's `kid`; the
@@ -328,16 +368,18 @@ public class AuthService {
         //    reject tokens not issued for Apple / for our client id.
         Claims claims;
         try {
-            claims = Jwts.parser()
-                    .keyLocator(header -> resolveAppleSigningKey(jwks, keyIdOf(header)))
-                    .requireIssuer(APPLE_ISSUER)
-                    .requireAudience(appleClientId)
-                    .build()
-                    .parseSignedClaims(idToken)
-                    .getPayload();
+            claims = parseAppleClaims(idToken, jwks);
         } catch (JwtException | IllegalArgumentException e) {
-            log.warn("Apple id_token verification failed: {}", e.getMessage());
-            throw new UnauthorizedException("Invalid social token");
+            // Possible Apple key rotation: refresh JWKS once and retry before
+            // rejecting, so rotation never locks users out for up to 24h.
+            log.info("Apple id_token verification failed, refreshing JWKS and retrying: {}", e.getMessage());
+            jwks = refreshAppleJwks(jwksUri);
+            try {
+                claims = parseAppleClaims(idToken, jwks);
+            } catch (JwtException | IllegalArgumentException retryFailure) {
+                log.warn("Apple id_token verification failed: {}", retryFailure.getMessage());
+                throw new UnauthorizedException("Invalid social token");
+            }
         }
 
         // 4. Extract verified profile claims; email is required for an account
@@ -354,6 +396,50 @@ public class AuthService {
         userInfo.put("email", email);
         userInfo.put("name", name);
         return userInfo;
+    }
+
+    private Claims parseAppleClaims(String idToken, Map<String, Object> jwks) {
+        return Jwts.parser()
+                .keyLocator(header -> resolveAppleSigningKey(jwks, keyIdOf(header)))
+                .requireIssuer(APPLE_ISSUER)
+                .requireAudience(appleClientId)
+                .build()
+                .parseSignedClaims(idToken)
+                .getPayload();
+    }
+
+    /**
+     * Returns Apple's JWKS, serving the 24h in-memory cache when fresh.
+     * Synchronized to prevent a cache-miss stampede from issuing parallel
+     * JWKS fetches; the fetch itself is bounded by the AppConfig
+     * RestTemplate timeouts.
+     */
+    private synchronized Map<String, Object> getAppleJwks(String jwksUri) {
+        long now = System.currentTimeMillis();
+        if (cachedAppleJwks != null && jwksUri.equals(cachedAppleJwksUri) && now < appleJwksExpiresAtMs) {
+            return cachedAppleJwks;
+        }
+        Map<String, Object> jwks = restTemplate.getForObject(jwksUri, Map.class);
+        if (jwks != null) {
+            cachedAppleJwks = jwks;
+            cachedAppleJwksUri = jwksUri;
+            appleJwksExpiresAtMs = now + APPLE_JWKS_TTL_MS;
+        }
+        return jwks;
+    }
+
+    /**
+     * Forces a JWKS refresh (rotation-retry path). Failures propagate to the
+     * caller, which maps them to "Invalid social token".
+     */
+    private synchronized Map<String, Object> refreshAppleJwks(String jwksUri) {
+        Map<String, Object> jwks = restTemplate.getForObject(jwksUri, Map.class);
+        if (jwks != null) {
+            cachedAppleJwks = jwks;
+            cachedAppleJwksUri = jwksUri;
+            appleJwksExpiresAtMs = System.currentTimeMillis() + APPLE_JWKS_TTL_MS;
+        }
+        return jwks;
     }
 
     private String keyIdOf(Header header) {

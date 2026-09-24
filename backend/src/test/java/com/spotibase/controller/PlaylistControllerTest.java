@@ -76,8 +76,9 @@ class PlaylistControllerTest extends BaseWebMvcTest {
 
     @Test
     void getUserPlaylists_unauthenticated_isRejected() throws Exception {
+        // Production + TestSecurityConfig entryPoint: unauthenticated => 401 (not 403).
         mockMvc.perform(get("/api/v1/playlists"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -291,7 +292,8 @@ class PlaylistControllerTest extends BaseWebMvcTest {
 
     @Test
     void likePlaylist_unauthenticated_isRejected() throws Exception {
+        // Production + TestSecurityConfig entryPoint: unauthenticated => 401 (not 403).
         mockMvc.perform(post("/api/v1/playlists/pl-1/like"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }

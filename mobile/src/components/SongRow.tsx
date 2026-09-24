@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SongResponse } from '../types';
 import { useThemeStore, usePlayerStore, useSelectionStore } from '../store';
-import { formatDuration, coverSource } from '../utils';
+import { formatDuration, coverSource, PLACEHOLDER_IMAGE } from '../utils';
 import Icon from './Icon';
 import SongOptionsMenuModal from './SongOptionsMenuModal';
 
@@ -224,7 +224,12 @@ const SongRow: React.FC<SongRowProps> = ({
             )}
           </View>
 
-          <Image source={coverSource(song.coverUrl)} style={styles.cover} />
+          {/* expo-image is not installed: use RN Image with a small CDN thumb (200px) + bundled placeholder while loading. */}
+          <Image
+            source={coverSource(song.coverUrl, 200)}
+            defaultSource={PLACEHOLDER_IMAGE}
+            style={styles.cover}
+          />
 
           <View style={styles.info}>
             <Text

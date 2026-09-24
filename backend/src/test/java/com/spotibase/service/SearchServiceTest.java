@@ -129,8 +129,8 @@ class SearchServiceTest {
 
     @Test
     void search_emptyQuery_returnsEmptySections() {
-        when(query.getResultList()).thenReturn(List.of());
-        when(songService.getSongsByIds(List.of(), "user-1")).thenReturn(List.of());
+        lenient().when(query.getResultList()).thenReturn(List.of());
+        lenient().when(songService.getSongsByIds(List.of(), "user-1")).thenReturn(List.of());
 
         SearchResponse response = searchService.search(
                 "", List.of("song"), 0, 20, null, null, null, "relevance", "user-1");
@@ -162,7 +162,7 @@ class SearchServiceTest {
         List<String> suggestions = searchService.getSuggestions("nam", 10);
 
         assertThat(suggestions).containsExactly("Song Name (song)", "Artist Name (artist)");
-        verify(query).setParameter("query", "nam");
+        verify(query).setParameter("pattern", "%nam%");
         verify(query).setParameter("limit", 10);
     }
 

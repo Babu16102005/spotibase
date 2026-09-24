@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosHeaders, AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { Platform } from 'react-native';
 import {
   AuthResponse,
@@ -30,13 +30,45 @@ import Constants from 'expo-constants';
 
 const getDevHostIp = () => {
   try {
-    const hostUri =
-      Constants.expoConfig?.hostUri ||
-      (Constants as any).manifest?.debuggerHost ||
-      (Constants as any).manifest2?.extra?.expoGo?.debuggerHost;
-    if (hostUri) {
-      const ip = hostUri.split(':')[0];
-      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') return ip;
+    const C = Constants as any;
+    // Expo Go runs as a StoreClient; its packager host is surfaced via the
+    // Expo Go config rather than expoConfig.hostUri, so read both (plus the
+    // legacy manifest fields) before giving up.
+    const isStoreClient =
+      C.executionEnvironment === 'storeClient' ||
+      C.appOwnership === 'expo' ||
+      C.expoGoConfig != null;
+    const expoGoHostCandidates: (string | undefined | null)[] = [
+      C.expoGoConfig?.debuggerHost,
+      C.expoGoConfig?.packagerOpts?.host,
+    ];
+    const hostCandidates: (string | undefined | null)[] = isStoreClient
+      ? [
+          ...expoGoHostCandidates,
+          C.expoConfig?.hostUri,
+          C.manifest?.debuggerHost,
+          C.manifest2?.extra?.expoGo?.debuggerHost,
+          C.manifest2?.extra?.expoClient?.host,
+        ]
+      : [
+          C.expoConfig?.hostUri,
+          ...expoGoHostCandidates,
+          C.manifest?.debuggerHost,
+          C.manifest2?.extra?.expoGo?.debuggerHost,
+          C.manifest2?.extra?.expoClient?.host,
+        ];
+    for (const hostUri of hostCandidates) {
+      if (typeof hostUri === 'string' && hostUri.length > 0) {
+        const ip = hostUri.split(':')[0]?.trim();
+        if (ip && ip !== 'localhost' && ip !== '127.0.0.1' && ip !== '::1') return ip;
+      }
+    }
+    // Last resort: derive the LAN IP from the Expo Go / dev-client link URL.
+    const linkingUri: unknown = C.linkingUri ?? C.experienceUrl;
+    if (typeof linkingUri === 'string') {
+      const match = linkingUri.match(/:\/\/([^/:]+)/);
+      const ip = match?.[1]?.trim();
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1' && ip !== '::1') return ip;
     }
   } catch (e) {}
   return null;
@@ -56,6 +88,9 @@ const getDefaultBaseUrl = () => {
     }
     return 'http://localhost:8088/api/v1';
   }
+  // Physical Android devices reach the dev server over the LAN IP discovered
+  // above (devIp:8088). The 10.0.2.2 loopback below is emulator-only, so it is
+  // strictly a fallback when no dev IP is known.
   const devIp = getDevHostIp();
   if (devIp) {
     return `http://${devIp}:8088/api/v1`;
@@ -91,6 +126,70 @@ export const getTrackStreamUrl = (track: { id?: string; fileUrl?: string }): str
 };
 
 const storage = getStorage('spotibase-auth');
+
+// Single-flight refresh: concurrent 401s share one /auth/refresh call instead
+// of racing (a loser could otherwise wipe tokens stored by the winner).
+let refreshPromise: Promise<AuthResponse> | null = null;
+
+const isNetworkError = (err: any): boolean =>
+  !err?.response &&
+  (err?.message === 'Network Error' || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED');
+
+const isInvalidGrant = (err: any): boolean => {
+  const status = err?.response?.status;
+  // Only an explicit auth rejection means the refresh token is dead. Network
+  // errors/timeouts and 5xx responses are transient — offline is not logged out.
+  return status === 401 || status === 403;
+};
+
+/**
+ * P0-415: multipart uploads must NEVER send the apiClient
+ * `application/json` default nor a bare `multipart/form-data` value without
+ * boundary (both yield HTTP 415). Axios merges defaults + per-request via
+ * `AxiosHeaders.concat`: omitting the key keeps the default, while an
+ * explicit `undefined` value deletes it so the adapter wires
+ * `multipart/form-data; boundary=...` on the wire.
+ *
+ * Handles both header shapes:
+ * - `AxiosHeaders` instances via `.delete()` / `.set(..., undefined)`
+ * - plain objects via `delete headers[...]` + explicit `undefined` marker
+ * (Expo SDK 57 / RN 0.86: FormData is spec-compliant; the adapter sets the
+ * boundary only when no Content-Type is present after merge).
+ */
+export const clearContentType = (headers: any): any => {
+  if (headers && typeof (headers as AxiosHeaders).delete === 'function') {
+    try {
+      (headers as AxiosHeaders).delete('Content-Type');
+    } catch {}
+  }
+  if (headers && typeof headers === 'object') {
+    try {
+      delete headers['Content-Type'];
+    } catch {}
+    try {
+      delete headers['content-type'];
+    } catch {}
+    try {
+      if (typeof (headers as AxiosHeaders).set === 'function') {
+        (headers as AxiosHeaders).set('Content-Type', undefined as any);
+      } else {
+        headers['Content-Type'] = undefined;
+      }
+    } catch {}
+  }
+  return headers;
+};
+
+/**
+ * Per-request headers for FormData uploads. Returns an `AxiosHeaders`
+ * instance whose Content-Type is the merge-time delete-marker, so
+ * `AxiosHeaders.concat({application/json default}, perRequest)` yields no
+ * Content-Type and the wire carries the adapter-generated boundary.
+ */
+export const multipartHeaders = (): any => {
+  const h = new AxiosHeaders({ 'Content-Type': undefined } as any);
+  return clearContentType(h);
+};
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: activeBaseUrl,
@@ -137,14 +236,40 @@ apiClient.interceptors.response.use(
             : originalRequest.url;
           const fullUrl = `${candidate}${relativeUrl || ''}`;
 
+          // Re-read the token per attempt and drop a stale Authorization header
+          // when the session is gone (e.g. logout raced this retry) instead of
+          // replaying a dead credential against the next candidate.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rawHeaders: any = originalRequest.headers as any;
+          const retryHeaders: any =
+            rawHeaders && typeof rawHeaders.toJSON === 'function'
+              ? { ...rawHeaders.toJSON() }
+              : { ...(rawHeaders || {}) };
+          if (token) {
+            retryHeaders.Authorization = `Bearer ${token}`;
+          } else {
+            delete retryHeaders.Authorization;
+          }
+          // Preserve multipart wire headers: never replay application/json or a
+          // bare multipart value without boundary for FormData — clear so axios
+          // regenerates `multipart/form-data; boundary=...` on the retry.
+          // Handles both AxiosHeaders instances and plain objects.
+          if (typeof FormData !== 'undefined' && originalRequest.data instanceof FormData) {
+            if (retryHeaders && typeof (retryHeaders as AxiosHeaders).delete === 'function') {
+              try {
+                (retryHeaders as AxiosHeaders).delete('Content-Type');
+              } catch {}
+            }
+            delete retryHeaders['Content-Type'];
+            delete retryHeaders['content-type'];
+            retryHeaders['Content-Type'] = undefined;
+          }
+
           const res = await axios({
             method: originalRequest.method || 'GET',
             url: fullUrl,
             data: originalRequest.data,
-            headers: {
-              ...originalRequest.headers,
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
+            headers: retryHeaders,
             timeout: originalRequest.timeout || 30000,
           });
 
@@ -160,12 +285,24 @@ apiClient.interceptors.response.use(
     }
     if ((error.response?.status === 401 || (error.response?.status === 403 && storage.getString('refreshToken'))) && !originalRequest._retry) {
       originalRequest._retry = true;
+      const refreshToken = storage.getString('refreshToken');
+      if (!refreshToken) {
+        // No way to recover the session — drop the dead access token.
+        storage.clearAll();
+        return Promise.reject(new Error('No refresh token'));
+      }
       try {
-        const refreshToken = storage.getString('refreshToken');
-        if (!refreshToken) throw new Error('No refresh token');
 
-        const res = await axios.post(`${getBaseUrl()}/auth/refresh`, { refreshToken });
-        const { accessToken, refreshToken: newRefresh } = res.data as AuthResponse;
+        if (!refreshPromise) {
+          const currentRefreshToken: string = refreshToken;
+          refreshPromise = axios
+            .post(`${getBaseUrl()}/auth/refresh`, { refreshToken: currentRefreshToken })
+            .then((r) => r.data as AuthResponse)
+            .finally(() => {
+              refreshPromise = null;
+            });
+        }
+        const { accessToken, refreshToken: newRefresh } = await refreshPromise;
 
         storage.set('accessToken', accessToken);
         storage.set('refreshToken', newRefresh);
@@ -174,8 +311,19 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         }
         return apiClient(originalRequest);
-      } catch (refreshError) {
-        storage.clearAll();
+      } catch (refreshError: any) {
+        // Keep the stored session on network errors/timeouts so the user stays
+        // logged in while offline; only wipe when the backend explicitly
+        // rejects the refresh grant (401/403). The original 401 is rejected so
+        // screens can redirect to Login; it is tagged when the refresh never
+        // reached the server so screens don't wipe a still-valid session.
+        if (!isNetworkError(refreshError) && isInvalidGrant(refreshError)) {
+          storage.clearAll();
+        }
+        if (isNetworkError(refreshError)) {
+          (error as any)._refreshNetworkError = true;
+          return Promise.reject(error);
+        }
         return Promise.reject(refreshError);
       }
     }
@@ -196,11 +344,14 @@ export const userApi = {
   getMe: () => apiClient.get<UserResponse>('/users/me'),
   updateProfile: (data: UpdateProfileRequest) => apiClient.put<UserResponse>('/users/me', data),
   deleteAccount: () => apiClient.delete('/users/me'),
+  // P0-415: never send bare `multipart/form-data` (no boundary => 415).
+  // Clear the application/json default so the adapter wires
+  // `multipart/form-data; boundary=...` (same as aiApi.voice).
   updateAvatar: (file: FormData) => apiClient.put<UserResponse>('/users/me/avatar', file, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: multipartHeaders(),
   }),
   updateCover: (file: FormData) => apiClient.put<UserResponse>('/users/me/cover', file, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: multipartHeaders(),
   }),
   changePassword: (oldPassword: string, newPassword: string) =>
     apiClient.put('/users/me/password', { oldPassword, newPassword }),
@@ -255,8 +406,10 @@ export const songApi = {
       formData.append('requests', JSON.stringify(requests));
     }
     const totalBytes = files.reduce((sum, f) => sum + (f.size || 0), 0);
+    // P0-415: clear Content-Type so the adapter wires the multipart boundary
+    // (a bare `multipart/form-data` value without boundary yields HTTP 415).
     const res = await apiClient.post<SongResponse[]>('/songs/bulk', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: multipartHeaders(),
       timeout: 0, // large FLAC files can take a while
       onUploadProgress: (e) => onProgress?.(e.loaded, e.total || totalBytes),
     });
@@ -304,9 +457,10 @@ export const playlistApi = {
 };
 
 export const searchApi = {
-  search: (query: string, types = 'song,album,artist,playlist', page = 0) =>
+  search: (query: string, types = 'song,album,artist,playlist', page = 0, signal?: AbortSignal) =>
     apiClient.get<SearchResponse>(
-      `/search?query=${encodeURIComponent(query)}&types=${types}&page=${page}`
+      `/search?query=${encodeURIComponent(query)}&types=${types}&page=${page}`,
+      signal ? { signal } : undefined
     ),
   suggestions: (query: string, limit = 10) =>
     apiClient.get<string[]>(
@@ -396,18 +550,41 @@ export const aiApi = {
 
   voice: (audioUri: string, transcriptFallback?: string, context?: any, filename = "audio.webm") => {
     const formData = new FormData();
+    const lower = (filename || "").toLowerCase();
+    const mimeType = lower.endsWith(".m4a") || lower.endsWith(".mp4") || lower.endsWith(".aac")
+      ? "audio/mp4"
+      : lower.endsWith(".ogg")
+        ? "audio/ogg"
+        : lower.endsWith(".wav")
+          ? "audio/wav"
+          : lower.endsWith(".mp3")
+            ? "audio/mpeg"
+            : "audio/webm";
     formData.append("audio", {
       uri: audioUri,
       name: filename,
-      type: "audio/webm",
+      type: mimeType,
     } as unknown as Blob);
     if (transcriptFallback) formData.append("transcript_fallback", transcriptFallback);
     if (context) formData.append("context", JSON.stringify(context));
+    // Explicitly clear the apiClient application/json default so axios sets
+    // `multipart/form-data; boundary=...` on the wire (a manual multipart
+    // value without boundary yields HTTP 415). Uses AxiosHeaders.delete +
+    // plain deletes + explicit undefined merge-marker (see multipartHeaders).
     return apiClient.post("/ai/voice", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
+      headers: multipartHeaders(),
       timeout: 30000,
     });
   },
+
+  /**
+   * Lightweight live-text partial for realtime voice search: POST
+   * /ai/voice-partial { text, context }. The backend may not implement this
+   * route yet (404/405) — callers (voiceOrchestrator) treat unsupported as
+   * a signal to use the /search fallback instead of surfacing an error.
+   */
+  voicePartial: (text: string, context?: any, signal?: AbortSignal) =>
+    apiClient.post("/ai/voice-partial", { text, context }, signal ? { signal, timeout: 8000 } : { timeout: 8000 }),
 
   health: () => apiClient.get("/ai/health"),
 };

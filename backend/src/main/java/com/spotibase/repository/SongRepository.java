@@ -3,13 +3,16 @@ package com.spotibase.repository;
 import com.spotibase.entity.Song;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -30,12 +33,15 @@ public interface SongRepository extends JpaRepository<Song, String> {
 
     List<Song> findByReleaseDateAfter(LocalDate date, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"artist", "album", "genre", "albumArtist"})
     @Query("SELECT s FROM Song s WHERE s.archived = false ORDER BY s.playCount DESC, s.createdAt DESC")
     List<Song> findTopSongs(Pageable pageable);
 
+    @EntityGraph(attributePaths = {"artist", "album", "genre", "albumArtist"})
     @Query("SELECT s FROM Song s WHERE s.archived = false ORDER BY s.createdAt DESC, s.releaseDate DESC")
     List<Song> findNewReleases(Pageable pageable);
 
+    @EntityGraph(attributePaths = {"artist", "album", "genre", "albumArtist"})
     @Query("SELECT s FROM Song s WHERE s.featured = true AND s.archived = false")
     List<Song> findFeaturedSongs(Pageable pageable);
 
@@ -51,6 +57,41 @@ public interface SongRepository extends JpaRepository<Song, String> {
 
     @Query("SELECT s FROM Song s WHERE s.id IN :ids")
     List<Song> findByIds(@Param("ids") List<String> ids);
+
+    @EntityGraph(attributePaths = {"artist", "album", "genre", "albumArtist", "contributingArtists", "contributingArtists.artist"})
+    @Query("SELECT s FROM Song s WHERE s.id IN :ids")
+    List<Song> findByIdsWithCoreRelations(@Param("ids") List<String> ids);
+
+    /**
+     * Index-only id scan for paged song lists: the page query touches only the
+     * (archived, createdAt, id) index, then details are batch-fetched via
+     * {@link #findByIdsWithCoreRelations} + the cached songs-base. Prefer this
+     * over {@code findAll} with entity fetch for large catalogs.
+     */
+    @Query("SELECT s.id FROM Song s WHERE s.archived = false ORDER BY s.createdAt DESC, s.id DESC")
+    Slice<String> findActiveIds(Pageable pageable);
+
+    /**
+     * Atomic play-count bump: single UPDATE, no read-modify-write round trip
+     * and no lost updates under concurrent streams.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE Song s SET s.playCount = s.playCount + 1 WHERE s.id = :id")
+    int incrementPlayCountAtomic(@Param("id") String id);
+
+    /**
+     * Cheap stream-path projection: {@code fileUrl + fileFormat} only, no
+     * joins. Served from the {@code songs} cache as {@code 'stream:' + id}
+     * via {@code SongService.getSongStreamRef} so the hot stream path never
+     * pays for the 6-join details fetch.
+     */
+    interface SongStreamInfo {
+        String getFileUrl();
+        String getFileFormat();
+    }
+
+    @Query("SELECT s.fileUrl AS fileUrl, s.fileFormat AS fileFormat FROM Song s WHERE s.id = :id")
+    java.util.Optional<SongStreamInfo> findStreamInfoById(@Param("id") String id);
 
     @Query("SELECT COUNT(s) FROM Song s WHERE s.archived = false")
     long countActiveSongs();
@@ -151,7 +192,22 @@ public interface SongRepository extends JpaRepository<Song, String> {
 
     // ============================================
     // NEW: Cursor-based pagination for infinite scroll
+    // Keyset on (createdAt DESC, id DESC) matches findActiveIds head ordering.
+    // Requires index on (archived, createdAt DESC, id DESC) — see Flyway V5/V19
+    // partial index note in Song entity. Never use id-only ordering: UUIDs are
+    // not time-ordered and would skip/duplicate rows vs the head page.
     // ============================================
+    @EntityGraph(attributePaths = {"artist", "album"})
+    @Query("""
+        SELECT s FROM Song s
+        WHERE s.archived = false
+        AND (s.createdAt < :createdAt OR (s.createdAt = :createdAt AND s.id < :cursorId))
+        ORDER BY s.createdAt DESC, s.id DESC
+    """)
+    List<Song> findAfterCursorByCreatedAt(@Param("createdAt") LocalDateTime createdAt,
+                                          @Param("cursorId") String cursorId,
+                                          Pageable pageable);
+
     @EntityGraph(attributePaths = {"artist", "album"})
     @Query("""
         SELECT s FROM Song s 

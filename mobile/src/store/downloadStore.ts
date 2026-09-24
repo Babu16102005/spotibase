@@ -3,6 +3,23 @@ import { DownloadResponse, DownloadStatsResponse } from '../types';
 import { downloadApi } from '../api/client';
 import { useAuthStore } from './authStore';
 
+// 401/403 from a protected endpoint means the session is dead (the api client
+// already attempted a refresh): log out once so RootNavigator redirects to
+// Login. Expected 401s while logged out and offline/network errors stay
+// silent instead of spamming console.error on every focus.
+const handleDownloadAuthError = (err: any, message: string): boolean => {
+  const status = err?.response?.status;
+  if (status === 401 || status === 403) {
+    if (!err?._refreshNetworkError && useAuthStore.getState().isAuthenticated) {
+      useAuthStore.getState().logout();
+    }
+    return true;
+  }
+  if (!err?.response) return true;
+  console.error(message, err);
+  return false;
+};
+
 interface DownloadState {
   downloads: DownloadResponse[];
   stats: DownloadStatsResponse | null;
@@ -36,6 +53,13 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       set({ downloads: response.data, isLoading: false });
       await get().fetchStats();
     } catch (err: any) {
+      if (err?.response?.status === 401 || err?.response?.status === 403) {
+        if (!err?._refreshNetworkError && useAuthStore.getState().isAuthenticated) {
+          useAuthStore.getState().logout();
+        }
+        set({ isLoading: false });
+        return;
+      }
       set({ error: err.message, isLoading: false });
     }
   },
@@ -46,8 +70,8 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
     try {
       const response = await downloadApi.getStats();
       set({ stats: response.data });
-    } catch (err) {
-      console.error('Failed to fetch download stats:', err);
+    } catch (err: any) {
+      handleDownloadAuthError(err, 'Failed to fetch download stats:');
     }
   },
 

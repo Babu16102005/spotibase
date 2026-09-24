@@ -23,6 +23,8 @@ public class HomeController {
     public ResponseEntity<HomeResponse> getHomeSections(@CurrentUser CustomUserDetails user) {
         String userId = user != null ? user.getId() : null;
         log.info("Get home sections for user: {}", userId != null ? userId : "guest");
-        return ResponseEntity.ok(recommendationService.getHomeSections(userId));
+        HomeResponse home = recommendationService.getHomeSections(userId);
+        home.setGreeting(recommendationService.currentGreeting());
+        return ResponseEntity.ok(home);
     }
 }

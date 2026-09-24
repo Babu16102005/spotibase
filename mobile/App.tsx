@@ -4,19 +4,23 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  useFonts,
-  Montserrat_400Regular,
-  Montserrat_500Medium,
-  Montserrat_600SemiBold,
-  Montserrat_700Bold,
-  Montserrat_800ExtraBold,
-} from '@expo-google-fonts/montserrat';
+// Import each font weight from its own submodule instead of the package
+// root. Importing from '@expo-google-fonts/montserrat' pulls ALL 18 weight
+// files (~6MB) into the bundle via index.js require() calls. Direct submodule
+// imports let the bundler include only the 5 weights actually used, which
+// drastically cuts the first-load payload and speeds up app start (Spotify-like
+// load times).
+import { useFonts } from '@expo-google-fonts/montserrat/useFonts';
+import Montserrat_400Regular from '@expo-google-fonts/montserrat/400Regular/Montserrat_400Regular.ttf';
+import Montserrat_500Medium from '@expo-google-fonts/montserrat/500Medium/Montserrat_500Medium.ttf';
+import Montserrat_600SemiBold from '@expo-google-fonts/montserrat/600SemiBold/Montserrat_600SemiBold.ttf';
+import Montserrat_700Bold from '@expo-google-fonts/montserrat/700Bold/Montserrat_700Bold.ttf';
+import Montserrat_800ExtraBold from '@expo-google-fonts/montserrat/800ExtraBold/Montserrat_800ExtraBold.ttf';
 import RootNavigator from './src/navigation/RootNavigator';
 import PlayerSheet from './src/components/PlayerSheet';
 import AppSplashScreen from './src/components/AppSplashScreen';
 import * as SplashScreen from 'expo-splash-screen';
-import { useAuthStore, useThemeStore, setupTrackPlayer, useNotificationStore, usePlayerStore } from './src/store';
+import { useAuthStore, useThemeStore, setupTrackPlayer, cleanupTrackPlayerWebSync, useNotificationStore, usePlayerStore } from './src/store';
 import { setupRealtime } from './src/realtime/client';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -117,6 +121,20 @@ function AppContent() {
     loadSession();
     setupTrackPlayer();
     registerServiceWorker();
+    // Web: single <audio data-spotibase> singleton at the app root. The
+    // player store reuses this element (never creates duplicates); creating
+    // it here guarantees exactly one instance for the app lifetime.
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      try {
+        if (!document.querySelector('audio[data-spotibase]')) {
+          const el = document.createElement('audio');
+          el.setAttribute('data-spotibase', 'true');
+          el.preload = 'auto';
+          el.style.display = 'none';
+          document.body.appendChild(el);
+        }
+      } catch {}
+    }
     // Request permissions on install/first launch: Notifications + MIC for AI voice
     (async () => {
       try {
@@ -169,6 +187,12 @@ function AppContent() {
     });
 
     SplashScreen.hideAsync().catch(() => {});
+
+    return () => {
+      try {
+        cleanupTrackPlayerWebSync();
+      } catch {}
+    };
   }, []);
 
   return (

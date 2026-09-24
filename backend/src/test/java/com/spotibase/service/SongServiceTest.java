@@ -51,6 +51,8 @@ class SongServiceTest {
     private SongContributingArtistRepository contributingArtistRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private com.spotibase.ai.service.AiTaggingService aiTaggingService;
 
     @InjectMocks
     private SongService songService;
@@ -136,6 +138,7 @@ class SongServiceTest {
         Song song = buildSong("song-1", "Hit Song", artist);
         PageImpl<Song> page = new PageImpl<>(List.of(song), PageRequest.of(0, 20), 1);
         when(songRepository.findAllActive(any(Pageable.class))).thenReturn(page);
+        when(songRepository.findByIdsWithCoreRelations(List.of("song-1"))).thenReturn(List.of(song));
 
         PagedResponse<SongResponse> response = songService.getAllSongs(0, 20, null);
 
@@ -420,6 +423,21 @@ class SongServiceTest {
     }
 
     @Test
+    void getSongsByIds_usesCoreRelationsAndBatchLikes() {
+        Artist artist = buildArtist("artist-1", "The Band");
+        Song song = buildSong("song-1", "Hit Song", artist);
+        when(songRepository.findByIdsWithCoreRelations(List.of("song-1"))).thenReturn(List.of(song));
+        when(likeRepository.findLikedSongIds("user-1", List.of("song-1"))).thenReturn(List.of("song-1"));
+
+        List<SongResponse> songs = songService.getSongsByIds(List.of("song-1"), "user-1");
+
+        assertThat(songs).hasSize(1);
+        assertThat(songs.get(0).isLiked()).isTrue();
+        verify(likeRepository, never()).existsByUserIdAndSongId(anyString(), anyString());
+        verify(songRepository, never()).findByIdInWithDetails(anyList());
+    }
+
+    @Test
     void getFeaturedSongs_delegatesToFindFeaturedSongs() {
         Artist artist = buildArtist("artist-1", "The Band");
         Song song = buildSong("song-1", "Featured", artist);
@@ -451,16 +469,14 @@ class SongServiceTest {
     void getLikedSongs_mapsLikedSongIdsToSongs() {
         Artist artist = buildArtist("artist-1", "The Band");
         Song song = buildSong("song-1", "Liked Song", artist);
-        List<Object[]> likedRows = new java.util.ArrayList<>();
-        likedRows.add(new Object[]{"song-1"});
-        when(likeRepository.findLikedSongIds("user-1")).thenReturn(likedRows);
-        when(songRepository.findByIdInWithDetails(List.of("song-1"))).thenReturn(List.of(song));
+        when(likeRepository.findAllLikedSongIds("user-1")).thenReturn(List.of("song-1"));
+        when(songRepository.findByIdsWithCoreRelations(List.of("song-1"))).thenReturn(List.of(song));
 
         List<SongResponse> songs = songService.getLikedSongs("user-1");
 
         assertThat(songs).hasSize(1);
         assertThat(songs.get(0).getId()).isEqualTo("song-1");
-        verify(songRepository).findByIdInWithDetails(List.of("song-1"));
+        verify(songRepository).findByIdsWithCoreRelations(List.of("song-1"));
     }
 
     @Test
@@ -471,7 +487,7 @@ class SongServiceTest {
         RecentlyPlayed albumItem = RecentlyPlayed.builder().itemType("ALBUM").itemId("album-1").build();
         when(recentlyPlayedRepository.findByUserIdOrderByPlayedAtDesc("user-1"))
                 .thenReturn(List.of(albumItem, songItem));
-        when(songRepository.findByIdInWithDetails(List.of("song-1"))).thenReturn(List.of(song));
+        when(songRepository.findByIdsWithCoreRelations(List.of("song-1"))).thenReturn(List.of(song));
 
         List<SongResponse> songs = songService.getRecentlyPlayed("user-1");
 

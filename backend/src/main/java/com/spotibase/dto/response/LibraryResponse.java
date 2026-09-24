@@ -21,4 +21,11 @@ public class LibraryResponse implements Serializable {
     private int totalAlbums;
     private int totalArtists;
     private int totalLikedSongs;
+    // Featured playlists (public, ordered by likeCount). Added alongside
+    // user playlists so clients get discovery content in one call.
+    // Kept separate from `playlists` for back-compat.
+    @Builder.Default
+    private List<PlaylistResponse> featuredPlaylists = new java.util.ArrayList<>();
+    @Builder.Default
+    private int totalFeaturedPlaylists = 0;
 }

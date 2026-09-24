@@ -1,5 +1,5 @@
 # SpotiBase AI - FastAPI AI Server
-# Python 3.10+  (mock mode needs only these 6)
+# Python 3.10+  (mock mode needs only these 7)
 
 fastapi
 uvicorn[standard]
@@ -7,16 +7,24 @@ pydantic
 pydantic-settings
 python-multipart
 httpx
+redis>=5.0.0  # shared cache with Spring Boot (optional at runtime: degrades to uncached if unreachable)
 
 # LLM - Qwen2.5-3B-Instruct via transformers (local) OR via HuggingFace Inference API
-# For MOCK mode (default) you DON'T need torch/transformers — only fastapi/uvicorn
+# For MOCK mode (default) you DON'T need torch/transformers — only the 7 above
 # For local real mode: pip install transformers accelerate torch faster-whisper
 # Requires ~8GB RAM, ~6GB GPU VRAM or CPU offload
 # transformers==4.41.0
 # accelerate==0.30.0
 # torch>=2.6.0  # 2.3.0 not available for Python 3.13, use >=2.6
-# faster-whisper==1.0.1
 # webrtcvad==2.0.10
+
+# STT - faster-whisper (OPTIONAL, only when STT_MODE=faster-whisper).
+# Mock (default) needs NOTHING here. To enable real STT:
+#   pip install faster-whisper==1.0.1
+#   set STT_MODE=faster-whisper  (Linux: export STT_MODE=faster-whisper)
+#   set STT_MODEL=small          (tiny|small|medium — small=244MB, best quality/speed)
+# Requires ffmpeg on PATH (Dockerfile already installs it via apt-get).
+# faster-whisper==1.0.1
 
 # TTS - optional, Piper or gTTS
 # piper-tts==1.2.0

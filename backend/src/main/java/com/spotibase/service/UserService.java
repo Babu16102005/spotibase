@@ -13,6 +13,7 @@ import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,9 @@ public class UserService {
     private final UserRepository userRepository;
     private final StorageService storageService;
     private final PasswordEncoder passwordEncoder;
+
+    @Autowired(required = false)
+    private com.spotibase.security.CustomUserDetailsService userDetailsService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -71,6 +75,7 @@ public class UserService {
 
         user = userRepository.save(user);
         log.info("Profile updated for user: {}", userId);
+        evictAuthCache(userId);
         return toUserResponse(user);
     }
 
@@ -113,6 +118,7 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         log.info("Password changed for user: {}", userId);
+        evictAuthCache(userId);
     }
 
     @Transactional
@@ -122,6 +128,7 @@ public class UserService {
         user.setActive(false);
         userRepository.save(user);
         log.info("Account deactivated: {}", userId);
+        evictAuthCache(userId);
     }
 
     @Transactional(readOnly = true)
@@ -274,6 +281,32 @@ public class UserService {
                 .build();
     }
 
+    /**
+     * Auth hot-path variant: skips the two follower/following COUNT queries
+     * (each is a join-aggregate) and returns 0s instead. Login / register /
+     * refresh / social stay under budget; full counts are still served by
+     * {@link #toUserResponse(User)} for profile reads and by
+     * {@link #getUserStats(String)} for the stats endpoint.
+     */
+    public UserResponse toUserResponseBasic(User user) {
+        return UserResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .username(user.getUsername())
+                .avatarUrl(user.getAvatarUrl())
+                .coverUrl(user.getCoverUrl())
+                .bio(user.getBio())
+                .country(user.getCountry())
+                .favoriteGenres(user.getFavoriteGenres())
+                .role(user.getRole().name())
+                .emailVerified(user.isEmailVerified())
+                .totalListeningTimeMs(user.getTotalListeningTimeMs())
+                .followerCount(0)
+                .followingCount(0)
+                .createdAt(user.getCreatedAt())
+                .build();
+    }
+
     private long getFollowerCount(String userId) {
         TypedQuery<Long> query = entityManager.createQuery(
                 "SELECT COUNT(f) FROM User f JOIN f.following u WHERE u.id = :userId",
@@ -288,5 +321,19 @@ public class UserService {
                 Long.class);
         query.setParameter("userId", userId);
         return query.getSingleResult();
+    }
+
+    /**
+     * Evicts the cached UserDetails for auth (best-effort: fail-open if the
+     * cache bean is absent in tests). TTL (10m) still bounds staleness.
+     */
+    private void evictAuthCache(String userId) {
+        if (userDetailsService != null && userId != null) {
+            try {
+                userDetailsService.evictUser(userId);
+            } catch (Exception ignored) {
+                // Fail-open: stale entry expires via TTL.
+            }
+        }
     }
 }

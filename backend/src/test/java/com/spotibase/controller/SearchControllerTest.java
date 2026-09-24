@@ -78,9 +78,10 @@ class SearchControllerTest extends BaseWebMvcTest {
 
     @Test
     void search_unauthenticated_isRejected() throws Exception {
+        // Production + TestSecurityConfig entryPoint: unauthenticated => 401 (not 403).
         mockMvc.perform(get("/api/v1/search")
                         .param("query", "queen"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

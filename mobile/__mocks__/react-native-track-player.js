@@ -92,6 +92,10 @@ const TrackPlayer = {
   getRate: jest.fn(async () => 1),
   setRepeatMode: jest.fn(async () => {}),
   setShuffleMode: jest.fn(async () => {}),
+  setQueue: jest.fn(async () => {}),
+  load: jest.fn(async () => {}),
+  getActiveTrack: jest.fn(async () => undefined),
+  getActiveTrackIndex: jest.fn(async () => undefined),
   removeUpcomingTracks: jest.fn(async () => {}),
   addEventListener: jest.fn(() => ({ remove: jest.fn() })),
 };

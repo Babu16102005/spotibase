@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { homeApi } from '../../api/client';
-import { useThemeStore, usePlayerStore } from '../../store';
+import { useThemeStore, usePlayerStore, useAuthStore } from '../../store';
 import { HomeSection, SongResponse, AlbumResponse, ArtistResponse, PlaylistResponse } from '../../types';
 import SongCard from '../../components/SongCard';
 import AlbumCard from '../../components/AlbumCard';
@@ -10,9 +10,10 @@ import ArtistCard from '../../components/ArtistCard';
 import PlaylistCard from '../../components/PlaylistCard';
 import SectionHeader from '../../components/SectionHeader';
 import { CardSkeleton, SongSkeleton } from '../../components/SkeletonLoader';
-import { getGreeting, getStorage } from '../../utils';
+import { getGreeting } from '../../utils';
 import Icon from '../../components/Icon';
 import GreetingHeader from '../../components/GreetingHeader';
+import { isHomeFeedFresh, readHomeFeed, writeHomeFeed } from '../../cache/homeFeedCache';
 
 const PILLS = [
   { label: 'Songs', icon: 'songs' as const },
@@ -20,57 +21,78 @@ const PILLS = [
   { label: 'Playlists', icon: 'music' as const },
 ];
 
-const homeCache = getStorage('spotibase-cache');
-
 const HomeScreen = ({ navigation }: any) => {
-  const [data, setData] = useState<any>(() => {
-    try {
-      const cached = homeCache.getString('homeData');
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [data, setData] = useState<any>(() => readHomeFeed());
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(() => !data);
   const { theme } = useThemeStore();
   const playMultiple = usePlayerStore((s) => s.playMultiple);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const fetchHome = useCallback(async () => {
+  const fetchHome = useCallback(async (force = false) => {
+    // Never hit a protected endpoint while logged out: without a token the
+    // backend answers 401 and the refresh interceptor has nothing to work
+    // with, so skip instead of logging an expected 401 on every focus.
+    if (!useAuthStore.getState().isAuthenticated) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    if (!force && isHomeFeedFresh()) {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await homeApi.getHome();
       const nextData = { ...res.data, greeting: getGreeting() };
       setData(nextData);
-      try {
-        homeCache.set('homeData', JSON.stringify(nextData));
-      } catch {}
-    } catch (err) {
-      console.error('Failed to fetch home:', err);
+      writeHomeFeed(nextData);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        // Session expired/revoked: log out once (RootNavigator redirects to
+        // Login). A refresh network failure is tagged by the api client — keep
+        // the cached feed instead of wiping a session that may still be valid.
+        if (!err?._refreshNetworkError && useAuthStore.getState().isAuthenticated) {
+          useAuthStore.getState().logout();
+        }
+      } else if (!err?.response) {
+        // Offline/transient: keep the cached feed silently.
+      } else {
+        console.error('Failed to fetch home:', err);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  // Fetch on mount and gently refresh in the background whenever the tab regains
-  // focus. Cached `data` stays visible while fetching; skeletons only show when
-  // there is no data yet (identical first-paint behavior, but data stays fresh).
+  // Cached data paints immediately. Network refresh only runs when the feed is
+  // older than 30s (Spotify-style stale-while-revalidate), or on pull-to-refresh.
   useFocusEffect(
     useCallback(() => {
-      fetchHome();
-    }, [fetchHome])
+      fetchHome(false);
+    }, [fetchHome, isAuthenticated])
   );
 
-  const onRefresh = () => { setRefreshing(true); fetchHome(); };
+  const onRefresh = () => { setRefreshing(true); fetchHome(true); };
 
   const renderSection = useCallback((section: HomeSection) => {
     if (!section.items || section.items.length === 0) return null;
+    const isTrendingSection =
+      section.id?.toLowerCase().includes('trend') ||
+      section.title?.toLowerCase().includes('trend');
 
     switch (section.type) {
       case 'SONG':
         return (
           <View key={section.id}>
-            <SectionHeader title={section.title} subtitle={section.subtitle} />
+            <SectionHeader
+              title={section.title}
+              subtitle={section.subtitle}
+              actionLabel={isTrendingSection ? 'YouTube' : undefined}
+              onAction={isTrendingSection ? () => navigation?.navigate('YouTubeSongs') : undefined}
+            />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
               {(section.items as SongResponse[]).slice(0, 10).map((item, i) => (
                 <View key={item.id || i} style={{ width: 160, marginRight: 12 }}>
@@ -154,7 +176,15 @@ const HomeScreen = ({ navigation }: any) => {
           <CardSkeleton count={3} />
         </View>
       ) : (
-        data?.sections?.map(renderSection)
+        <>
+          <SectionHeader
+            title="Trending Now"
+            subtitle="YouTube hits & viral songs"
+            actionLabel="Open YouTube"
+            onAction={() => navigation?.navigate('YouTubeSongs')}
+          />
+          {data?.sections?.map(renderSection)}
+        </>
       )}
       <View style={{ height: 100 }} />
     </ScrollView>

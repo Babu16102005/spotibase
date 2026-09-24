@@ -14,6 +14,30 @@ import { getStorage } from '../utils';
 
 const MAX_QUEUE_CAPACITY = 100;
 const queueStorage = getStorage('spotibase-cache');
+const authStorage = getStorage('spotibase-auth');
+
+// --- Spotify-smooth playback helpers --------------------------------------
+// Monotonic id: every explicit play/next/prev bumps it. Async continuations
+// compare their captured id and bail out when stale, so rapid taps never
+// apply out-of-order (older request finishing after a newer one is ignored).
+let playRequestId = 0;
+// One retry per track when the CDN (R2 fileUrl) fails: fall back to /stream.
+let nativeRetriedTrackId: string | null = null;
+let webRetriedTrackId: string | null = null;
+// Preload dedupe: warm the next track once per track.
+let lastPreloadedTrackId: string | null = null;
+// Former web-sync poll timer (removed; kept so unmount cleanup stays safe).
+let webAudioSyncTimer: ReturnType<typeof setInterval> | null = null;
+
+export function cleanupTrackPlayerWebSync() {
+  if (webAudioSyncTimer) {
+    clearInterval(webAudioSyncTimer);
+    webAudioSyncTimer = null;
+  }
+}
+
+const PRELOAD_PROGRESS_THRESHOLD = 0.8;
+const PRELOAD_RANGE_HEADER = 'bytes=0-262143';
 
 const getInitialCachedQueue = (): SongResponse[] => {
   try {
@@ -35,6 +59,435 @@ const saveQueueCache = (q: SongResponse[]) => {
   try {
     queueStorage.set('spotibase_queue_cache', JSON.stringify(q.slice(0, MAX_QUEUE_CAPACITY)));
   } catch {}
+};
+
+const trackDurationOf = (t: SongResponse): number =>
+  t.durationMs && t.durationMs > 0 ? t.durationMs / 1000 : 180;
+
+const toPlayerTrack = (t: SongResponse, url: string) => ({
+  id: t.id,
+  url,
+  title: t.title,
+  artist: t.artistName,
+  artwork: t.coverUrl,
+  duration: trackDurationOf(t),
+});
+
+/** Fallback backend stream URL (used when the R2/CDN fileUrl fails). */
+const getStreamFallbackUrl = (track: { id?: string }): string =>
+  `${getBaseUrl()}/songs/${track?.id}/stream`;
+
+/**
+ * P0-1: direct-CDN plays bypass backend /stream so no play is ever counted.
+ * After a successful direct play, fire-and-forget GET
+ * /songs/{id}/stream?count=1 with Range bytes=0-0 (1 byte, no body needed).
+ * Backend counts start==0 or ?count=1; seeks and prefetch warmups never call
+ * this. AbortController 5s, silent catch. Skips when the URL already hits
+ * backend /stream (backend counts those itself).
+ */
+const pingDirectPlayCount = (trackId?: string, streamUrl?: string) => {
+  try {
+    if (!trackId || !streamUrl) return;
+    if (streamUrl.includes(`/songs/${trackId}/stream`)) return;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      try {
+        controller.abort();
+      } catch {}
+    }, 5000);
+    const headers: Record<string, string> = { Range: 'bytes=0-0' };
+    try {
+      const token = authStorage.getString('accessToken');
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch {}
+    fetch(`${getBaseUrl()}/songs/${trackId}/stream?count=1`, {
+      headers,
+      signal: controller.signal,
+    })
+      .then((res) => {
+        clearTimeout(timeout);
+        // Drain the 1-byte body so the bytes flow; never throws.
+        try {
+          const ab = (res as Response).arrayBuffer?.();
+          if (ab && typeof (ab as Promise<ArrayBuffer>).catch === 'function') {
+            (ab as Promise<ArrayBuffer>).catch(() => {});
+          }
+        } catch {}
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+      });
+  } catch {}
+};
+
+/**
+ * P0-2 reverse exclusion: audio winning must pause any playing YouTube video
+ * so audio + video never overlap. Lazy require (not a static import):
+ * youtubePlayerStore imports playerStore, so a top-level import would cycle.
+ * Deferred require runs after both modules are initialized (same pattern as
+ * the downloadStore lazy import below) and stays synchronous so the video
+ * pauses in the same tick audio starts.
+ */
+const notifyYoutubeAudioStarted = () => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const yt = require('./youtubePlayerStore') as typeof import('./youtubePlayerStore');
+    yt.useYouTubePlayerStore.getState().notifyAudioStarted();
+  } catch {}
+};
+
+/**
+ * Offline-first URL resolution. Fallback chain:
+ *   local download (file://) -> fileUrl CDN -> backend /stream
+ * downloadStore is imported lazily (call time, after module init) so the
+ * two zustand stores can never deadlock in a require cycle.
+ */
+const resolvePlaybackUrl = async (track: SongResponse): Promise<string> => {
+  try {
+    const { useDownloadStore } = await import('./downloadStore');
+    const ds = useDownloadStore.getState();
+    if (track?.id && ds.isDownloaded(track.id)) {
+      const dl = ds.getDownload(track.id);
+      const p = dl?.filePath;
+      if (p) {
+        if (p.startsWith('file://') || p.startsWith('http://') || p.startsWith('https://')) return p;
+        if (p.startsWith('/')) return `file://${p}`;
+      }
+    }
+  } catch {}
+  return getTrackStreamUrl(track);
+};
+
+/**
+ * Fire-and-forget warmup of the upcoming track: a small Range fetch primes
+ * the HTTP/CDN connection while a hidden Audio element primes the web
+ * decoder. Never throws; never blocks playback.
+ */
+const preloadNextTrack = (url?: string | null) => {
+  if (!url || !url.startsWith('http')) return;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      try {
+        controller.abort();
+      } catch {}
+    }, 8000);
+    fetch(url, { headers: { Range: PRELOAD_RANGE_HEADER }, signal: controller.signal })
+      .then((res) => {
+        clearTimeout(timeout);
+        // Drain a chunk so the bytes are actually pulled through caches.
+        try {
+          const ab = (res as Response).arrayBuffer?.();
+          if (ab && typeof (ab as Promise<ArrayBuffer>).catch === 'function') {
+            (ab as Promise<ArrayBuffer>).catch(() => {});
+          }
+        } catch {}
+      })
+      .catch(() => {
+        clearTimeout(timeout);
+      });
+  } catch {}
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    try {
+      const AudioCtor = (globalThis as unknown as { Audio?: typeof Audio }).Audio;
+      if (typeof AudioCtor !== 'undefined') {
+        const probe = new AudioCtor();
+        probe.preload = 'auto';
+        probe.src = url;
+        try {
+          probe.load?.();
+        } catch {}
+      }
+    } catch {}
+  }
+};
+
+/** Called from progress updates: warm the next track past 80% playback. */
+const maybePreloadNext = (position: number, duration: number) => {
+  try {
+    if (!duration || duration <= 0 || !position || position <= 0) return;
+    if (position / duration < PRELOAD_PROGRESS_THRESHOLD) return;
+    const { queue, currentTrack } = usePlayerStore.getState();
+    if (!currentTrack || queue.length < 2) return;
+    const idx = queue.findIndex((t) => t.id === currentTrack.id);
+    const nextSong = idx >= 0 ? queue[idx + 1] : undefined;
+    if (!nextSong || nextSong.id === lastPreloadedTrackId) return;
+    lastPreloadedTrackId = nextSong.id;
+    // Resolve async; the warmup itself is fire-and-forget.
+    void resolvePlaybackUrl(nextSong).then(preloadNextTrack).catch(() => {});
+  } catch {}
+};
+
+// --- Web singleton audio ----------------------------------------------------
+
+const ensureWebAudio = (): HTMLAudioElement | null => {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return null;
+  let audio = getWebAudio();
+  if (!audio) {
+    audio = document.createElement('audio');
+    audio.setAttribute('data-spotibase', 'true');
+    audio.preload = 'auto';
+    audio.style.display = 'none';
+    document.body.appendChild(audio);
+  }
+  wireWebAudioSingleton(audio);
+  return audio;
+};
+
+let webAudioWired: HTMLAudioElement | null = null;
+
+/** Wire real Buffering/Playing/Error mapping onto the singleton (idempotent). */
+const wireWebAudioSingleton = (audio: HTMLAudioElement) => {
+  if (webAudioWired === audio && (audio as unknown as { _spotibase_wired?: boolean })._spotibase_wired) return;
+  (audio as unknown as { _spotibase_wired?: boolean })._spotibase_wired = true;
+  webAudioWired = audio;
+  audio.onended = () => {
+    try {
+      void usePlayerStore.getState().next();
+    } catch {}
+  };
+  audio.ontimeupdate = () => {
+    try {
+      if (!isNaN(audio.currentTime)) {
+        usePlayerStore
+          .getState()
+          .updatePosition(
+            audio.currentTime,
+            !isNaN(audio.duration) && audio.duration > 0 ? audio.duration : usePlayerStore.getState().duration,
+          );
+      }
+    } catch {}
+  };
+  audio.onpause = () => {
+    try {
+      if (usePlayerStore.getState().playbackState === 'playing') usePlayerStore.setState({ playbackState: 'paused' });
+    } catch {}
+  };
+  audio.onplaying = () => {
+    try {
+      usePlayerStore.setState({ playbackState: 'playing' });
+    } catch {}
+  };
+  audio.onwaiting = () => {
+    try {
+      if (usePlayerStore.getState().playbackState === 'playing') usePlayerStore.setState({ playbackState: 'loading' });
+    } catch {}
+  };
+  audio.onstalled = () => {
+    try {
+      if (usePlayerStore.getState().playbackState === 'playing') usePlayerStore.setState({ playbackState: 'loading' });
+    } catch {}
+  };
+  const markReady = () => {
+    try {
+      if (usePlayerStore.getState().playbackState === 'loading') usePlayerStore.setState({ playbackState: 'playing' });
+    } catch {}
+  };
+  try {
+    audio.addEventListener('canplaythrough', markReady);
+  } catch {}
+  audio.onerror = () => {
+    void (async () => {
+      try {
+        const { currentTrack } = usePlayerStore.getState();
+        if (!currentTrack) return;
+        const src = audio.src || '';
+        console.warn('[WebAudio] Stream error for URL:', src);
+        // Single retry: R2/CDN fileUrl -> backend /stream fallback.
+        if (webRetriedTrackId !== currentTrack.id && (src.startsWith('http://') || src.startsWith('https://'))) {
+          webRetriedTrackId = currentTrack.id;
+          const fallback = getStreamFallbackUrl(currentTrack);
+          if (fallback && fallback !== src) {
+            try {
+              audio.src = fallback;
+              audio.load();
+              audio.currentTime = 0;
+              await audio.play().catch(() => {});
+              return;
+            } catch {}
+          }
+        }
+        if (usePlayerStore.getState().currentTrack?.id === currentTrack.id) {
+          usePlayerStore.setState({ playbackState: 'error' });
+        }
+      } catch {}
+    })();
+  };
+};
+
+/**
+ * Web playback path: HTML audio element ONLY (no TrackPlayer.reset/add on
+ * web — the web stub has no real queue and duplicated adds caused
+ * double-loads). Resolves when the browser can actually render audio
+ * (canplaythrough / buffered > 1.5s / playing event), not via a timer hack.
+ */
+const playOnWeb = async (
+  track: SongResponse,
+  url: string,
+  trackDuration: number,
+  myReq: number,
+): Promise<void> => {
+  const audio = ensureWebAudio();
+  if (!audio) throw new Error('Web audio unavailable');
+  webRetriedTrackId = null;
+  usePlayerStore.setState({ playbackState: 'loading', position: 0 });
+  audio.src = url;
+  audio.load();
+  try {
+    audio.currentTime = 0;
+  } catch {}
+  const canPlay = new Promise<void>((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      resolve();
+    };
+    try {
+      audio.addEventListener('canplaythrough', finish, { once: true });
+    } catch {}
+    // Buffered-bytes fallback: >1.5s buffered means smooth start.
+    const probe = setInterval(() => {
+      try {
+        const st = usePlayerStore.getState();
+        if (myReq !== playRequestId || st.currentTrack?.id !== track.id) {
+          clearInterval(probe);
+          finish();
+          return;
+        }
+        const buffered = audio.buffered;
+        if (buffered && buffered.length > 0) {
+          try {
+            if (buffered.end(buffered.length - 1) > 1.5) {
+              clearInterval(probe);
+              finish();
+              return;
+            }
+          } catch {}
+        }
+        if (audio.readyState >= 3) {
+          clearInterval(probe);
+          finish();
+        }
+      } catch {}
+    }, 150);
+    // Hard cap so a stalled stream still surfaces an error instead of
+    // hanging in loading forever.
+    setTimeout(() => {
+      try {
+        clearInterval(probe);
+      } catch {}
+      finish();
+    }, 12000);
+  });
+  await audio.play().catch(() => {});
+  if (myReq !== playRequestId) return;
+  await canPlay;
+  if (myReq !== playRequestId) return;
+  // Only leave loading when the element is really rendering.
+  try {
+    const buffered = audio.buffered;
+    const bufferedEnough =
+      (buffered && buffered.length > 0 && (() => { try { return buffered.end(buffered.length - 1) > 1.5; } catch { return false; } })()) ||
+      audio.readyState >= 3;
+    if (bufferedEnough || !audio.paused) {
+      if (usePlayerStore.getState().currentTrack?.id === track.id) usePlayerStore.setState({ playbackState: 'playing' });
+    }
+    // Otherwise onplaying/canplaythrough handlers flip the state when ready.
+  } catch {}
+};
+
+// --- Native queue-preserving playback --------------------------------------
+// The TrackPlayer queue is NEVER reset on tap. Single taps skip() when the
+// track is already queued, else setQueue([track]). next/prev skip within the
+// kept queue (adding the target first when it is not queued yet).
+
+const playSingleOnNative = async (track: SongResponse, url: string, trackDuration: number, myReq: number): Promise<boolean> => {
+  const playerTrack = toPlayerTrack(track, url);
+  // Fast path: track already queued -> just skip to it.
+  try {
+    const q = (await TrackPlayer.getQueue()) as unknown as Array<{ id?: string }>;
+    const idx = Array.isArray(q) ? q.findIndex((t) => t?.id === track.id) : -1;
+    if (idx >= 0) {
+      if (myReq !== playRequestId) return false;
+      await TrackPlayer.skip(idx);
+      if (myReq !== playRequestId) return false;
+      await TrackPlayer.play();
+      return true;
+    }
+  } catch {}
+  if (myReq !== playRequestId) return false;
+  try {
+    const tp = TrackPlayer as unknown as { setQueue?: (t: unknown[]) => Promise<void>; load?: (t: unknown) => Promise<void> };
+    if (typeof tp.setQueue === 'function') {
+      await tp.setQueue([playerTrack]);
+    } else if (typeof tp.load === 'function') {
+      await tp.load(playerTrack);
+    } else {
+      await TrackPlayer.reset();
+      await TrackPlayer.add(playerTrack);
+    }
+  } catch {
+    await TrackPlayer.reset();
+    await TrackPlayer.add(playerTrack);
+  }
+  if (myReq !== playRequestId) return false;
+  await TrackPlayer.play();
+  return true;
+};
+
+/** Skip to a queued native track, adding it first when it is not queued. */
+const skipToNativeTrack = async (
+  song: SongResponse,
+  url: string,
+  direction: 'next' | 'prev',
+): Promise<void> => {
+  const playerTrack = toPlayerTrack(song, url);
+  try {
+    const q = (await TrackPlayer.getQueue().catch(() => null)) as unknown as Array<{ id?: string }> | null;
+    const idx = Array.isArray(q) ? q.findIndex((t) => t?.id === song.id) : -1;
+    if (idx >= 0) {
+      await TrackPlayer.skip(idx);
+      await TrackPlayer.play();
+      return;
+    }
+    if (direction === 'prev') {
+      // Insert before the head so skip(0) lands exactly on the target.
+      try {
+        await TrackPlayer.add(playerTrack, 0);
+        await TrackPlayer.skip(0);
+        await TrackPlayer.play();
+        return;
+      } catch {}
+    } else {
+      await TrackPlayer.add(playerTrack);
+      try {
+        const q2 = (await TrackPlayer.getQueue().catch(() => null)) as unknown as Array<{ id?: string }> | null;
+        const idx2 = Array.isArray(q2) ? q2.findIndex((t) => t?.id === song.id) : -1;
+        if (idx2 >= 0) {
+          await TrackPlayer.skip(idx2);
+          await TrackPlayer.play();
+          return;
+        }
+      } catch {}
+    }
+    if (direction === 'next') {
+      await TrackPlayer.skipToNext().catch(() => TrackPlayer.play());
+    } else {
+      await TrackPlayer.skipToPrevious().catch(() => TrackPlayer.play());
+    }
+    await TrackPlayer.play().catch(() => {});
+  } catch {
+    try {
+      await TrackPlayer.add(playerTrack);
+      if (direction === 'next') {
+        await TrackPlayer.skipToNext().catch(() => {});
+      } else {
+        await TrackPlayer.skipToPrevious().catch(() => {});
+      }
+      await TrackPlayer.play();
+    } catch {}
+  }
 };
 
 interface PlayerState {
@@ -83,6 +536,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isExpanded: false,
 
   play: async (track) => {
+    // P0-2: audio wins — pause any playing YouTube video first.
+    notifyYoutubeAudioStarted();
+    const myReq = ++playRequestId;
+    const isStale = () => myReq !== playRequestId;
     try {
       const { currentTrack, playbackState } = get();
       if (currentTrack?.id === track.id) {
@@ -91,12 +548,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
         set({ playbackState: 'playing', isMiniPlayerVisible: true });
         try {
-          await TrackPlayer.play();
+          if (Platform.OS === 'web') {
+            const wa = getWebAudio();
+            if (wa) await wa.play().catch(() => {});
+          } else {
+            await TrackPlayer.play();
+          }
         } catch (e) {}
         return;
       }
 
-      const trackDuration = (track.durationMs && track.durationMs > 0) ? track.durationMs / 1000 : 180;
+      const trackDuration = trackDurationOf(track);
+      nativeRetriedTrackId = null;
+      lastPreloadedTrackId = null;
       set({
         currentTrack: track,
         playbackState: 'loading',
@@ -104,91 +568,41 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         position: 0,
         duration: trackDuration,
       });
-      const streamUrl = getTrackStreamUrl(track);
+      const streamUrl = await resolvePlaybackUrl(track);
+      if (isStale()) return;
 
-      // Web low-latency fast path: use HTML Audio directly for instant play (<300ms)
+      // Web path: HTML audio singleton only (no TrackPlayer queue churn).
       if (Platform.OS === 'web') {
         try {
-          // Ensure any existing audio is cleaned up
-          try { await TrackPlayer.reset(); } catch {}
-          // Create hidden audio element with low-latency preload
-          let audio = document.querySelector('audio[data-spotibase]') as HTMLAudioElement | null;
-          if (!audio) {
-            audio = document.createElement('audio');
-            audio.setAttribute('data-spotibase', 'true');
-            audio.preload = 'auto';
-            audio.style.display = 'none';
-            document.body.appendChild(audio);
-          }
-          audio.src = streamUrl;
-          audio.currentTime = 0;
-          // Optimistic playing - don't wait for buffering
-          set({ playbackState: 'playing' });
-          const playPromise = audio.play();
-          if (playPromise) await playPromise.catch(() => {});
-          audio.onended = () => get().next();
-          audio.ontimeupdate = () => {
-            if (!isNaN(audio!.currentTime) && !isNaN(audio!.duration)) {
-              get().updatePosition(audio!.currentTime, audio!.duration || trackDuration);
-            }
-          };
-          audio.onpause = () => {
-            if (get().playbackState === 'playing') set({ playbackState: 'paused' });
-          };
-          audio.onplaying = () => set({ playbackState: 'playing' });
-          audio.onwaiting = () => set({ playbackState: 'loading' });
-          audio.onerror = () => {
-            console.warn('[WebAudio] Stream error for URL:', streamUrl);
-          };
-          // Also keep TrackPlayer queue in sync for next/previous compatibility
-          try {
-            await TrackPlayer.add({
-              id: track.id,
-              url: streamUrl,
-              title: track.title,
-              artist: track.artistName,
-              artwork: track.coverUrl,
-              duration: trackDuration,
-            });
-          } catch {}
-          // optimistic already set
+          await playOnWeb(track, streamUrl, trackDuration, myReq);
+          if (!isStale()) pingDirectPlayCount(track.id, streamUrl);
         } catch (e) {
-          console.warn('Web audio fast path failed, falling back to TrackPlayer', e);
-          await TrackPlayer.reset();
-          await TrackPlayer.add({
-            id: track.id,
-            url: streamUrl,
-            title: track.title,
-            artist: track.artistName,
-            artwork: track.coverUrl,
-            duration: trackDuration,
-          });
-          await TrackPlayer.play();
-          set({ playbackState: 'playing' });
+          console.warn('Web audio play failed', e);
+          if (!isStale() && get().currentTrack?.id === track.id) set({ playbackState: 'error' });
         }
       } else {
-        await TrackPlayer.reset();
-        await TrackPlayer.add({
-          id: track.id,
-          url: streamUrl,
-          title: track.title,
-          artist: track.artistName,
-          artwork: track.coverUrl,
-          duration: trackDuration,
-        });
-        await TrackPlayer.play();
+        try {
+          await playSingleOnNative(track, streamUrl, trackDuration, myReq);
+          if (!isStale()) pingDirectPlayCount(track.id, streamUrl);
+        } catch (e: unknown) {
+          if ((e as { name?: string })?.name !== 'AbortError') {
+            console.error('Play error:', e);
+          }
+          throw e;
+        }
         // Optimistic: show playing state immediately; TrackPlayer events will sync real state
-        set({ playbackState: 'playing', isMiniPlayerVisible: true });
+        if (!isStale()) set({ playbackState: 'playing', isMiniPlayerVisible: true });
       }
 
       // FIX: Single play should NOT auto-queue all songs - queue = only current track + manually added via addToQueue
       // Previously this auto-enriched queue with all catalog songs causing "queue shows for all"
       const nextQueue: SongResponse[] = [track];
       saveQueueCache(nextQueue);
+      if (isStale()) return;
       set({
         currentTrack: track,
         queue: nextQueue,
-        playbackState: 'playing',
+        playbackState: Platform.OS === 'web' ? get().playbackState : 'playing',
         isMiniPlayerVisible: true,
         position: 0,
         duration: trackDuration,
@@ -196,15 +610,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       // Background non-blocking sync (no auto-enrichment)
       queueApi.addToQueue(track.id, track.albumId ? 'ALBUM' : 'SONG').catch(() => {});
-    } catch (err: any) {
+    } catch (err: unknown) {
+      if (isStale()) return;
       set({ playbackState: 'idle', currentTrack: null });
-      if (err?.name !== 'AbortError') {
+      if ((err as { name?: string })?.name !== 'AbortError') {
         console.error('Play error:', err);
       }
     }
   },
 
   playMultiple: async (tracks, startIndex = 0) => {
+    // P0-2: audio wins — pause any playing YouTube video first.
+    notifyYoutubeAudioStarted();
+    const myReq = ++playRequestId;
+    const isStale = () => myReq !== playRequestId;
     try {
       if (!tracks || tracks.length === 0) return;
       const validIndex = Math.max(0, Math.min(startIndex, tracks.length - 1));
@@ -217,13 +636,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
         set({ playbackState: 'playing', isMiniPlayerVisible: true });
         try {
-          await TrackPlayer.play();
+          if (Platform.OS === 'web') {
+            const wa = getWebAudio();
+            if (wa) await wa.play().catch(() => {});
+          } else {
+            await TrackPlayer.play();
+          }
         } catch (e) {}
         return;
       }
 
       const boundedTracks = tracks.slice(0, MAX_QUEUE_CAPACITY);
-      const trackDuration = (targetSong.durationMs && targetSong.durationMs > 0) ? targetSong.durationMs / 1000 : 180;
+      const trackDuration = trackDurationOf(targetSong);
+      nativeRetriedTrackId = null;
+      lastPreloadedTrackId = null;
       set({
         currentTrack: targetSong,
         queue: boundedTracks,
@@ -233,73 +659,64 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         duration: trackDuration,
       });
 
-      // Web low-latency fast path (bypass TrackPlayer stub)
+      // Web path: HTML audio singleton only (no duplicate TrackPlayer.add).
       if (Platform.OS === 'web') {
         try {
-          try { await TrackPlayer.reset(); } catch {}
-          const streamUrl = getTrackStreamUrl(targetSong);
-          let audio = getWebAudio();
-          if (!audio) {
-            audio = document.createElement('audio') as HTMLAudioElement;
-            audio.setAttribute('data-spotibase', 'true');
-            audio.preload = 'auto';
-            (audio as any).style = 'display:none';
-            document.body.appendChild(audio);
-          }
-          audio.src = streamUrl;
-          audio.currentTime = 0;
-          set({ playbackState: 'playing' });
-          const p = audio.play();
-          if (p) await p.catch(() => {});
-          audio.onended = () => get().next();
-          audio.ontimeupdate = () => {
-            if (!isNaN(audio!.currentTime) && !isNaN(audio!.duration)) {
-              get().updatePosition(audio!.currentTime, audio!.duration || trackDuration);
-            }
-          };
-          audio.onpause = () => { if (get().playbackState === 'playing') set({ playbackState: 'paused' }); };
-          audio.onplaying = () => set({ playbackState: 'playing' });
-          audio.onerror = () => {
-            console.warn('[WebAudio] playMultiple stream error for URL:', streamUrl);
-          };
-          try {
-            const playerTracks = boundedTracks.map(t => ({
-              id: t.id,
-              url: getTrackStreamUrl(t),
-              title: t.title,
-              artist: t.artistName,
-              artwork: t.coverUrl,
-              duration: (t.durationMs && t.durationMs > 0) ? t.durationMs / 1000 : 180,
-            }));
-            await TrackPlayer.add(playerTracks);
-          } catch {}
-          saveQueueCache(boundedTracks);
-          set({ currentTrack: targetSong, queue: boundedTracks, playbackState: 'playing', isMiniPlayerVisible: true, position: 0, duration: trackDuration });
-          return;
+          const streamUrl = await resolvePlaybackUrl(targetSong);
+          if (isStale()) return;
+          await playOnWeb(targetSong, streamUrl, trackDuration, myReq);
+          if (!isStale()) pingDirectPlayCount(targetSong.id, streamUrl);
         } catch (e) {
-          console.warn('Web playMultiple fast path failed, falling back', e);
+          console.warn('Web playMultiple failed', e);
+          if (!isStale() && get().currentTrack?.id === targetSong.id) set({ playbackState: 'error' });
         }
+        if (isStale()) return;
+        saveQueueCache(boundedTracks);
+        set({
+          currentTrack: targetSong,
+          queue: boundedTracks,
+          playbackState: get().playbackState === 'error' ? 'error' : 'playing',
+          isMiniPlayerVisible: true,
+          position: 0,
+          duration: trackDuration,
+        });
+        return;
       }
 
-      await TrackPlayer.reset();
-      const playerTracks = boundedTracks.map(t => ({
-        id: t.id,
-        url: getTrackStreamUrl(t),
-        title: t.title,
-        artist: t.artistName,
-        artwork: t.coverUrl,
-        duration: (t.durationMs && t.durationMs > 0) ? t.durationMs / 1000 : 180,
-      }));
-      await TrackPlayer.add(playerTracks);
+      // Native: replace the kept queue in place (no reset), then skip to start.
+      const playerTracks = await Promise.all(
+        boundedTracks.map(async (t) => toPlayerTrack(t, await resolvePlaybackUrl(t))),
+      );
+      if (isStale()) return;
+      let queueSet = false;
+      try {
+        const tp = TrackPlayer as unknown as { setQueue?: (t: unknown[]) => Promise<void> };
+        if (typeof tp.setQueue === 'function') {
+          await tp.setQueue(playerTracks);
+          queueSet = true;
+        }
+      } catch {}
+      if (!queueSet) {
+        await TrackPlayer.reset();
+        await TrackPlayer.add(playerTracks);
+      }
+      if (isStale()) return;
       if (validIndex > 0) {
         await TrackPlayer.skip(validIndex);
+        if (isStale()) return;
       }
       await TrackPlayer.play();
+      if (isStale()) return;
+      try {
+        const targetUrl = (playerTracks[validIndex] as { url?: string })?.url;
+        if (typeof targetUrl === 'string') pingDirectPlayCount(targetSong.id, targetUrl);
+      } catch {}
       saveQueueCache(boundedTracks);
       set({ currentTrack: targetSong, queue: boundedTracks, playbackState: 'playing', isMiniPlayerVisible: true, position: 0, duration: trackDuration });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      if (myReq !== playRequestId) return;
       set({ playbackState: 'idle', currentTrack: null });
-      if (err?.name !== 'AbortError') {
+      if ((err as { name?: string })?.name !== 'AbortError') {
         console.error('Play multiple error:', err);
       }
     }
@@ -310,16 +727,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     try {
       const wa = getWebAudio();
       if (wa) wa.pause();
-      await TrackPlayer.pause();
+      if (Platform.OS !== 'web') {
+        await TrackPlayer.pause();
+      }
     } catch (e) {}
   },
 
   resume: async () => {
+    // P0-2: audio wins — pause any playing YouTube video first.
+    notifyYoutubeAudioStarted();
     set({ playbackState: 'playing' });
     try {
       const wa = getWebAudio();
-      if (wa) await wa.play().catch(()=>{});
-      await TrackPlayer.play();
+      if (wa) await wa.play().catch(() => {});
+      if (Platform.OS !== 'web') {
+        await TrackPlayer.play();
+      }
     } catch (e) {}
   },
 
@@ -336,33 +759,51 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       try {
         const wa = getWebAudio();
         if (wa) wa.pause();
-        await TrackPlayer.pause();
+        if (Platform.OS !== 'web') {
+          await TrackPlayer.pause();
+        }
       } catch (e) {}
     } else {
+      // P0-2: audio wins — pause any playing YouTube video first.
+      notifyYoutubeAudioStarted();
       set({ playbackState: 'playing' });
       try {
         const wa = getWebAudio();
-        if (wa) await wa.play().catch(()=>{});
-        await TrackPlayer.play();
+        if (wa) await wa.play().catch(() => {});
+        if (Platform.OS !== 'web') {
+          await TrackPlayer.play();
+        }
       } catch (e) {}
     }
   },
 
   next: async () => {
+    // P0-2: audio wins — pause any playing YouTube video first.
+    notifyYoutubeAudioStarted();
+    const myReq = ++playRequestId;
+    const isStale = () => myReq !== playRequestId;
     const { queue, currentTrack, shuffle, repeat } = get();
     if (!currentTrack) return;
 
     // repeat=one → restart current track
     if (repeat === 'one') {
       try {
-        await TrackPlayer.seekTo(0);
-        set({ position: 0, playbackState: 'playing' });
-        await TrackPlayer.play();
+        if (Platform.OS === 'web') {
+          const wa = getWebAudio();
+          if (wa) {
+            wa.currentTime = 0;
+            await wa.play().catch(() => {});
+          }
+        } else {
+          await TrackPlayer.seekTo(0);
+          await TrackPlayer.play();
+        }
+        if (!isStale()) set({ position: 0, playbackState: 'playing' });
       } catch (e) {}
       return;
     }
 
-    let activeQueue = queue && queue.length > 0 ? [...queue] : [currentTrack];
+    const activeQueue = queue && queue.length > 0 ? [...queue] : [currentTrack];
 
     // FIX: Don't auto-fill queue with all catalog songs (was causing "queue shows for all")
     // Single track queue stays single - Next will just restart or stop
@@ -383,9 +824,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         } else {
           // Single track with no additional tracks: restart from beginning
           try {
-            await TrackPlayer.seekTo(0);
-            set({ position: 0, playbackState: 'playing' });
-            await TrackPlayer.play();
+            if (Platform.OS === 'web') {
+              const wa = getWebAudio();
+              if (wa) {
+                wa.currentTime = 0;
+                await wa.play().catch(() => {});
+              }
+            } else {
+              await TrackPlayer.seekTo(0);
+              await TrackPlayer.play();
+            }
+            if (!isStale()) set({ position: 0, playbackState: 'playing' });
           } catch (e) {}
           return;
         }
@@ -395,67 +844,69 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const nextSong = activeQueue[nextIndex];
     if (!nextSong) return;
 
-    const streamUrl = getTrackStreamUrl(nextSong);
-    const trackDuration = (nextSong.durationMs && nextSong.durationMs > 0) ? nextSong.durationMs / 1000 : 180;
+    const streamUrl = await resolvePlaybackUrl(nextSong);
+    if (isStale()) return;
+    const trackDuration = trackDurationOf(nextSong);
+    lastPreloadedTrackId = null;
     set({ currentTrack: nextSong, queue: activeQueue, position: 0, duration: trackDuration, playbackState: 'loading' });
 
     if (Platform.OS === 'web') {
       try {
-        try { await TrackPlayer.reset(); } catch {}
-        let audio = getWebAudio();
-        if (!audio) {
-          audio = document.createElement('audio') as HTMLAudioElement;
-          audio.setAttribute('data-spotibase', 'true');
-          audio.preload = 'auto';
-          (audio as any).style = 'display:none';
-          document.body.appendChild(audio);
+        await playOnWeb(nextSong, streamUrl, trackDuration, myReq);
+        if (isStale()) return;
+        pingDirectPlayCount(nextSong.id, streamUrl);
+        if (get().currentTrack?.id === nextSong.id && get().playbackState === 'loading') {
+          set({ playbackState: 'playing' });
         }
-        audio.src = streamUrl;
-        audio.currentTime = 0;
-        set({ playbackState: 'playing' });
-        await audio.play().catch(()=>{});
-        audio.onended = () => get().next();
-        try { await TrackPlayer.add({ id: nextSong.id, url: streamUrl, title: nextSong.title, artist: nextSong.artistName, artwork: nextSong.coverUrl, duration: trackDuration }); } catch {}
-        set({ playbackState: 'playing' });
         return;
-      } catch (e) { console.warn('Web next fast path failed', e); }
+      } catch (e) {
+        console.warn('Web next failed', e);
+        if (!isStale()) set({ playbackState: 'error' });
+        return;
+      }
     }
 
+    // Native: skip within the kept queue (never reset+add single).
     try {
-      await TrackPlayer.reset();
-      await TrackPlayer.add({
-        id: nextSong.id,
-        url: streamUrl,
-        title: nextSong.title,
-        artist: nextSong.artistName,
-        artwork: nextSong.coverUrl,
-        duration: trackDuration,
-      });
-      await TrackPlayer.play();
+      await skipToNativeTrack(nextSong, streamUrl, 'next');
+      if (isStale()) return;
+      pingDirectPlayCount(nextSong.id, streamUrl);
       set({ playbackState: 'playing' });
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name !== 'AbortError') {
         console.error('next() TrackPlayer error:', e);
       }
-      set({ playbackState: 'playing' });
+      if (!isStale()) set({ playbackState: 'playing' });
     }
   },
 
   previous: async () => {
+    // P0-2: audio wins — pause any playing YouTube video first.
+    notifyYoutubeAudioStarted();
+    const myReq = ++playRequestId;
+    const isStale = () => myReq !== playRequestId;
     const { queue, currentTrack, position, shuffle } = get();
     if (!currentTrack) return;
 
     // If more than 3 seconds in: restart current track
     if (position > 3) {
       try {
-        await TrackPlayer.seekTo(0);
-        set({ position: 0, playbackState: 'playing' });
-        await TrackPlayer.play();
+        if (Platform.OS === 'web') {
+          const wa = getWebAudio();
+          if (wa) {
+            wa.currentTime = 0;
+            await wa.play().catch(() => {});
+          }
+        } else {
+          await TrackPlayer.seekTo(0);
+          await TrackPlayer.play();
+        }
+        if (!isStale()) set({ position: 0, playbackState: 'playing' });
       } catch (e) {}
       return;
     }
 
-    let activeQueue = queue && queue.length > 0 ? [...queue] : [currentTrack];
+    const activeQueue = queue && queue.length > 0 ? [...queue] : [currentTrack];
 
     // FIX: Don't auto-fill queue
 
@@ -471,9 +922,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (prevIndex < 0 || prevIndex === currentIndex) {
         // Only 1 track: just restart
         try {
-          await TrackPlayer.seekTo(0);
-          set({ position: 0, playbackState: 'playing' });
-          await TrackPlayer.play();
+          if (Platform.OS === 'web') {
+            const wa = getWebAudio();
+            if (wa) {
+              wa.currentTime = 0;
+              await wa.play().catch(() => {});
+            }
+          } else {
+            await TrackPlayer.seekTo(0);
+            await TrackPlayer.play();
+          }
+          if (!isStale()) set({ position: 0, playbackState: 'playing' });
         } catch (e) {}
         return;
       }
@@ -482,49 +941,39 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const prevSong = activeQueue[prevIndex];
     if (!prevSong) return;
 
-    const streamUrl = getTrackStreamUrl(prevSong);
-    const trackDuration = (prevSong.durationMs && prevSong.durationMs > 0) ? prevSong.durationMs / 1000 : 180;
+    const streamUrl = await resolvePlaybackUrl(prevSong);
+    if (isStale()) return;
+    const trackDuration = trackDurationOf(prevSong);
+    lastPreloadedTrackId = null;
     set({ currentTrack: prevSong, queue: activeQueue, position: 0, duration: trackDuration, playbackState: 'loading' });
 
     if (Platform.OS === 'web') {
       try {
-        try { await TrackPlayer.reset(); } catch {}
-        let audio = getWebAudio();
-        if (!audio) {
-          audio = document.createElement('audio') as HTMLAudioElement;
-          audio.setAttribute('data-spotibase', 'true');
-          audio.preload = 'auto';
-          (audio as any).style = 'display:none';
-          document.body.appendChild(audio);
+        await playOnWeb(prevSong, streamUrl, trackDuration, myReq);
+        if (isStale()) return;
+        pingDirectPlayCount(prevSong.id, streamUrl);
+        if (get().currentTrack?.id === prevSong.id && get().playbackState === 'loading') {
+          set({ playbackState: 'playing' });
         }
-        audio.src = streamUrl;
-        audio.currentTime = 0;
-        set({ playbackState: 'playing' });
-        await audio.play().catch(()=>{});
-        audio.onended = () => get().next();
-        try { await TrackPlayer.add({ id: prevSong.id, url: streamUrl, title: prevSong.title, artist: prevSong.artistName, artwork: prevSong.coverUrl, duration: trackDuration }); } catch {}
-        set({ playbackState: 'playing' });
         return;
-      } catch (e) { console.warn('Web previous fast path failed', e); }
+      } catch (e) {
+        console.warn('Web previous failed', e);
+        if (!isStale()) set({ playbackState: 'error' });
+        return;
+      }
     }
 
+    // Native: skip within the kept queue (never reset+add single).
     try {
-      await TrackPlayer.reset();
-      await TrackPlayer.add({
-        id: prevSong.id,
-        url: streamUrl,
-        title: prevSong.title,
-        artist: prevSong.artistName,
-        artwork: prevSong.coverUrl,
-        duration: trackDuration,
-      });
-      await TrackPlayer.play();
+      await skipToNativeTrack(prevSong, streamUrl, 'prev');
+      if (isStale()) return;
+      pingDirectPlayCount(prevSong.id, streamUrl);
       set({ playbackState: 'playing' });
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name !== 'AbortError') {
         console.error('previous() TrackPlayer error:', e);
       }
-      set({ playbackState: 'playing' });
+      if (!isStale()) set({ playbackState: 'playing' });
     }
   },
 
@@ -532,8 +981,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     set({ position });
     try {
       const wa = getWebAudio();
-      if (wa) wa.currentTime = position;
-      await TrackPlayer.seekTo(position);
+      if (wa) {
+        try {
+          wa.currentTime = position;
+        } catch {}
+      }
+      if (Platform.OS !== 'web') {
+        await TrackPlayer.seekTo(position);
+      }
     } catch (e) {}
   },
 
@@ -548,7 +1003,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   setVolume: async (volume) => {
-    await TrackPlayer.setVolume(volume);
+    try {
+      const wa = getWebAudio();
+      if (wa) {
+        try {
+          wa.volume = Math.max(0, Math.min(1, volume));
+        } catch {}
+      }
+      if (Platform.OS !== 'web') {
+        await TrackPlayer.setVolume(volume);
+      }
+    } catch {}
     set({ volume });
   },
 
@@ -561,14 +1026,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       nextQueue = nextQueue.slice(nextQueue.length - MAX_QUEUE_CAPACITY);
     }
     try {
-      await TrackPlayer.add({
-        id: track.id,
-        url: getTrackStreamUrl(track),
-        title: track.title,
-        artist: track.artistName,
-        artwork: track.coverUrl,
-        duration: (track.durationMs && track.durationMs > 0) ? track.durationMs / 1000 : 180,
-      });
+      // Append only — never disturb the current playback queue.
+      await TrackPlayer.add(toPlayerTrack(track, await resolvePlaybackUrl(track)));
     } catch (e) {
       console.warn('Failed adding to TrackPlayer:', e);
     }
@@ -602,6 +1061,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     if (Math.abs(position - curPos) >= 0.15 || (duration > 0 && Math.abs(duration - curDur) >= 0.2)) {
       set({ position, duration: effectiveDur });
     }
+    // Warm the next track once playback passes 80% (Spotify-style gapless).
+    maybePreloadNext(position, effectiveDur);
   },
 
   expandPlayer: () => set({ isExpanded: true }),
@@ -660,25 +1121,55 @@ export const usePlayerActions = () =>
   );
 
 export async function setupTrackPlayer() {
+  // Spotify-smooth buffering (TrackPlayer v5 PlayerOptions). Falls back to a
+  // bare setup on builds whose native module does not accept these keys.
+  const bufferOptions = {
+    minBuffer: 15,
+    maxBuffer: 30,
+    playBuffer: 2.5,
+    backBuffer: 30,
+    maxCacheSize: 102400,
+  };
   try {
-    await TrackPlayer.setupPlayer();
-  } catch (err: any) {
-    if (!err?.message?.includes('already been initialized') && err?.code !== 'player_already_initialized') {
-      console.error('TrackPlayer setup error:', err);
-      return;
+    await TrackPlayer.setupPlayer(bufferOptions);
+  } catch (err: unknown) {
+    const msg = (err as { message?: string })?.message ?? '';
+    const code = (err as { code?: string })?.code;
+    if (!msg.includes('already been initialized') && code !== 'player_already_initialized') {
+      try {
+        await TrackPlayer.setupPlayer();
+      } catch (retryErr: unknown) {
+        const retryMsg = (retryErr as { message?: string })?.message ?? '';
+        const retryCode = (retryErr as { code?: string })?.code;
+        if (!retryMsg.includes('already been initialized') && retryCode !== 'player_already_initialized') {
+          console.error('TrackPlayer setup error:', retryErr);
+          return;
+        }
+      }
     }
   }
 
   try {
     await TrackPlayer.updateOptions({
-      progressUpdateEventInterval: Platform.OS === 'web' ? 1.0 : 0.5,
+      progressUpdateEventInterval: 0.25,
       capabilities: [
         Capability.Play,
         Capability.Pause,
+        Capability.Stop,
         Capability.SkipToNext,
         Capability.SkipToPrevious,
         Capability.SeekTo,
       ],
+      notificationCapabilities: [
+        Capability.Play,
+        Capability.Pause,
+        Capability.Stop,
+        Capability.SkipToNext,
+        Capability.SkipToPrevious,
+        Capability.SeekTo,
+      ],
+      forwardJumpInterval: 15,
+      backwardJumpInterval: 15,
     });
 
     TrackPlayer.addEventListener(Event.PlaybackState, (event: any) => {
@@ -697,24 +1188,36 @@ export async function setupTrackPlayer() {
         [State.None]: 'idle',
       };
       const mapped = stateMap[rawState];
-      if (mapped) {
+      if (mapped === 'error') {
+        // Real error mapping with a single retry: R2/CDN fileUrl -> /stream.
+        const cur = usePlayerStore.getState().currentTrack;
+        if (cur && nativeRetriedTrackId !== cur.id && cur.fileUrl?.startsWith('http')) {
+          nativeRetriedTrackId = cur.id;
+          usePlayerStore.getState().updatePlaybackState('loading');
+          void (async () => {
+            try {
+              const fallback = getStreamFallbackUrl(cur);
+              const playerTrack = toPlayerTrack(cur, fallback);
+              const tp = TrackPlayer as unknown as { setQueue?: (t: unknown[]) => Promise<void> };
+              if (typeof tp.setQueue === 'function') {
+                await tp.setQueue([playerTrack]);
+              } else {
+                await TrackPlayer.reset();
+                await TrackPlayer.add(playerTrack);
+              }
+              await TrackPlayer.play();
+            } catch {}
+          })();
+          return;
+        }
+        usePlayerStore.getState().updatePlaybackState('error');
+      } else if (mapped) {
+        // Fresh connecting/buffering states flow straight through; stale
+        // retries never overwrite a newer explicit play (guarded by callers).
         usePlayerStore.getState().updatePlaybackState(mapped);
       } else {
         usePlayerStore.getState().updatePlaybackState('idle');
       }
-      // Mobile fallback: if we get Buffering for >5s, force 'playing' to avoid
-      // infinite loading spinner. The backend redirect means audio is loading
-      // from R2 directly; TrackPlayer may not emit State.Playing until buffered.
-      if (mapped === 'loading') {
-        setTimeout(() => {
-          const cur = usePlayerStore.getState().playbackState;
-          if (cur === 'loading') {
-            console.warn('[Player] Playback stuck at loading >5s - forcing playing state');
-            usePlayerStore.getState().updatePlaybackState('playing');
-          }
-        }, 5000);
-      }
-
     });
 
     TrackPlayer.addEventListener(Event.PlaybackProgressUpdated, (event) => {
@@ -723,18 +1226,19 @@ export async function setupTrackPlayer() {
       }
     });
 
-    TrackPlayer.addEventListener(Event.RemotePlay, () => TrackPlayer.play().catch(() => {}));
-    TrackPlayer.addEventListener(Event.RemotePause, () => TrackPlayer.pause().catch(() => {}));
-    TrackPlayer.addEventListener(Event.RemoteNext, () => usePlayerStore.getState().next());
-    TrackPlayer.addEventListener(Event.RemotePrevious, () => usePlayerStore.getState().previous());
-    TrackPlayer.addEventListener(Event.RemoteSeek, (event) => TrackPlayer.seekTo(event.position).catch(() => {}));
+    // NOTE (P0-2): Remote* handlers live ONLY in mobile/index.ts
+    // registerPlaybackService (single owner, delegates to the store via
+    // dynamic import). Registering them here too fires next/prev/play/pause
+    // twice per headset/notification tap, so this setup path keeps only
+    // PlaybackState / Progress / ActiveTrack listeners.
 
     const handleTrackChange = async (event: any) => {
       try {
         const { queue } = usePlayerStore.getState();
-        let activeTrack = event?.track || event?.nextTrack;
+        const evt = event as { track?: { id?: string; duration?: number }; nextTrack?: { id?: string; duration?: number } } | null;
+        let activeTrack = evt?.track || evt?.nextTrack;
         if (!activeTrack) {
-          activeTrack = await TrackPlayer.getActiveTrack();
+          activeTrack = (await TrackPlayer.getActiveTrack()) as unknown as { id?: string; duration?: number } | undefined;
         }
         if (activeTrack && activeTrack.id) {
           const matched = queue.find((t) => t.id === activeTrack.id);
@@ -757,56 +1261,15 @@ export async function setupTrackPlayer() {
       TrackPlayer.addEventListener((Event as any).PlaybackTrackChanged, handleTrackChange);
     }
 
-    // Web audio sync: attach directly to HTML5 <audio> element if in browser
-    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-      const attachWebAudioListeners = () => {
-        const audioElement = (document.getElementById('react-native-track-player') ||
-          document.querySelector('audio')) as HTMLAudioElement | null;
-        if (audioElement && !(audioElement as any)._spotibase_listeners_attached) {
-          (audioElement as any)._spotibase_listeners_attached = true;
-          const onPlay = () => usePlayerStore.getState().updatePlaybackState('playing');
-          const onPause = () => {
-            if (usePlayerStore.getState().playbackState === 'playing') {
-              usePlayerStore.getState().updatePlaybackState('paused');
-            }
-          };
-          const onWaiting = () => {
-            if (usePlayerStore.getState().playbackState === 'playing') {
-              usePlayerStore.getState().updatePlaybackState('loading');
-            }
-          };
-          const onTimeUpdate = () => {
-            const pos = audioElement.currentTime;
-            const dur = audioElement.duration;
-            if (typeof pos === 'number' && !isNaN(pos)) {
-              usePlayerStore.getState().updatePosition(pos, typeof dur === 'number' && !isNaN(dur) && dur > 0 ? dur : usePlayerStore.getState().duration);
-            }
-          };
-          const onDurationChange = () => {
-            const dur = audioElement.duration;
-            if (typeof dur === 'number' && !isNaN(dur) && dur > 0) {
-              usePlayerStore.getState().updatePosition(audioElement.currentTime, dur);
-            }
-          };
-          const onEnded = () => {
-            usePlayerStore.getState().next();
-          };
-
-          audioElement.addEventListener('play', onPlay);
-          audioElement.addEventListener('playing', onPlay);
-          audioElement.addEventListener('pause', onPause);
-          audioElement.addEventListener('waiting', onWaiting);
-          audioElement.addEventListener('timeupdate', onTimeUpdate);
-          audioElement.addEventListener('durationchange', onDurationChange);
-          audioElement.addEventListener('loadedmetadata', onDurationChange);
-          audioElement.addEventListener('ended', onEnded);
-        }
-      };
-      attachWebAudioListeners();
-      const webTimer = setInterval(attachWebAudioListeners, 1000);
-      if (webTimer && typeof (webTimer as any).unref === 'function') {
-        (webTimer as any).unref();
-      }
+    // Web: wire the singleton <audio data-spotibase> directly. No polling
+    // interval (the old 1s setInterval leaked for the app lifetime); the
+    // singleton is (re)wired on creation in ensureWebAudio.
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      try {
+        cleanupTrackPlayerWebSync();
+        const existing = document.querySelector('audio[data-spotibase]') as HTMLAudioElement | null;
+        if (existing) wireWebAudioSingleton(existing);
+      } catch {}
     }
 
     console.log('TrackPlayer setup complete');

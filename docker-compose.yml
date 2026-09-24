@@ -60,6 +60,11 @@ services:
       - STT_MODE=${STT_MODE:-mock}
       - STT_MODEL=${STT_MODEL:-small}
       - JWT_SECRET=${JWT_SECRET}
+      # YouTube Data API v3 proxy: empty key = mock catalogue, set key = live.
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
+      - YOUTUBE_ENABLED=${YOUTUBE_ENABLED:-true}
+      - YOUTUBE_REGION_CODE=${YOUTUBE_REGION_CODE:-US}
+      - YOUTUBE_TIMEOUT_SECONDS=${YOUTUBE_TIMEOUT_SECONDS:-5}
     depends_on:
       - spotibase-db
       - redis

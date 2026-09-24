@@ -42,7 +42,7 @@ public class User {
     @Column(length = 100)
     private String country;
 
-    @ElementCollection(fetch = FetchType.EAGER)
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "user_favorite_genres", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "genre")
     @Builder.Default

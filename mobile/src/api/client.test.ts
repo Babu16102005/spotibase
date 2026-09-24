@@ -123,17 +123,54 @@ describe('api/client', () => {
       expect(instance).not.toHaveBeenCalled();
     });
 
-    it('clears storage when the refresh call fails', async () => {
+    it('keeps stored tokens when the refresh call fails with a network error', async () => {
       storage.set('accessToken', 'expired-token');
       storage.set('refreshToken', 'refresh-token');
-      (axios.post as jest.Mock).mockRejectedValue(new Error('network down'));
+      (axios.post as jest.Mock).mockRejectedValue(new Error('Network Error'));
 
       const error = authError();
-      await expect(responseRejected(error)).rejects.toThrow('network down');
+      await expect(responseRejected(error)).rejects.toBe(error);
+
+      expect(storage.getString('accessToken')).toBe('expired-token');
+      expect(storage.getString('refreshToken')).toBe('refresh-token');
+      expect(instance).not.toHaveBeenCalled();
+    });
+
+    it('clears storage when the refresh endpoint rejects the grant (401)', async () => {
+      storage.set('accessToken', 'expired-token');
+      storage.set('refreshToken', 'dead-refresh');
+      const grantError = { response: { status: 401 }, config: { headers: {} } };
+      (axios.post as jest.Mock).mockRejectedValue(grantError);
+
+      await expect(responseRejected(authError())).rejects.toBe(grantError);
 
       expect(storage.getString('accessToken')).toBeUndefined();
       expect(storage.getString('refreshToken')).toBeUndefined();
       expect(instance).not.toHaveBeenCalled();
+    });
+
+    it('shares a single refresh call across concurrent 401s', async () => {
+      storage.set('accessToken', 'expired-token');
+      storage.set('refreshToken', 'refresh-token');
+      const refreshed = makeAuthResponse({ accessToken: 'fresh-token', refreshToken: 'new-refresh' });
+      (axios.post as jest.Mock).mockResolvedValue({ data: refreshed });
+
+      const first: { url: string; headers: Record<string, string>; _retry?: boolean } = {
+        url: '/songs',
+        headers: {},
+      };
+      const second: { url: string; headers: Record<string, string>; _retry?: boolean } = {
+        url: '/albums',
+        headers: {},
+      };
+      await Promise.all([
+        responseRejected(authError({ config: first })),
+        responseRejected(authError({ config: second })),
+      ]);
+
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      expect(first.headers.Authorization).toBe('Bearer fresh-token');
+      expect(second.headers.Authorization).toBe('Bearer fresh-token');
     });
 
     it('clears storage without calling the refresh endpoint when no refresh token exists', async () => {

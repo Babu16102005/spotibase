@@ -36,6 +36,7 @@ def root():
         "health": "/health",
         "assistant": "/assistant/understand",
         "voice": "/speech/voice",
+        "partial": "/speech/partial",
         "transcribe": "/speech/transcribe"
     }
 

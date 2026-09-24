@@ -1,5 +1,6 @@
 export { useAuthStore } from './authStore';
-export { usePlayerStore, setupTrackPlayer, usePlayerState, usePlayerActions } from './playerStore';
+export { usePlayerStore, setupTrackPlayer, cleanupTrackPlayerWebSync, usePlayerState, usePlayerActions } from './playerStore';
+export { useYouTubePlayerStore } from './youtubePlayerStore';
 export { useThemeStore } from './themeStore';
 export { useDownloadStore } from './downloadStore';
 export { useNotificationStore } from './notificationStore';

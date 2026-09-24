@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { getStorage } from '../../utils';
 import { libraryApi, playlistApi, songApi, adminApi } from '../../api/client';
 import { useThemeStore, usePlayerStore, useAuthStore } from '../../store';
 import { LibraryResponse } from '../../types';
@@ -25,9 +26,37 @@ import BulkAddToPlaylistModal from '../../components/BulkAddToPlaylistModal';
 import SongBulkActionBar from '../../components/SongBulkActionBar';
 import { CardSkeleton } from '../../components/SkeletonLoader';
 
+const libraryCache = getStorage('spotibase-cache');
+const LIBRARY_FRESH_MS = 30_000;
+// V2 cache holds LibraryResponse with optional featuredPlaylists.
+// V1 (libraryData) is read as fallback for back-compat with old installs.
+const LIBRARY_CACHE_KEY = 'libraryDataV2';
+const LIBRARY_CACHE_AT_KEY = 'libraryDataAtV2';
+const LEGACY_LIBRARY_CACHE_KEY = 'libraryData';
+const LEGACY_LIBRARY_CACHE_AT_KEY = 'libraryDataAt';
+
+const writeLibraryCache = (payload: LibraryResponse) => {
+  try {
+    libraryCache.set(LIBRARY_CACHE_KEY, JSON.stringify(payload));
+    libraryCache.set(LIBRARY_CACHE_AT_KEY, Date.now());
+  } catch {}
+};
+
+const readLibraryCache = (): LibraryResponse | null => {
+  try {
+    const rawV2 = libraryCache.getString(LIBRARY_CACHE_KEY);
+    if (rawV2) return JSON.parse(rawV2);
+    // Back-compat: old cache JSON has no featuredPlaylists — null-guard at use sites.
+    const rawV1 = libraryCache.getString(LEGACY_LIBRARY_CACHE_KEY);
+    return rawV1 ? JSON.parse(rawV1) : null;
+  } catch {
+    return null;
+  }
+};
+
 const LibraryScreen = ({ navigation }: any) => {
-  const [data, setData] = useState<LibraryResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<LibraryResponse | null>(() => readLibraryCache());
+  const [loading, setLoading] = useState(() => !data);
   const [refreshing, setRefreshing] = useState(false);
   const [showLikedSongsList, setShowLikedSongsList] = useState(false);
   const { theme } = useThemeStore();
@@ -48,11 +77,45 @@ const LibraryScreen = ({ navigation }: any) => {
   const [playlistDesc, setPlaylistDesc] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const fetchLibrary = useCallback(async () => {
+  const fetchLibrary = useCallback(async (force = false) => {
+    if (!force) {
+      try {
+        const cachedAt =
+          (libraryCache.getNumber?.(LIBRARY_CACHE_AT_KEY) as number | null | undefined) ??
+          (libraryCache.getNumber?.(LEGACY_LIBRARY_CACHE_AT_KEY) as number | null | undefined) ??
+          0;
+        if (cachedAt > 0 && Date.now() - cachedAt < LIBRARY_FRESH_MS) {
+          setLoading(false);
+          return;
+        }
+      } catch {}
+    }
     setError(null);
     try {
       const r = await libraryApi.getLibrary();
-      setData(r.data);
+      let merged: LibraryResponse = r.data;
+      // Back-compat: old payloads / old cache JSON may omit featuredPlaylists.
+      const hasFeatured = Array.isArray((r.data as LibraryResponse)?.featuredPlaylists);
+      if (!hasFeatured) {
+        try {
+          const f = await playlistApi.getFeatured(20);
+          const fallbackFeatured = Array.isArray(f.data) ? f.data : [];
+          merged = {
+            ...r.data,
+            featuredPlaylists: fallbackFeatured,
+            totalFeaturedPlaylists:
+              (r.data as LibraryResponse)?.totalFeaturedPlaylists ?? fallbackFeatured.length,
+          };
+        } catch {
+          merged = {
+            ...r.data,
+            featuredPlaylists: [],
+            totalFeaturedPlaylists: (r.data as LibraryResponse)?.totalFeaturedPlaylists ?? 0,
+          };
+        }
+      }
+      setData(merged);
+      writeLibraryCache(merged);
     } catch (err: any) {
       console.error('Failed to fetch library:', err);
       setError(err?.message || 'Failed to fetch library from server');
@@ -67,21 +130,23 @@ const LibraryScreen = ({ navigation }: any) => {
   // still only surfaces when there is no data to show.
   useFocusEffect(
     useCallback(() => {
-      fetchLibrary();
+      fetchLibrary(false);
     }, [fetchLibrary])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchLibrary();
+    fetchLibrary(true);
   };
 
   // Long-press a playlist (like songs) to delete it completely.
+  // Your Playlists: owner delete via playlistApi, admin via adminApi.
+  // Featured: no long-press for non-admin (see render); admin force-deletes.
   const handleDeletePlaylist = useCallback(
     (playlistId: string, playlistName: string) => {
     Alert.alert(
       'Delete Playlist',
-      `Permanently delete "${playlistName}" and all its songs links? This cannot be undone.`,
+      `Delete "${playlistName}"? Songs in it stay in your library. This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -91,10 +156,25 @@ const LibraryScreen = ({ navigation }: any) => {
             try {
               if (isAdmin) await adminApi.forceDeletePlaylist(playlistId);
               else await playlistApi.delete(playlistId);
-              setData((prev) =>
-                prev ? { ...prev, playlists: (prev.playlists || []).filter((p) => p.id !== playlistId) } : prev
-              );
-              fetchLibrary();
+              // Optimistic removal from both lists, then forced refresh.
+              setData((prev) => {
+                if (!prev) return prev;
+                const next: LibraryResponse = {
+                  ...prev,
+                  playlists: (prev.playlists || []).filter((p) => p.id !== playlistId),
+                  featuredPlaylists: (prev.featuredPlaylists || []).filter(
+                    (p) => p.id !== playlistId
+                  ),
+                  totalPlaylists: Math.max(0, (prev.totalPlaylists || 0) - 1),
+                };
+                writeLibraryCache(next);
+                return next;
+              });
+              // Invalidate + force refetch so cache timestamp stays fresh.
+              try {
+                libraryCache.delete(LIBRARY_CACHE_AT_KEY);
+              } catch {}
+              fetchLibrary(true);
             } catch (err: any) {
               Alert.alert('Delete Failed', err?.response?.data?.message || err?.message || 'Could not delete playlist');
             }
@@ -109,16 +189,37 @@ const LibraryScreen = ({ navigation }: any) => {
   const handleCreatePlaylist = async () => {    if (!playlistTitle.trim()) return;
     setCreating(true);
     try {
-      await playlistApi.create({
+      const res = await playlistApi.create({
         name: playlistTitle.trim(),
         description: playlistDesc.trim() || undefined,
       });
+      const created = res.data;
+      // Optimistic insert so the new playlist appears instantly.
+      if (created) {
+        setData((prev) => {
+          if (!prev) return prev;
+          if ((prev.playlists || []).some((p) => p.id === created.id)) return prev;
+          const next: LibraryResponse = {
+            ...prev,
+            playlists: [created, ...(prev.playlists || [])],
+            totalPlaylists: (prev.totalPlaylists || 0) + 1,
+          };
+          writeLibraryCache(next);
+          return next;
+        });
+      }
       setPlaylistTitle('');
       setPlaylistDesc('');
       setCreateModalVisible(false);
-      fetchLibrary();
-    } catch (err) {
+      // Forced refresh updates cache timestamp + featured fallback.
+      fetchLibrary(true);
+    } catch (err: any) {
       console.error('Error creating playlist:', err);
+      // Keep the modal open so the user doesn't lose their input.
+      Alert.alert(
+        'Could Not Create Playlist',
+        err?.response?.data?.message || err?.message || 'Could not create playlist. Please try again.'
+      );
     } finally {
       setCreating(false);
     }
@@ -191,13 +292,24 @@ const LibraryScreen = ({ navigation }: any) => {
             variant="primary"
             size="md"
             title="Retry Connection"
-            onPress={fetchLibrary}
+            onPress={() => fetchLibrary(true)}
             style={{ marginTop: 16 }}
           />
         </View>
       );
     }
     if (!data) return <Text style={[styles.empty, { color: theme.colors.textSecondary }]}>Nothing in your library yet</Text>;
+
+    // Null-guard old cache JSON (V1 has no featuredPlaylists) + guard duplicate ids
+    // so a playlist never renders in both sections.
+    const userPlaylists = data.playlists || [];
+    const userIds = new Set(userPlaylists.map((p) => p.id));
+    const seenFeatured = new Set<string>();
+    const featuredPlaylists = (data.featuredPlaylists || []).filter((p) => {
+      if (!p || userIds.has(p.id) || seenFeatured.has(p.id)) return false;
+      seenFeatured.add(p.id);
+      return true;
+    });
 
     return (
       <View style={styles.sectionContainer}>
@@ -261,7 +373,7 @@ const LibraryScreen = ({ navigation }: any) => {
                 song={s}
                 index={index}
                 onPress={() => (selectionMode ? toggleSelect(s.id) : (data.likedSongs && playMultiple(data.likedSongs, index)))}
-                onSongUpdated={fetchLibrary}
+                onSongUpdated={() => fetchLibrary(true)}
                 selectionMode={selectionMode}
                 isSelected={selectedIds.has(s.id)}
                 onToggleSelect={() => toggleSelect(s.id)}
@@ -303,7 +415,7 @@ const LibraryScreen = ({ navigation }: any) => {
         {/* 3. User Playlists Grid */}
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Your Playlists</Text>
         <View style={styles.grid}>
-          {data.playlists?.map((p) => (
+          {userPlaylists.map((p) => (
             <PlaylistCard
               key={p.id}
               playlist={p}
@@ -311,12 +423,42 @@ const LibraryScreen = ({ navigation }: any) => {
               onLongPress={() => handleDeletePlaylist(p.id, p.name)}
             />
           ))}
-          {data.playlists?.length === 0 && (
+          {userPlaylists.length === 0 && (
             <Text style={[styles.empty, { color: theme.colors.textSecondary }]}>
               No user playlists created yet. Click above to create one!
             </Text>
           )}
         </View>
+
+        {/* 3b. Featured Playlists — tap navigates; no delete for non-admin,
+            admin long-press force-deletes. Liked-song SongCards keep no
+            contextPlaylistId (link-only remove lives on PlaylistScreen). */}
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: 24 }]}>
+          Featured Playlists
+        </Text>
+        {featuredPlaylists.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.featuredRow}
+            accessibilityLabel="Featured playlists"
+          >
+            {featuredPlaylists.map((p) => (
+              <PlaylistCard
+                key={p.id}
+                playlist={p}
+                onPress={() => navigation?.navigate('Playlist', { id: p.id })}
+                onLongPress={
+                  isAdmin ? () => handleDeletePlaylist(p.id, p.name) : undefined
+                }
+              />
+            ))}
+          </ScrollView>
+        ) : (
+          <Text style={[styles.empty, { color: theme.colors.textSecondary }]}>
+            No featured playlists right now. Check back soon!
+          </Text>
+        )}
 
         {/* 4. Liked Albums Section (If Any) */}
         {data.albums && data.albums.length > 0 && (
@@ -343,7 +485,7 @@ const LibraryScreen = ({ navigation }: any) => {
         )}
       </View>
     );
-  }, [loading, error, data, theme, fetchLibrary, likedCount, showLikedSongsList, toggleSelect, selectionMode, selectedIds, navigation, handleDeletePlaylist, playMultiple]);
+  }, [loading, error, data, theme, fetchLibrary, likedCount, showLikedSongsList, toggleSelect, selectionMode, selectedIds, navigation, handleDeletePlaylist, playMultiple, isAdmin]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -571,6 +713,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  featuredRow: { paddingHorizontal: 4, paddingVertical: 8, gap: 12 },
   artistRow: { paddingHorizontal: 4, paddingVertical: 8 },
   empty: { fontSize: 14, padding: 32, textAlign: 'center' },
 

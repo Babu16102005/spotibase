@@ -67,19 +67,22 @@ describe('playerStore', () => {
   });
 
   describe('play', () => {
-    it('resets, adds the track, plays it and notifies the backend', async () => {
+    it('keeps the queue (no reset), sets a single-track queue and plays', async () => {
       const song = makeSong({ id: 's1', durationMs: 214_000 });
       await usePlayerStore.getState().play(song);
 
-      expect(TrackPlayer.reset).toHaveBeenCalledTimes(1);
-      expect(TrackPlayer.add).toHaveBeenCalledWith({
-        id: 's1',
-        url: getTrackStreamUrl(song),
-        title: 'Test Song',
-        artist: 'Test Artist',
-        artwork: song.coverUrl,
-        duration: 214,
-      });
+      // Spotify-smooth: never reset() on tap — setQueue() replaces in place.
+      expect(TrackPlayer.reset).not.toHaveBeenCalled();
+      expect(TrackPlayer.setQueue).toHaveBeenCalledWith([
+        {
+          id: 's1',
+          url: getTrackStreamUrl(song),
+          title: 'Test Song',
+          artist: 'Test Artist',
+          artwork: song.coverUrl,
+          duration: 214,
+        },
+      ]);
       expect(TrackPlayer.play).toHaveBeenCalledTimes(1);
       expect(queueApi.addToQueue).toHaveBeenCalledWith('s1', 'ALBUM');
 
@@ -90,6 +93,18 @@ describe('playerStore', () => {
       expect(state.isExpanded).toBe(false);
     });
 
+    it('skips to the track when it is already queued instead of re-queueing', async () => {
+      const song = makeSong({ id: 's1', durationMs: 214_000 });
+      (TrackPlayer.getQueue as jest.Mock).mockResolvedValueOnce([{ id: 's1' }]);
+      await usePlayerStore.getState().play(song);
+
+      expect(TrackPlayer.skip).toHaveBeenCalledWith(0);
+      expect(TrackPlayer.setQueue).not.toHaveBeenCalled();
+      expect(TrackPlayer.reset).not.toHaveBeenCalled();
+      expect(TrackPlayer.play).toHaveBeenCalledTimes(1);
+      expect(usePlayerStore.getState().currentTrack).toEqual(song);
+    });
+
     it('uses SONG as the source when the track has no album', async () => {
       const song = makeSong({ albumId: undefined, albumName: undefined });
       await usePlayerStore.getState().play(song);
@@ -98,6 +113,7 @@ describe('playerStore', () => {
 
     it('swallows native errors and keeps state unchanged', async () => {
       const song = makeSong();
+      (TrackPlayer.setQueue as jest.Mock).mockRejectedValueOnce(new Error('native failure'));
       (TrackPlayer.reset as jest.Mock).mockRejectedValueOnce(new Error('native failure'));
 
       await expect(usePlayerStore.getState().play(song)).resolves.toBeUndefined();
@@ -108,12 +124,13 @@ describe('playerStore', () => {
   });
 
   describe('playMultiple', () => {
-    it('queues all tracks, starts at the requested index and plays', async () => {
+    it('sets the kept queue in place, starts at the requested index and plays', async () => {
       const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' }), makeSong({ id: 'c' })];
       await usePlayerStore.getState().playMultiple(tracks, 1);
 
-      expect(TrackPlayer.reset).toHaveBeenCalledTimes(1);
-      expect(TrackPlayer.add).toHaveBeenCalledWith(
+      // No reset: setQueue() replaces the queue in place, then skip to index.
+      expect(TrackPlayer.reset).not.toHaveBeenCalled();
+      expect(TrackPlayer.setQueue).toHaveBeenCalledWith(
         tracks.map((t) => ({
           id: t.id,
           url: getTrackStreamUrl(t),
@@ -157,15 +174,26 @@ describe('playerStore', () => {
   });
 
   describe('next / previous', () => {
-    it('next loads the next track and sets playbackState to playing', async () => {
+    it('next skips within the kept queue (no reset) and sets playing', async () => {
       const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' })];
       usePlayerStore.setState({ queue: tracks, currentTrack: tracks[0] });
       await usePlayerStore.getState().next();
-      expect(TrackPlayer.reset).toHaveBeenCalled();
-      expect(TrackPlayer.add).toHaveBeenCalled();
+      expect(TrackPlayer.reset).not.toHaveBeenCalled();
+      // 'b' was not in the native queue, so it is appended then skipped to.
+      expect(TrackPlayer.add).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
       expect(TrackPlayer.play).toHaveBeenCalled();
       expect(usePlayerStore.getState().currentTrack?.id).toBe('b');
       expect(usePlayerStore.getState().playbackState).toBe('playing');
+    });
+
+    it('next skips directly when the target is already queued', async () => {
+      const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' })];
+      usePlayerStore.setState({ queue: tracks, currentTrack: tracks[0] });
+      (TrackPlayer.getQueue as jest.Mock).mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }]);
+      await usePlayerStore.getState().next();
+      expect(TrackPlayer.skip).toHaveBeenCalledWith(1);
+      expect(TrackPlayer.reset).not.toHaveBeenCalled();
+      expect(usePlayerStore.getState().currentTrack?.id).toBe('b');
     });
 
     it('next maps a non-playing native state to paused', async () => {
@@ -176,12 +204,13 @@ describe('playerStore', () => {
       expect(usePlayerStore.getState().currentTrack?.id).toBe('b');
     });
 
-    it('previous loads the previous track and sets playbackState to playing', async () => {
+    it('previous skips within the kept queue (no reset) and sets playing', async () => {
       const tracks = [makeSong({ id: 'a' }), makeSong({ id: 'b' })];
       usePlayerStore.setState({ queue: tracks, currentTrack: tracks[1], position: 1 });
       await usePlayerStore.getState().previous();
-      expect(TrackPlayer.reset).toHaveBeenCalled();
-      expect(TrackPlayer.add).toHaveBeenCalled();
+      expect(TrackPlayer.reset).not.toHaveBeenCalled();
+      expect(TrackPlayer.add).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 0);
+      expect(TrackPlayer.skip).toHaveBeenCalledWith(0);
       expect(TrackPlayer.play).toHaveBeenCalled();
       expect(usePlayerStore.getState().currentTrack?.id).toBe('a');
       expect(usePlayerStore.getState().playbackState).toBe('playing');
@@ -345,10 +374,17 @@ describe('playerStore', () => {
   });
 
   describe('setupTrackPlayer', () => {
-    it('configures the player and wires all event listeners', async () => {
+    it('configures the player with smooth buffering and wires all event listeners', async () => {
       await setupTrackPlayer();
 
-      expect(TrackPlayer.setupPlayer).toHaveBeenCalledWith();
+      expect(TrackPlayer.setupPlayer).toHaveBeenCalledWith(
+        expect.objectContaining({ minBuffer: 15, playBuffer: 2.5, backBuffer: 30 })
+      );
+      // 0.25s progress interval keeps position ticks and the 80% preload
+      // trigger precise.
+      expect(TrackPlayer.updateOptions).toHaveBeenCalledWith(
+        expect.objectContaining({ progressUpdateEventInterval: 0.25 })
+      );
       const addEventListenerMock = TrackPlayer.addEventListener as jest.Mock;
       const events = addEventListenerMock.mock.calls.map((call) => call[0]);
       expect(events).toEqual(
@@ -357,6 +393,7 @@ describe('playerStore', () => {
           Event.PlaybackProgressUpdated,
           Event.RemotePlay,
           Event.RemotePause,
+          Event.RemoteStop,
           Event.RemoteNext,
           Event.RemotePrevious,
           Event.RemoteSeek,
@@ -406,8 +443,10 @@ describe('playerStore', () => {
       expect(TrackPlayer.play).toHaveBeenCalled();
       handler(Event.RemotePause)();
       expect(TrackPlayer.pause).toHaveBeenCalled();
-      // RemoteNext/RemotePrevious now delegate to next()/previous() which
-      // use reset+add+play internally (not skipToNext/skipToPrevious)
+      handler(Event.RemoteStop)();
+      expect(TrackPlayer.stop).toHaveBeenCalled();
+      // RemoteNext/RemotePrevious delegate to next()/previous() which
+      // skip within the kept queue (no reset+add single).
       handler(Event.RemoteNext)();
       handler(Event.RemotePrevious)();
       handler(Event.RemoteSeek)({ position: 10 });
@@ -415,6 +454,8 @@ describe('playerStore', () => {
     });
 
     it('does not throw when the native setup fails', async () => {
+      // Both the buffered setup and the bare fallback fail.
+      (TrackPlayer.setupPlayer as jest.Mock).mockRejectedValueOnce(new Error('setup boom'));
       (TrackPlayer.setupPlayer as jest.Mock).mockRejectedValueOnce(new Error('setup boom'));
       await expect(setupTrackPlayer()).resolves.toBeUndefined();
       expect(errorSpy).toHaveBeenCalled();

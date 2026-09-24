@@ -10,26 +10,24 @@ import GlassButton from '../../components/GlassButton';
 import BulkAddToPlaylistModal from '../../components/BulkAddToPlaylistModal';
 import SongBulkActionBar from '../../components/SongBulkActionBar';
 import { CardSkeleton, SongSkeleton } from '../../components/SkeletonLoader';
-import { getStorage } from '../../utils';
+import {
+  getCachedSongs,
+  setCachedSongs,
+  pruneCachedSongs,
+  isSongsFresh,
+  SONGS_PAGE_SIZE,
+} from '../../cache/songListCache';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = SONGS_PAGE_SIZE;
 
-const songsCache = getStorage('spotibase-cache');
-
-const AllSongsScreen = () => {
+const AllSongsScreen = ({ navigation }: any) => {
   const { theme } = useThemeStore();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const playbackState = usePlayerStore((s) => s.playbackState);
   const playMultiple = usePlayerStore((s) => s.playMultiple);
 
-  const [songs, setSongs] = useState<SongResponse[]>(() => {
-    try {
-      const cached = songsCache.getString('allSongsData');
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Hydrate instantly from MMKV cache — no loading spinner when cache exists.
+  const [songs, setSongs] = useState<SongResponse[]>(() => getCachedSongs());
   const [total, setTotal] = useState(() => songs.length);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -51,24 +49,37 @@ const AllSongsScreen = () => {
   const isAdmin = user?.role === 'ADMIN';
   const selectionMode = selectedIds.size > 0;
 
+  // Guard against duplicate in-flight page fetches (double onEndReached, focus+prefetch races).
+  const inFlightRef = useRef<Set<number>>(new Set());
+  // Latest list snapshot for cache writes OUTSIDE the setSongs updater (updaters
+  // must stay pure: StrictMode double-invokes them, so side-effects inside
+  // would duplicate cache writes). Kept in sync on every render + write.
+  const songsRef = useRef<SongResponse[]>([]);
+  songsRef.current = songs;
+
   const fetchPage = useCallback(async (pageNum: number, replace: boolean) => {
+    if (inFlightRef.current.has(pageNum)) return;
+    inFlightRef.current.add(pageNum);
     setFetchError(null);
     try {
       const res = await songApi.getAll(pageNum, PAGE_SIZE);
       const content = res.data.content;
-      setSongs((prev) => {
-        // Deduplicate by id to prevent React duplicate key warnings (was causing "Encountered two children with same key")
-        const map = new Map<string, SongResponse>();
-        const base = replace ? [] : prev;
-        for (const s of [...base, ...content]) {
-          if (!map.has(s.id)) map.set(s.id, s);
-        }
-        const nextSongs = Array.from(map.values());
-        if (replace) {
-          try { songsCache.set('allSongsData', JSON.stringify(content)); } catch {}
-        }
-        return nextSongs;
-      });
+      // Deduplicate by id to prevent React duplicate key warnings (was causing "Encountered two children with same key").
+      // Last write wins so background revalidations refresh stale rows; Map preserves first-insert order.
+      const map = new Map<string, SongResponse>();
+      const base = replace ? [] : songsRef.current;
+      for (const s of base) {
+        if (!map.has(s.id)) map.set(s.id, s);
+      }
+      for (const s of content) {
+        map.set(s.id, s);
+      }
+      const nextSongs = Array.from(map.values());
+      songsRef.current = nextSongs;
+      setSongs(nextSongs);
+      // Cache write is a plain sequential step AFTER setSongs — never inside
+      // the updater closure — so StrictMode stays idempotent.
+      try { setCachedSongs(nextSongs); } catch {}
       setTotal(res.data.totalElements);
       setHasMore(!res.data.last && content.length > 0);
       setPage(pageNum);
@@ -81,19 +92,24 @@ const AllSongsScreen = () => {
         setFetchError(err?.response?.data?.message || err?.message || 'Failed to connect to song library server');
       }
     } finally {
+      inFlightRef.current.delete(pageNum);
       setLoading(false);
       setRefreshing(false);
       setLoadingMore(false);
     }
   }, []);
 
-  // Reload first page when the screen gains focus
+  // SWR-style focus behavior: hydrate from cache instantly, only refetch when
+  // stale. Background revalidations merge (replace=false) so the list never flashes.
   useFocusEffect(
     useCallback(() => {
-      if (!searchQuery.trim()) {
+      if (searchQuery.trim()) return;
+      if (songs.length === 0) {
         fetchPage(0, true);
+      } else if (!isSongsFresh()) {
+        fetchPage(0, false);
       }
-    }, [fetchPage, searchQuery])
+    }, [fetchPage, searchQuery, songs.length])
   );
 
   const handleSearchQueryChange = useCallback((q: string) => {
@@ -131,6 +147,17 @@ const AllSongsScreen = () => {
     setLoadingMore(true);
     fetchPage(page + 1, false);
   }, [searchQuery, hasMore, loadingMore, loading, fetchPage, page]);
+
+  // Prefetch the next page when the user scrolls near the end (before hitting it).
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
+  const handleViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: Array<{ index?: number | null }> }) => {
+    if (searchQuery.trim() || !hasMore || loadingMore || loading || songs.length === 0) return;
+    const maxIndex = viewableItems.reduce((m, v) => Math.max(m, v.index ?? 0), 0);
+    if (maxIndex >= songs.length - 8) {
+      setLoadingMore(true);
+      fetchPage(page + 1, false);
+    }
+  }, [searchQuery, hasMore, loadingMore, loading, songs.length, fetchPage, page]);
 
   const handleToggleLike = useCallback(async (song: SongResponse) => {
     const nextLiked = !song.liked;
@@ -198,6 +225,13 @@ const AllSongsScreen = () => {
   }, [searchQuery, activeSongs, songs]);
 
   const isPlaying = playbackState === 'playing' || playbackState === 'loading';
+
+  // Extra data for FlatList: re-render rows only when selection, current track,
+  // or playback state change (fixes equalizer/highlight flicker + stale rows).
+  const listExtraData = React.useMemo(
+    () => ({ selectedIds, currentTrackId: currentTrack?.id, playbackState }),
+    [selectedIds, currentTrack?.id, playbackState]
+  );
 
   const renderItem = useCallback(
     ({ item, index }: { item: SongResponse; index: number }) => (
@@ -272,14 +306,19 @@ const AllSongsScreen = () => {
           style: 'destructive',
           onPress: async () => {
             const idsToDelete = Array.from(selectedIds);
+            const doomed = new Set(idsToDelete);
             for (const id of idsToDelete) {
               try {
                 if (isAdmin) await adminApi.forceDeleteSong(id);
                 else await songApi.delete(id);
               } catch (e) {}
             }
-            setSongs((prev) => prev.filter((s) => !selectedIds.has(s.id)));
-            setSearchResults((prev) => prev.filter((s) => !selectedIds.has(s.id)));
+            const nextSongs = songsRef.current.filter((s) => !doomed.has(s.id));
+            songsRef.current = nextSongs;
+            setSongs(nextSongs);
+            setSearchResults((prev) => prev.filter((s) => !doomed.has(s.id)));
+            // Prune MMKV so deleted rows never rehydrate on next focus.
+            try { pruneCachedSongs(doomed); } catch {}
             setSelectedIds(new Set());
           },
         },
@@ -324,21 +363,31 @@ const AllSongsScreen = () => {
               ? `${activeTotalCount} ${activeTotalCount === 1 ? 'song' : 'songs'} matching "${searchQuery}"`
               : `${activeTotalCount} ${activeTotalCount === 1 ? 'song' : 'songs'}`}
           </Text>
-          <GlassButton
-            variant="primary"
-            size="icon"
-            icon="play"
-            iconSize={16}
-            iconColor="#000000"
-            onPress={() => {
-              if (activeSongs.length > 0) {
-                // Explicit Play All: queue all
-                const { playMultiple } = usePlayerStore.getState();
-                playMultiple(activeSongs, 0);
-              }
-            }}
-            accessibilityLabel="Play all songs"
-          />
+          <View style={styles.headerActions}>
+            <GlassButton
+              variant="secondary"
+              size="sm"
+              icon="music"
+              title="YouTube"
+              onPress={() => navigation?.navigate('YouTubeSongs')}
+              accessibilityLabel="Open YouTube songs"
+            />
+            <GlassButton
+              variant="primary"
+              size="icon"
+              icon="play"
+              iconSize={16}
+              iconColor="#000000"
+              onPress={() => {
+                if (activeSongs.length > 0) {
+                  // Explicit Play All: queue all
+                  const { playMultiple } = usePlayerStore.getState();
+                  playMultiple(activeSongs, 0);
+                }
+              }}
+              accessibilityLabel="Play all songs"
+            />
+          </View>
         </View>
       </View>
 
@@ -346,9 +395,11 @@ const AllSongsScreen = () => {
         data={activeSongs}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        extraData={selectedIds}
+        extraData={listExtraData}
         onEndReached={onEndReached}
-        onEndReachedThreshold={0.4}
+        onEndReachedThreshold={0.7}
+        onViewableItemsChanged={handleViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({ length: 60, offset: 60 * index, index })}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
@@ -366,7 +417,11 @@ const AllSongsScreen = () => {
           searching ? (
             <ActivityIndicator color={theme.colors.primary} style={styles.footer} />
           ) : loadingMore ? (
-            <ActivityIndicator color={theme.colors.primary} style={styles.footer} />
+            <View style={{ marginTop: 8 }}>
+              <SongSkeleton />
+              <SongSkeleton />
+              <SongSkeleton />
+            </View>
           ) : !hasMore && !searchQuery.trim() && songs.length > 0 ? (
             <Text style={[styles.footerText, { color: theme.colors.textTertiary }]}>You're all caught up</Text>
           ) : null
@@ -412,6 +467,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 4,
     paddingBottom: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   title: { fontSize: 28, fontWeight: '800', letterSpacing: -0.5 },
   subtitle: { fontSize: 13, marginTop: 2 },

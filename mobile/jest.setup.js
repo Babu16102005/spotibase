@@ -48,6 +48,19 @@ jest.mock('expo-speech-recognition', () => ({
   useSpeechRecognitionEvent: jest.fn(),
 }));
 
+jest.mock('expo-audio', () => ({
+  AudioModule: {
+    AudioRecorder: jest.fn(),
+  },
+  RecordingPresets: {
+    HIGH_QUALITY: {},
+    LOW_QUALITY: {},
+  },
+  setAudioModeAsync: jest.fn(async () => {}),
+  getRecordingPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+  requestRecordingPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+}));
+
 // RN's Animated.loop/timing would keep JS timers alive and fire state updates
 // after test teardown (act warnings, "import after teardown" failures).
 // Replace the animation primitives with inert no-ops for the test environment.

@@ -35,10 +35,21 @@ public class TestSecurityConfig {
                         .requestMatchers("/api/v1/public/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/songs/*/stream").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/api/v1/songs/*/stream").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/api/v1/songs/*/stream").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/search/suggestions",
                                 "/api/v1/search/trending", "/api/v1/playlists/featured").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .anyRequest().authenticated());
+                        .anyRequest().authenticated())
+                // Mirror production SecurityConfig: unauthenticated => 401 JSON
+                // (default without entryPoint would be 403, diverging from prod).
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json");
+                            response.getWriter().write("{\"status\":401,\"error\":\"Unauthorized\",\"message\":\""
+                                    + authException.getMessage() + "\"}");
+                        }));
         return http.build();
     }
 

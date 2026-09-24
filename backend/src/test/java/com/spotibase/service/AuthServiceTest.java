@@ -89,7 +89,7 @@ class AuthServiceTest {
         when(jwtTokenProvider.generateToken("user-1", "alice@example.com", "USER")).thenReturn("access-token");
         when(jwtTokenProvider.generateRefreshToken("user-1")).thenReturn("refresh-token");
         UserResponse userResponse = UserResponse.builder().id("user-1").email("alice@example.com").build();
-        when(userService.toUserResponse(saved)).thenReturn(userResponse);
+        when(userService.toUserResponseBasic(saved)).thenReturn(userResponse);
 
         AuthResponse response = authService.register(request);
 
@@ -169,7 +169,7 @@ class AuthServiceTest {
         when(passwordEncoder.matches("password123", "encoded-hash")).thenReturn(true);
         when(jwtTokenProvider.generateToken("user-1", "alice@example.com", "USER")).thenReturn("access");
         when(jwtTokenProvider.generateRefreshToken("user-1")).thenReturn("refresh");
-        when(userService.toUserResponse(user)).thenReturn(UserResponse.builder().id("user-1").build());
+        when(userService.toUserResponseBasic(user)).thenReturn(UserResponse.builder().id("user-1").build());
 
         AuthResponse response = authService.login(request);
 
@@ -202,13 +202,13 @@ class AuthServiceTest {
 
         when(userRepository.findByEmailWithFavoriteGenres("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrong-password", "encoded-hash")).thenReturn(false);
-        // Supabase fallback verification fails
-        when(restTemplate.postForEntity(anyString(), any(), eq(Map.class)))
-                .thenThrow(new RuntimeException("network error"));
 
+        // Local hash exists: must fail fast WITHOUT the Supabase fallback
+        // (saves the cloud round-trip on every wrong-password attempt).
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessage("Invalid email or password");
+        verifyNoInteractions(restTemplate);
     }
 
     @Test
@@ -241,7 +241,7 @@ class AuthServiceTest {
                 .thenReturn(ResponseEntity.ok(Map.of("access_token", "xyz")));
         when(jwtTokenProvider.generateToken("user-2", "social@example.com", "USER")).thenReturn("access");
         when(jwtTokenProvider.generateRefreshToken("user-2")).thenReturn("refresh");
-        when(userService.toUserResponse(user)).thenReturn(UserResponse.builder().id("user-2").build());
+        when(userService.toUserResponseBasic(user)).thenReturn(UserResponse.builder().id("user-2").build());
 
         AuthResponse response = authService.login(request);
 
@@ -274,7 +274,7 @@ class AuthServiceTest {
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
         when(jwtTokenProvider.generateToken("user-1", "alice@example.com", "USER")).thenReturn("new-access");
         when(jwtTokenProvider.generateRefreshToken("user-1")).thenReturn("new-refresh");
-        when(userService.toUserResponse(user)).thenReturn(UserResponse.builder().id("user-1").build());
+        when(userService.toUserResponseBasic(user)).thenReturn(UserResponse.builder().id("user-1").build());
 
         AuthResponse response = authService.refreshToken("refresh-token");
 
@@ -315,7 +315,7 @@ class AuthServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(created);
         when(jwtTokenProvider.generateToken("user-g", "google@example.com", "USER")).thenReturn("access");
         when(jwtTokenProvider.generateRefreshToken("user-g")).thenReturn("refresh");
-        when(userService.toUserResponse(created)).thenReturn(UserResponse.builder().id("user-g").build());
+        when(userService.toUserResponseBasic(created)).thenReturn(UserResponse.builder().id("user-g").build());
 
         AuthResponse response = authService.socialAuth("google", "google-id-token");
 
@@ -333,7 +333,7 @@ class AuthServiceTest {
         when(userRepository.findByEmailWithFavoriteGenres("google@example.com")).thenReturn(Optional.of(existing));
         when(jwtTokenProvider.generateToken("user-1", "google@example.com", "USER")).thenReturn("access");
         when(jwtTokenProvider.generateRefreshToken("user-1")).thenReturn("refresh");
-        when(userService.toUserResponse(existing)).thenReturn(UserResponse.builder().id("user-1").build());
+        when(userService.toUserResponseBasic(existing)).thenReturn(UserResponse.builder().id("user-1").build());
 
         AuthResponse response = authService.socialAuth("google", "id-token");
 
@@ -414,7 +414,7 @@ class AuthServiceTest {
         when(userRepository.save(any(User.class))).thenReturn(created);
         when(jwtTokenProvider.generateToken("user-a", "apple-real@example.com", "USER")).thenReturn("access");
         when(jwtTokenProvider.generateRefreshToken("user-a")).thenReturn("refresh");
-        when(userService.toUserResponse(created)).thenReturn(UserResponse.builder().id("user-a").build());
+        when(userService.toUserResponseBasic(created)).thenReturn(UserResponse.builder().id("user-a").build());
 
         String idToken = buildAppleIdToken(keyPair, "apple-test-key-1", "apple-real@example.com");
         AuthResponse response = authService.socialAuth("apple", idToken);

@@ -33,7 +33,12 @@ const LoginScreen = ({ navigation, socialIdTokenOverride }: LoginScreenProps) =>
   const [password, setPassword] = useState('');
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
   const [socialMessage, setSocialMessage] = useState<SocialMessage | null>(null);
-  const { login, isLoading } = useAuth();
+  // Local submit state (NOT the store's session-restore isLoading): keeps the
+  // LoginScreen mounted with an inline spinner while login is in flight, so
+  // RootNavigator never blanks the UI mid-request. Navigation to Main happens
+  // optimistically the moment isAuthenticated flips.
+  const [submitting, setSubmitting] = useState(false);
+  const { login } = useAuth();
   const { theme } = useThemeStore();
 
   const handleLogin = async () => {
@@ -41,6 +46,10 @@ const LoginScreen = ({ navigation, socialIdTokenOverride }: LoginScreenProps) =>
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
+    // No pre-auth prefetch: unauthenticated song/home calls 401 and waste
+    // bandwidth. Post-login warmup lives in authStore.login (after tokens are
+    // saved), so screens hydrate instantly without racing the login request.
+    setSubmitting(true);
     try {
       await login({ email, password });
     } catch (err: any) {
@@ -48,6 +57,8 @@ const LoginScreen = ({ navigation, socialIdTokenOverride }: LoginScreenProps) =>
         err.response?.data?.message ||
         (err.response ? 'Invalid credentials' : `Unable to connect to backend server at ${BASE_URL}`);
       Alert.alert('Login Failed', message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -111,10 +122,10 @@ const LoginScreen = ({ navigation, socialIdTokenOverride }: LoginScreenProps) =>
               variant="primary"
               size="lg"
               fullWidth
-              title={isLoading ? 'Signing in...' : 'Sign In'}
+              title={submitting ? 'Signing in...' : 'Sign In'}
               onPress={handleLogin}
-              loading={isLoading}
-              disabled={isLoading}
+              loading={submitting}
+              disabled={submitting}
               style={{ marginTop: 8 }}
             />
 

@@ -52,6 +52,9 @@ public class AdminService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private OrphanStorageCleanupScheduler orphanStorageCleanupScheduler;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.spotibase.security.CustomUserDetailsService userDetailsService;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -149,6 +152,7 @@ public class AdminService {
         }
         userRepository.save(user);
         log.info("User {} role updated to {}", userId, role);
+        evictAuthCache(userId);
         return userService.toUserResponse(user);
     }
 
@@ -322,6 +326,7 @@ public class AdminService {
         user.setActive(false);
         userRepository.save(user);
         log.info("User {} deleted (deactivated) by admin", userId);
+        evictAuthCache(userId);
     }
 
     public void featureSong(String songId) {
@@ -480,5 +485,15 @@ public class AdminService {
                 .followingCount(0)
                 .createdAt(user.getCreatedAt())
                 .build();
+    }
+
+    private void evictAuthCache(String userId) {
+        if (userDetailsService != null && userId != null) {
+            try {
+                userDetailsService.evictUser(userId);
+            } catch (Exception ignored) {
+                // Fail-open: 10m TTL bounds staleness.
+            }
+        }
     }
 }

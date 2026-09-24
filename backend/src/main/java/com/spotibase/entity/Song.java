@@ -16,6 +16,11 @@ import java.util.Set;
 
 @Entity
 @Table(name = "songs", indexes = {
+        // NOTE: Flyway owns the schema (ddl-auto=none). These JPA indexes are
+        // documentary only and use DB (snake_case) column names. Partial
+        // (WHERE archived = FALSE), DESC-ordered, and GIN/trigram variants
+        // live in Flyway migrations (V5/V19/V22/V23) and are intentionally
+        // NOT declared here — JPA cannot express them.
         @Index(name = "idx_songs_name", columnList = "name"),
         @Index(name = "idx_songs_artist_id", columnList = "artist_id"),
         @Index(name = "idx_songs_album_id", columnList = "album_id"),
@@ -23,13 +28,13 @@ import java.util.Set;
         @Index(name = "idx_songs_language", columnList = "language"),
         @Index(name = "idx_songs_release_date", columnList = "release_date"),
         @Index(name = "idx_songs_play_count", columnList = "play_count"),
-        @Index(name = "idx_songs_fts", columnList = "fts_vector", unique = false),
-        // New composite indexes for fast listing
-        @Index(name = "idx_songs_home_feed", columnList = "archived,featured,releaseDate"),
-        @Index(name = "idx_songs_artist_page", columnList = "artistId,archived,releaseDate"),
-        @Index(name = "idx_songs_album_page", columnList = "albumId,discNumber,trackNumber"),
-        @Index(name = "idx_songs_album_artist_page", columnList = "albumArtistId,archived,releaseDate"),
-        @Index(name = "idx_songs_genre_listing", columnList = "genreId,archived,releaseDate")
+        // Composite listing helpers (plain btree equivalents of the
+        // partial indexes managed by Flyway)
+        @Index(name = "idx_songs_home_feed", columnList = "archived,featured,release_date"),
+        @Index(name = "idx_songs_artist_page", columnList = "artist_id,archived,release_date"),
+        @Index(name = "idx_songs_album_page", columnList = "album_id,disc_number,track_number"),
+        @Index(name = "idx_songs_album_artist_page", columnList = "album_artist_id,archived,release_date"),
+        @Index(name = "idx_songs_genre_listing", columnList = "genre_id,archived,release_date")
 })
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Song {

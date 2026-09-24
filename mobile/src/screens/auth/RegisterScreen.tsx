@@ -33,7 +33,11 @@ const RegisterScreen = ({ navigation, socialIdTokenOverride }: RegisterScreenPro
   const [password, setPassword] = useState('');
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
   const [socialMessage, setSocialMessage] = useState<SocialMessage | null>(null);
-  const { register, isLoading } = useAuth();
+  // Local submit state (NOT the store's session-restore isLoading): keeps the
+  // RegisterScreen mounted with an inline spinner while the request is in
+  // flight. Mirrors LoginScreen.
+  const [submitting, setSubmitting] = useState(false);
+  const { register } = useAuth();
   const { theme } = useThemeStore();
 
   const handleRegister = async () => {
@@ -45,11 +49,14 @@ const RegisterScreen = ({ navigation, socialIdTokenOverride }: RegisterScreenPro
       Alert.alert('Error', 'Password must be at least 8 characters');
       return;
     }
+    setSubmitting(true);
     try {
       await register({ email, username, password });
     } catch (err: any) {
       const message = err.response?.data?.message || (err.response ? 'Could not create account' : 'Unable to connect to backend server');
       Alert.alert('Registration Failed', message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -115,10 +122,10 @@ const RegisterScreen = ({ navigation, socialIdTokenOverride }: RegisterScreenPro
               variant="primary"
               size="lg"
               fullWidth
-              title={isLoading ? 'Creating account...' : 'Sign Up'}
+              title={submitting ? 'Creating account...' : 'Sign Up'}
               onPress={handleRegister}
-              loading={isLoading}
-              disabled={isLoading}
+              loading={submitting}
+              disabled={submitting}
               style={{ marginTop: 8 }}
             />
 

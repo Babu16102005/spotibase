@@ -236,7 +236,9 @@ const PlaylistScreen = ({ route, navigation }: any) => {
           onClose={deselectAll}
           onAddToPlaylist={() => setBulkAddModalVisible(true)}
           onDelete={handleBulkDelete}
-          deleteLabel={isOwner ? 'Remove' : 'Delete'}
+          // Link-only removal: songs stay in the library, only the
+          // playlist link is removed — label is always "Remove".
+          deleteLabel="Remove"
         />
       )}
 

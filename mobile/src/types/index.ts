@@ -102,6 +102,7 @@ export interface PlaylistResponse {
   type: string;
   likeCount: number;
   liked: boolean;
+  featured?: boolean;
   songs?: SongResponse[];
   createdAt: string;
   updatedAt: string;
@@ -163,6 +164,8 @@ export interface LibraryResponse {
   totalAlbums: number;
   totalArtists: number;
   totalLikedSongs: number;
+  featuredPlaylists?: PlaylistResponse[];
+  totalFeaturedPlaylists?: number;
 }
 
 export interface PagedResponse<T> {

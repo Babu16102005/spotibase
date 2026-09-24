@@ -5,8 +5,10 @@ import com.spotibase.entity.*;
 import com.spotibase.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.EntityManager;
@@ -15,7 +17,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -48,6 +49,7 @@ public class RecommendationService {
             WHERE lh.user_id = :userId AND lh.skipped = false
             GROUP BY g.id, g.name
             ORDER BY COUNT(*) DESC
+            LIMIT 6
         """;
 
         Query genreQuery = entityManager.createNativeQuery(genreSql);
@@ -189,7 +191,16 @@ public class RecommendationService {
 
         Query genreQuery = entityManager.createNativeQuery(recentGenresSql);
         genreQuery.setParameter("userId", userId);
-        List<String> recentGenreIds = genreQuery.getResultList();
+        List<?> genreRows = genreQuery.getResultList();
+        List<String> recentGenreIds = genreRows.stream()
+                .map(row -> {
+                    if (row instanceof Object[] arr) {
+                        return arr.length > 0 && arr[0] != null ? arr[0].toString() : null;
+                    }
+                    return row != null ? row.toString() : null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
         if (recentGenreIds.isEmpty()) return Collections.emptyList();
 
@@ -326,31 +337,46 @@ public class RecommendationService {
         return songService.getSongsByIds(songIds, userId);
     }
 
+    /**
+     * Home feed is read-only and fan-out across many cached section builders.
+     * Runs with NO outer transaction (NOT_SUPPORTED): each nested service call
+     * opens its own short read-only tx. Without this, a RuntimeException from
+     * one section (e.g. cache ClassCast on stale songs/home entries) marks the
+     * shared tx rollback-only even though it is caught below, and commit then
+     * fails with UnexpectedRollbackException ("Transaction silently rolled
+     * back"). Each section is already try/caught so one failure never fails
+     * the whole feed.
+     */
+    @Cacheable(value = "home", key = "#userId != null ? #userId : 'guest'")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public HomeResponse getHomeSections(String userId) {
+        long started = System.nanoTime();
         List<HomeResponse.Section> sections = new ArrayList<>();
+        List<RecentlyPlayed> recentItems = List.of();
 
-        try {
-            if (userId != null) {
-                sections.add(buildContinueListeningSection(userId));
+        if (userId != null) {
+            try {
+                LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
+                recentItems = recentlyPlayedRepository
+                        .findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(userId, sevenDaysAgo);
+            } catch (Exception e) {
+                log.error("Failed to load recently played: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("Failed to build continue listening section: {}", e.getMessage());
-        }
-
-        try {
-            if (userId != null) {
-                sections.add(buildRecentlyPlayedSection(userId));
+            try {
+                sections.add(buildContinueListeningSection(userId, recentItems));
+            } catch (Exception e) {
+                log.error("Failed to build continue listening section: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("Failed to build recently played section: {}", e.getMessage());
-        }
-
-        try {
-            if (userId != null) {
+            try {
+                sections.add(buildRecentlyPlayedSection(userId, recentItems));
+            } catch (Exception e) {
+                log.error("Failed to build recently played section: {}", e.getMessage());
+            }
+            try {
                 sections.add(buildUserPlaylistsSection(userId));
+            } catch (Exception e) {
+                log.error("Failed to build user playlists section: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            log.error("Failed to build user playlists section: {}", e.getMessage());
         }
 
         try {
@@ -409,10 +435,18 @@ public class RecommendationService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
+        log.debug("Home assembled in {}ms for {}",
+                (System.nanoTime() - started) / 1_000_000,
+                userId != null ? userId : "guest");
+
         return HomeResponse.builder()
                 .greeting(getGreeting())
                 .sections(filteredSections)
                 .build();
+    }
+
+    public String currentGreeting() {
+        return getGreeting();
     }
 
     private String getGreeting() {
@@ -422,11 +456,7 @@ public class RecommendationService {
         return "Good Evening";
     }
 
-    private HomeResponse.Section buildContinueListeningSection(String userId) {
-        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
-        List<RecentlyPlayed> recentItems = recentlyPlayedRepository
-                .findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(userId, sevenDaysAgo);
-
+    private HomeResponse.Section buildContinueListeningSection(String userId, List<RecentlyPlayed> recentItems) {
         List<String> songIds = recentItems.stream()
                 .filter(rp -> "SONG".equals(rp.getItemType()))
                 .limit(10)
@@ -446,11 +476,7 @@ public class RecommendationService {
                 .build();
     }
 
-    private HomeResponse.Section buildRecentlyPlayedSection(String userId) {
-        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
-        List<RecentlyPlayed> recentItems = recentlyPlayedRepository
-                .findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(userId, sevenDaysAgo);
-
+    private HomeResponse.Section buildRecentlyPlayedSection(String userId, List<RecentlyPlayed> recentItems) {
         List<RecentlyPlayed> limitedItems = recentItems.stream()
                 .limit(10)
                 .collect(Collectors.toList());

@@ -82,7 +82,13 @@
           }
         }
       ],
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow SpotiBase to access your microphone for AI voice commands like 'Play calm Tamil songs'.",
+          "enableBackgroundPlayback": true
+        }
+      ],
       [
         "expo-notifications",
         {
@@ -92,13 +98,17 @@
           "mode": "production"
         }
       ],
-      "expo-speech-recognition"
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow SpotiBase to use the microphone for AI voice commands.",
+          "speechRecognitionPermission": "Allow SpotiBase to use speech recognition for AI voice assistance.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      "expo-secure-store"
     ],
-    "extra": {
-      "eas": {
-        "projectId": "spotibase"
-      }
-    },
+    "extra": {},
     "owner": "spotibase"
   }
 }

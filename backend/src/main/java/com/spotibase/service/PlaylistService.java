@@ -15,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +50,12 @@ public class PlaylistService {
         return toPlaylistResponse(playlist, userId);
     }
 
+    // NOTE: "playlists" cache holds getFeaturedPlaylists (public playlists ordered
+    // by likeCount, TTL 2 min in RedisCacheConfig). Every mutation that can change
+    // featured ordering/visibility (create/update/delete/add/remove/reorder/toggles/
+    // collaborators/likes) evicts all entries so the next featured read is fresh.
+    // allEntries=true is used because keys are "'featured:' + limit" and vary by limit.
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse createPlaylist(CreatePlaylistRequest request, String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
@@ -66,6 +74,7 @@ public class PlaylistService {
         return toPlaylistResponse(playlist, userId);
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse updatePlaylist(String id, UpdatePlaylistRequest request, String userId) {
         Playlist playlist = playlistRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", id));
@@ -84,15 +93,23 @@ public class PlaylistService {
         return toPlaylistResponse(playlist, userId);
     }
 
+    // Link-only delete: removes PlaylistSong join rows + collaborator links, then the
+    // Playlist row. NEVER deletes Song entities (songRepository.delete is never called
+    // here) so songs survive playlist deletion. liked_playlists join rows are removed
+    // via the Playlist.likedBy @ManyToMany mapping on playlist delete.
+    @CacheEvict(value = "playlists", allEntries = true)
     public void deletePlaylist(String id, String userId) {
         Playlist playlist = playlistRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", id));
         validateOwnership(playlist, userId);
         playlistSongRepository.deleteAllByPlaylistId(id);
+        // playlist_collaborators has no FK cascade (plain playlist_id column), so clean up explicitly.
+        playlistCollaboratorRepository.deleteAllByPlaylistId(id);
         playlistRepository.delete(playlist);
         log.info("Playlist deleted: {} by user {}", id, userId);
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse duplicatePlaylist(String id, String userId) {
         Playlist source = playlistRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", id));
@@ -125,6 +142,7 @@ public class PlaylistService {
         return toPlaylistResponse(duplicate, userId);
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse mergePlaylists(String targetId, String sourceId, String userId) {
         Playlist target = playlistRepository.findById(targetId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", targetId));
@@ -153,6 +171,7 @@ public class PlaylistService {
         return toPlaylistResponse(target, userId);
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse addSongsToPlaylist(String playlistId, AddSongsToPlaylistRequest request, String userId) {
         Playlist playlist = playlistRepository.findById(playlistId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
@@ -198,6 +217,10 @@ public class PlaylistService {
         return toPlaylistResponse(playlist, userId);
     }
 
+    // Link-only removal: deletes the PlaylistSong join row and reindexes positions.
+    // NEVER deletes the Song entity itself (no songRepository.delete call) so the
+    // song remains in the catalog and in other playlists.
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse removeSongFromPlaylist(String playlistId, String songId, String userId) {
         Playlist playlist = playlistRepository.findById(playlistId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
@@ -220,6 +243,7 @@ public class PlaylistService {
         return toPlaylistResponse(playlist, userId);
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse reorderSongs(String playlistId, List<ReorderItem> reorderItems, String userId) {
         Playlist playlist = playlistRepository.findById(playlistId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
@@ -283,6 +307,7 @@ public class PlaylistService {
         return toPlaylistResponse(playlist, userId);
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse togglePublic(String playlistId, String userId) {
         Playlist playlist = playlistRepository.findById(playlistId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
@@ -293,6 +318,7 @@ public class PlaylistService {
         return toPlaylistResponse(playlist, userId);
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public PlaylistResponse toggleCollaborative(String playlistId, String userId) {
         Playlist playlist = playlistRepository.findById(playlistId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
@@ -303,6 +329,7 @@ public class PlaylistService {
         return toPlaylistResponse(playlist, userId);
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public void addCollaborator(String playlistId, String collaboratorUserId, String userId) {
         Playlist playlist = playlistRepository.findById(playlistId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
@@ -333,12 +360,15 @@ public class PlaylistService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "playlists", key = "'featured:' + #limit")
     public List<PlaylistResponse> getFeaturedPlaylists(int limit) {
         return playlistRepository.findFeaturedPlaylists(PageRequest.of(0, limit)).stream()
                 .map(playlist -> toPlaylistResponse(playlist, null))
                 .collect(Collectors.toList());
     }
 
+    // Featured ordering is by likeCount, so likes/unlikes must evict the featured cache.
+    @CacheEvict(value = "playlists", allEntries = true)
     public void likePlaylist(String userId, String playlistId) {
         Playlist playlist = playlistRepository.findById(playlistId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
@@ -353,6 +383,7 @@ public class PlaylistService {
         }
     }
 
+    @CacheEvict(value = "playlists", allEntries = true)
     public void unlikePlaylist(String userId, String playlistId) {
         Playlist playlist = playlistRepository.findById(playlistId)
                 .orElseThrow(() -> new ResourceNotFoundException("Playlist", playlistId));
@@ -405,6 +436,8 @@ public class PlaylistService {
                 .totalDurationMs(playlist.getTotalDurationMs())
                 .type(playlist.getType())
                 .archived(playlist.isArchived())
+                // Contract: Playlist.featured is a dedicated column (not an isPublic proxy).
+                // Mapped 1:1 here so PlaylistResponse.featured reflects editorial featuring.
                 .featured(playlist.isFeatured())
                 .likeCount(playlist.getLikeCount())
                 .liked(liked)

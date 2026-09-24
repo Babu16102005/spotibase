@@ -116,8 +116,9 @@ describe('MiniPlayer', () => {
     fireEvent.press(getByLabelText('Next'));
     await act(async () => {});
 
-    // next() now navigates via reset+add+play (not skipToNext)
-    expect(TrackPlayer.reset).toHaveBeenCalled();
+    // next() skips within the kept queue (no reset+add single).
+    expect(TrackPlayer.reset).not.toHaveBeenCalled();
+    expect(TrackPlayer.skipToNext).toHaveBeenCalled();
     expect(TrackPlayer.play).toHaveBeenCalled();
   });
 

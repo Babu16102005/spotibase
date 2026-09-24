@@ -24,11 +24,11 @@ public interface LikeRepository extends JpaRepository<Song, String> {
     boolean existsByUserIdAndArtistId(@Param("userId") String userId, @Param("artistId") String artistId);
 
     @Query(value = "SELECT song_id FROM liked_songs WHERE user_id = :userId ORDER BY liked_at DESC", nativeQuery = true)
-    List<Object[]> findLikedSongIds(@Param("userId") String userId);
+    List<String> findAllLikedSongIds(@Param("userId") String userId);
 
     @Query(value = "SELECT album_id FROM liked_albums WHERE user_id = :userId ORDER BY liked_at DESC", nativeQuery = true)
-    List<Object[]> findLikedAlbumIds(@Param("userId") String userId);
+    List<String> findAllLikedAlbumIds(@Param("userId") String userId);
 
     @Query(value = "SELECT artist_id FROM liked_artists WHERE user_id = :userId ORDER BY liked_at DESC", nativeQuery = true)
-    List<Object[]> findLikedArtistIds(@Param("userId") String userId);
+    List<String> findAllLikedArtistIds(@Param("userId") String userId);
 }

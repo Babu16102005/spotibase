@@ -1,10 +1,10 @@
 // Service Worker for SpotiBase PWA
 // Provides offline caching, background sync, and push notifications
 
-const CACHE_NAME = 'spotibase-v1';
-const STATIC_CACHE = 'spotibase-static-v1';
-const DYNAMIC_CACHE = 'spotibase-dynamic-v1';
-const AUDIO_CACHE = 'spotibase-audio-v1';
+const CACHE_NAME = 'spotibase-v2';
+const STATIC_CACHE = 'spotibase-static-v2';
+const DYNAMIC_CACHE = 'spotibase-dynamic-v2';
+const AUDIO_CACHE = 'spotibase-audio-v2';
 
 const STATIC_ASSETS = [
   '/',
@@ -30,12 +30,21 @@ self.addEventListener('install', (event) => {
 
       // Precache the hashed JS/CSS bundles referenced by index.html so the
       // app shell is fully available on the very first offline visit.
+      //
+      // The web audio engine (shaka-player) is a dynamic, lazily-loaded chunk
+      // that is NOT part of the app shell. It is fetched on demand when the
+      // user first plays audio, so we intentionally do NOT scan or fetch
+      // the (2.4MB) main bundle at install time just to locate it. That scan
+      // was wasteful during install (reading + fetching the whole bundle). The
+      // audio chunk is picked up on-demand by the runtime fetch handler below.
       try {
         const htmlRes = await fetch('/index.html', { cache: 'no-cache' });
         const html = await htmlRes.text();
         const refs = [...html.matchAll(/(?:src|href)="([^"]+)"/g)]
           .map((m) => m[1])
-          .filter((p) => p.startsWith('/') && !p.startsWith('/api/'));
+          // Only precache the hashed, content-addressed app-shell JS/CSS. Skip
+          // navigation/asset refs that don't need to be in the shell cache.
+          .filter((p) => p.startsWith('/') && !p.startsWith('/api/') && /\.(js|css)$/.test(p));
         const unique = [...new Set(refs)];
         await cache.addAll(unique).catch(() => {
           // addAll fails atomically if any resource 404s; cache what we can
@@ -45,21 +54,6 @@ self.addEventListener('install', (event) => {
             }).catch(() => {});
           }
         });
-
-        // The web audio engine (shaka-player) is a dynamic chunk not listed
-        // in index.html — find it inside the main bundle and precache it too.
-        const mainBundle = unique.find((p) => p.startsWith('/_expo/') && p.endsWith('.js'));
-        if (mainBundle) {
-          const bundleRes = await fetch(mainBundle, { cache: 'no-cache' });
-          const bundleText = await bundleRes.text();
-          const chunks = [...bundleText.matchAll(/shaka-player-[a-f0-9]+\.js/g)]
-            .map((m) => `/_expo/static/js/web/${m[0]}`);
-          for (const chunk of [...new Set(chunks)]) {
-            fetch(chunk).then((r) => {
-              if (r.ok) cache.put(chunk, r);
-            }).catch(() => {});
-          }
-        }
       } catch (err) {
         console.warn('[SW] shell precache skipped:', err);
       }

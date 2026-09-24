@@ -18,7 +18,7 @@ import org.jaudiotagger.tag.FieldKey;
 import org.jaudiotagger.tag.Tag;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -65,13 +65,50 @@ public class SongService {
     private SongService self;
 
     public SongResponse getSongById(String id, String userId) {
+        SongResponse base = (self != null ? self : this).getSongBaseById(id);
+        // Never mutate the cached instance: copy before overlaying per-user state.
+        SongResponse copy = copySongResponse(base);
+        if (userId != null) {
+            boolean liked = likeRepository.existsByUserIdAndSongId(userId, id);
+            copy.setLiked(liked);
+        }
+        return copy;
+    }
+
+    /**
+     * Cached song base (no per-user data): the liked flag is overlaid per
+     * request by {@link #getSongById}, so cached entries stay user-agnostic.
+     * Evicted with the rest of {@code songs} on every song mutation.
+     */
+    @Cacheable(value = "songs", key = "'id:' + #id")
+    public SongResponse getSongBaseById(String id) {
         Song song = songRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Song", id));
-        return toSongResponse(song, userId);
+        return toSongResponse(song, false);
     }
 
     public Song getSongEntityById(String id) {
         return songRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Song", id));
+    }
+
+    /**
+     * Serializable stream-path ref ({@code fileUrl + fileFormat} only).
+     * Plain record (not a Spring Data projection proxy) so it serializes
+     * cleanly to the JSON Redis cache.
+     */
+    public record SongStreamRef(String fileUrl, String fileFormat) implements java.io.Serializable {}
+
+    /**
+     * Cheap cached lookup for the stream path: single-column projection, no
+     * joins, cached 5 min in {@code songs} under {@code 'stream:' + id}
+     * (evicted with everything else on song mutation). The controller falls
+     * back to {@link #getSongEntityById} when this is unavailable.
+     */
+    @Cacheable(value = "songs", key = "'stream:' + #id")
+    public SongStreamRef getSongStreamRef(String id) {
+        return songRepository.findStreamInfoById(id)
+                .map(p -> new SongStreamRef(p.getFileUrl(), p.getFileFormat()))
                 .orElseThrow(() -> new ResourceNotFoundException("Song", id));
     }
 
@@ -82,7 +119,11 @@ public class SongService {
                 .map(Song::getId)
                 .collect(Collectors.toList());
         // Cached base (no user data) + per-request liked overlay (1 fast query).
-        List<SongResponse> songs = new ArrayList<>(self.getSongsBase(ids));
+        // Deep-copy each element: new ArrayList<>(cached) alone still shares the
+        // mutable SongResponse instances with the cache.
+        List<SongResponse> songs = (self != null ? self : this).getSongsBase(ids).stream()
+                .map(this::copySongResponse)
+                .collect(Collectors.toCollection(ArrayList::new));
         if (userId != null && !songs.isEmpty()) {
             Set<String> likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, ids));
             songs.forEach(s -> s.setLiked(likedIds.contains(s.getId())));
@@ -95,13 +136,15 @@ public class SongService {
      * for 10 songs on this stack; the 6-join fetch shape costs 3-4s and must not be
      * used here). Liked flags are overlaid per request, so this cache holds no user data.
      * Evicted on every song mutation. Oversized pages bypass the cache (memory guard).
+     * Key is the stable id-list string (not Objects.hash, which collides across
+     * permutations and JVM runs) so long pages don't create huge cache keys.
      */
-    @Cacheable(value = "songs", key = "#ids", condition = "#ids.size() <= 50")
+    @Cacheable(value = "songs", key = "#ids.toString()", condition = "#ids != null && #ids.size() <= 50")
     public List<SongResponse> getSongsBase(List<String> ids) {
         if (ids.isEmpty()) {
             return List.of();
         }
-        Map<String, Song> byId = songRepository.findAllById(ids).stream()
+        Map<String, Song> byId = songRepository.findByIdsWithCoreRelations(ids).stream()
                 .collect(Collectors.toMap(Song::getId, Function.identity(), (a, b) -> a));
         return ids.stream()
                 .map(byId::get)
@@ -233,6 +276,12 @@ public class SongService {
             } catch (Exception e) {
                 log.warn("AI tagging failed for '{}', will save without tags: {}", song.getName(), e.getMessage());
             }
+            // Denormalized fast-listing columns (searchSongs reads primary_artist_name/
+            // album_name; getEffective* fall back to joins when null for old rows).
+            // TODO(backfill): UPDATE songs SET primary_artist_name=(SELECT name FROM artists
+            //   WHERE id=artist_id), album_name=(SELECT name FROM albums WHERE id=album_id),
+            //   cover_url_cached=cover_url WHERE primary_artist_name IS NULL;
+            syncDenormalizedFields(song, artist, album);
             // Save to DB - if this throws, the catch block will clean up storage
             song = songRepository.save(song);
 
@@ -375,7 +424,12 @@ public class SongService {
      * Records a playback event: upserts the "Recently Played" entry (single row
      * per song, timestamp bumped) and appends a Listening History entry, deduped
      * so rapid stream requests (seek, re-buffer) do not spam the history.
+     *
+     * <p>Fire-and-forget from the stream path ({@code @Async} on the bounded
+     * {@code analytics} executor): stream threads return headers immediately
+     * and never block on these writes. Failures are logged, never propagated.
      */
+    @Async
     @Transactional
     public void recordPlayback(String userId, String songId, String source) {
         if (userId == null || userId.isBlank() || songId == null || songId.isBlank()) return;
@@ -648,6 +702,8 @@ public class SongService {
             song.setCoverUrl(coverUrl);
         }
 
+        syncDenormalizedFields(song, song.getArtist(), song.getAlbum());
+
         song = songRepository.save(song);
 
         if (song.getAlbum() != null) {
@@ -696,32 +752,91 @@ public class SongService {
         songRepository.save(song);
     }
 
+    /**
+     * Fire-and-forget play-count bump from the stream path ({@code @Async}):
+     * headers are returned before this runs. Still a single atomic
+     * {@code UPDATE} ({@link SongRepository#incrementPlayCountAtomic}) with
+     * the legacy read-modify-write fallback, so no lost updates.
+     */
+    @Async
     @Transactional
     public void incrementPlayCount(String id) {
-        songRepository.findById(id).ifPresent(song -> {
-            song.setPlayCount(song.getPlayCount() + 1);
-            songRepository.save(song);
-        });
+        // Atomic UPDATE: no read-modify-write round trip, no lost updates.
+        int updated = songRepository.incrementPlayCountAtomic(id);
+        if (updated == 0) {
+            songRepository.findById(id).ifPresent(song -> {
+                song.setPlayCount(song.getPlayCount() + 1);
+                songRepository.save(song);
+            });
+        }
     }
 
     public List<SongResponse> getTrendingSongs(String userId, int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
+        int safeLimit = Math.max(1, Math.min(limit <= 0 ? 20 : limit, 50));
+        List<SongResponse> base = (self != null ? self : this).getTrendingSongsBase(safeLimit);
+        List<SongResponse> songs = base.stream()
+                .map(this::copySongResponse)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (userId != null && !songs.isEmpty()) {
+            List<String> ids = songs.stream().map(SongResponse::getId).collect(Collectors.toList());
+            Set<String> likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, ids));
+            songs.forEach(s -> s.setLiked(likedIds.contains(s.getId())));
+        }
+        return songs;
+    }
+
+    /** Cached trending base (no per-user data); liked flags overlaid per request. */
+    @Cacheable(value = "songs", key = "'trending:' + #limit")
+    public List<SongResponse> getTrendingSongsBase(int limit) {
+        Pageable pageable = PageRequest.of(0, Math.max(1, Math.min(limit, 50)));
         return songRepository.findTopSongs(pageable).stream()
-                .map(song -> toSongResponse(song, userId))
+                .map(song -> toSongResponse(song, false))
                 .collect(Collectors.toList());
     }
 
     public List<SongResponse> getNewReleases(String userId, int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
+        int safeLimit = Math.max(1, Math.min(limit <= 0 ? 20 : limit, 50));
+        List<SongResponse> base = (self != null ? self : this).getNewReleasesBase(safeLimit);
+        List<SongResponse> songs = base.stream()
+                .map(this::copySongResponse)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (userId != null && !songs.isEmpty()) {
+            List<String> ids = songs.stream().map(SongResponse::getId).collect(Collectors.toList());
+            Set<String> likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, ids));
+            songs.forEach(s -> s.setLiked(likedIds.contains(s.getId())));
+        }
+        return songs;
+    }
+
+    /** Cached new-releases base (no per-user data); liked flags overlaid per request. */
+    @Cacheable(value = "songs", key = "'new:' + #limit")
+    public List<SongResponse> getNewReleasesBase(int limit) {
+        Pageable pageable = PageRequest.of(0, Math.max(1, Math.min(limit, 50)));
         return songRepository.findNewReleases(pageable).stream()
-                .map(song -> toSongResponse(song, userId))
+                .map(song -> toSongResponse(song, false))
                 .collect(Collectors.toList());
     }
 
     public List<SongResponse> getFeaturedSongs(String userId, int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
+        int safeLimit = Math.max(1, Math.min(limit <= 0 ? 20 : limit, 50));
+        List<SongResponse> base = (self != null ? self : this).getFeaturedSongsBase(safeLimit);
+        List<SongResponse> songs = base.stream()
+                .map(this::copySongResponse)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (userId != null && !songs.isEmpty()) {
+            List<String> ids = songs.stream().map(SongResponse::getId).collect(Collectors.toList());
+            Set<String> likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, ids));
+            songs.forEach(s -> s.setLiked(likedIds.contains(s.getId())));
+        }
+        return songs;
+    }
+
+    /** Cached featured base (no per-user data); liked flags overlaid per request. */
+    @Cacheable(value = "songs", key = "'featured:' + #limit")
+    public List<SongResponse> getFeaturedSongsBase(int limit) {
+        Pageable pageable = PageRequest.of(0, Math.max(1, Math.min(limit, 50)));
         return songRepository.findFeaturedSongs(pageable).stream()
-                .map(song -> toSongResponse(song, userId))
+                .map(song -> toSongResponse(song, false))
                 .collect(Collectors.toList());
     }
 
@@ -738,9 +853,56 @@ public class SongService {
     }
 
     public List<SongResponse> getSongsByIds(List<String> ids, String userId) {
-        return songRepository.findByIdInWithDetails(ids).stream()
-                .map(song -> toSongResponse(song, userId))
-                .collect(Collectors.toList());
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        SongService cached = self != null ? self : this;
+        List<SongResponse> songs = cached.getSongsBase(ids).stream()
+                .map(this::copySongResponse)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (userId != null && !songs.isEmpty()) {
+            Set<String> likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, ids));
+            songs.forEach(s -> s.setLiked(likedIds.contains(s.getId())));
+        }
+        return songs;
+    }
+
+    /**
+     * Cursor-based slice for infinite scroll: keyset on (createdAt DESC, id DESC)
+     * via {@code findAfterCursorByCreatedAt}, matching the {@code findActiveIds}
+     * head ordering. The cursor is the last seen song id; its createdAt is looked
+     * up so callers never parse timestamps. First page passes {@code cursorId == null}.
+     * Then a single batched liked-ids lookup via {@code getSongsByIds} (which
+     * deep-copies cached bases before overlaying liked flags).
+     */
+    public List<SongResponse> getSongsAfterCursor(String cursorId, int size, String userId) {
+        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(0, safeSize);
+        if (cursorId == null || cursorId.isBlank()) {
+            // Head of the catalog via the index-only id scan + batch fetch.
+            List<String> ids = songRepository.findActiveIds(pageable).getContent();
+            return getSongsByIds(ids, userId);
+        }
+        // Resolve cursor keyset position: id alone is not time-ordered (UUID),
+        // so fetch its createdAt for the (createdAt, id) keyset tail query.
+        Optional<Song> cursor = songRepository.findById(cursorId);
+        if (cursor.isEmpty()) {
+            return List.of();
+        }
+        LocalDateTime cursorCreatedAt = cursor.get().getCreatedAt();
+        List<Song> songs;
+        if (cursorCreatedAt == null) {
+            // Legacy fallback: id-ordered scan (documented as inconsistent with
+            // the createdAt-ordered head; only hit for rows missing createdAt).
+            songs = songRepository.findAfterCursor(cursorId, pageable);
+        } else {
+            songs = songRepository.findAfterCursorByCreatedAt(cursorCreatedAt, cursorId, pageable);
+        }
+        if (songs.isEmpty()) {
+            return List.of();
+        }
+        List<String> ids = songs.stream().map(Song::getId).collect(Collectors.toList());
+        return getSongsByIds(ids, userId);
     }
 
     public void updateAlbumStats(String albumId) {
@@ -769,6 +931,20 @@ public class SongService {
                 .map(song -> toSongResponse(song, userId))
                 .collect(Collectors.toList());
         return toPagedResponse(songPage, songs);
+    }
+
+    public List<SongResponse> toSongResponses(List<Song> songs, String userId) {
+        if (songs == null || songs.isEmpty()) {
+            return List.of();
+        }
+        if (userId == null) {
+            return songs.stream().map(song -> toSongResponse(song, false)).collect(Collectors.toList());
+        }
+        List<String> ids = songs.stream().map(Song::getId).collect(Collectors.toList());
+        Set<String> likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, ids));
+        return songs.stream()
+                .map(song -> toSongResponse(song, likedIds.contains(song.getId())))
+                .collect(Collectors.toList());
     }
 
     public SongResponse toSongResponse(Song song, String userId) {
@@ -844,6 +1020,61 @@ public class SongService {
         return builder.build();
     }
 
+    /**
+     * Defensive copy of a cached {@link SongResponse}: the cache holds base
+     * instances (liked=false) and callers overlay per-user liked flags, so the
+     * cached element itself must never be mutated. Lists are shallow-copied so
+     * flag changes on the copy cannot leak into the cached entry.
+     */
+    private SongResponse copySongResponse(SongResponse src) {
+        if (src == null) {
+            return null;
+        }
+        return SongResponse.builder()
+                .id(src.getId())
+                .title(src.getTitle())
+                .artistId(src.getArtistId())
+                .artistName(src.getArtistName())
+                .albumArtistId(src.getAlbumArtistId())
+                .albumArtistName(src.getAlbumArtistName())
+                .albumId(src.getAlbumId())
+                .albumName(src.getAlbumName())
+                .genreId(src.getGenreId())
+                .genreName(src.getGenreName())
+                .language(src.getLanguage())
+                .composer(src.getComposer())
+                .lyrics(src.getLyrics())
+                .duration(src.getDuration())
+                .durationMs(src.getDurationMs())
+                .releaseDate(src.getReleaseDate())
+                .trackNumber(src.getTrackNumber())
+                .discNumber(src.getDiscNumber())
+                .fileUrl(src.getFileUrl())
+                .coverUrl(src.getCoverUrl())
+                .fileFormat(src.getFileFormat())
+                .fileSize(src.getFileSize())
+                .bitrate(src.getBitrate())
+                .sampleRate(src.getSampleRate())
+                .explicit(src.isExplicit())
+                .archived(src.isArchived())
+                .featured(src.isFeatured())
+                .playCount(src.getPlayCount())
+                .liked(src.isLiked())
+                .createdAt(src.getCreatedAt())
+                .moodTags(src.getMoodTags() != null ? new ArrayList<>(src.getMoodTags()) : null)
+                .vibeTags(src.getVibeTags() != null ? new ArrayList<>(src.getVibeTags()) : null)
+                .activityTags(src.getActivityTags() != null ? new ArrayList<>(src.getActivityTags()) : null)
+                .energyScore(src.getEnergyScore())
+                .valenceScore(src.getValenceScore())
+                .bpm(src.getBpm())
+                .aiTagged(src.isAiTagged())
+                .aiTaggedAt(src.getAiTaggedAt())
+                .contributingArtists(src.getContributingArtists() != null
+                        ? new ArrayList<>(src.getContributingArtists())
+                        : null)
+                .build();
+    }
+
     private PagedResponse<SongResponse> toPagedResponse(Page<Song> page, List<SongResponse> songs) {
         return PagedResponse.<SongResponse>builder()
                 .content(songs)
@@ -859,6 +1090,29 @@ public class SongService {
     private String getFileExtension(String filename) {
         if (filename == null || !filename.contains(".")) return "MP3";
         return filename.substring(filename.lastIndexOf(".") + 1).toUpperCase();
+    }
+
+    /**
+     * Keeps denormalized fast-listing columns in sync with relations.
+     * searchSongs matches name + primary_artist_name + album_name, and
+     * getEffective* fall back to joins when these are null (pre-backfill rows).
+     */
+    private void syncDenormalizedFields(Song song, Artist artist, Album album) {
+        if (artist != null && artist.getName() != null) {
+            song.setPrimaryArtistName(artist.getName());
+        } else if (song.getArtist() != null && song.getArtist().getName() != null) {
+            song.setPrimaryArtistName(song.getArtist().getName());
+        }
+        if (album != null && album.getName() != null) {
+            song.setAlbumName(album.getName());
+        } else if (song.getAlbum() != null && song.getAlbum().getName() != null) {
+            song.setAlbumName(song.getAlbum().getName());
+        }
+        if (song.getCoverUrl() != null && !song.getCoverUrl().isBlank()) {
+            song.setCoverUrlCached(song.getCoverUrl());
+        } else if (album != null && album.getCoverUrl() != null && !album.getCoverUrl().isBlank()) {
+            song.setCoverUrlCached(album.getCoverUrl());
+        }
     }
 
     private Artist resolveArtist(String artistId) {
@@ -878,10 +1132,7 @@ public class SongService {
     }
 
     public List<SongResponse> getLikedSongs(String userId) {
-        List<Object[]> rows = likeRepository.findLikedSongIds(userId);
-        List<String> songIds = rows.stream()
-                .map(row -> (String) row[0])
-                .collect(Collectors.toList());
+        List<String> songIds = likeRepository.findAllLikedSongIds(userId);
         return getSongsByIds(songIds, userId);
     }
 

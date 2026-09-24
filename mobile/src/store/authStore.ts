@@ -2,8 +2,11 @@ import { create } from 'zustand';
 import { UserResponse, LoginRequest, RegisterRequest } from '../types';
 import { authApi } from '../api/client';
 import { getStorage } from '../utils';
+import { prefetchHomeFeed } from '../cache/homeFeedCache';
+import { prefetchSongs } from '../cache/songListCache';
 
 const storage = getStorage('spotibase-auth');
+const feedCache = getStorage('spotibase-cache');
 
 interface AuthState {
   user: UserResponse | null;
@@ -57,11 +60,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (data) => {
     try {
-      set({ isLoading: true, error: null });
+      // Global isLoading is the session-restore flag consumed by
+      // RootNavigator — do NOT set it here, or the auth screens unmount
+      // mid-request (blank flash). LoginScreen tracks its own submitting
+      // state instead.
+      set({ error: null });
       const response = await authApi.login(data);
       const { accessToken, refreshToken, user } = response.data;
       saveAuthSession(accessToken, refreshToken, user);
       set({ user, isAuthenticated: true, isLoading: false });
+      void prefetchHomeFeed();
+      void prefetchSongs();
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Login failed', isLoading: false });
       throw err;
@@ -70,11 +79,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   register: async (data) => {
     try {
-      set({ isLoading: true, error: null });
+      // See login: global isLoading stays for session restore only.
+      set({ error: null });
       const response = await authApi.register(data);
       const { accessToken, refreshToken, user } = response.data;
       saveAuthSession(accessToken, refreshToken, user);
       set({ user, isAuthenticated: true, isLoading: false });
+      void prefetchHomeFeed();
+      void prefetchSongs();
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Registration failed', isLoading: false });
       throw err;
@@ -83,11 +95,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   socialAuth: async (provider, idToken) => {
     try {
-      set({ isLoading: true, error: null });
+      // See login: global isLoading stays for session restore only.
+      set({ error: null });
       const response = await authApi.socialAuth(provider, idToken);
       const { accessToken, refreshToken, user } = response.data;
       saveAuthSession(accessToken, refreshToken, user);
       set({ user, isAuthenticated: true, isLoading: false });
+      void prefetchHomeFeed();
+      void prefetchSongs();
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Social login failed', isLoading: false });
       throw err;
@@ -96,6 +111,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     storage.clearAll();
+    try {
+      feedCache.clearAll();
+    } catch {}
     set({ user: null, isAuthenticated: false, isLoading: false, error: null });
   },
 
@@ -104,9 +122,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const refreshToken = storage.getString('refreshToken') || storage.getString('accessToken');
       const cachedUser = getCachedUser();
 
-      // If we have cached credentials & user, keep user logged in immediately!
+      // If we have cached credentials & user, restore instantly and unblock the
+      // UI (isLoading=false) BEFORE the network refresh. The refresh below runs
+      // in the background so a slow backend never gates app start.
       if (cachedUser && refreshToken) {
         set({ user: cachedUser, isAuthenticated: true, isLoading: false });
+        void prefetchHomeFeed();
+        void prefetchSongs();
+        void (async () => {
+          try {
+            const response = await authApi.refresh(refreshToken);
+            const { accessToken: newAccess, refreshToken: newRefresh, user: newUser } = response.data;
+            saveAuthSession(newAccess, newRefresh, newUser);
+            set({ user: newUser, isAuthenticated: true, isLoading: false });
+            void prefetchHomeFeed();
+          } catch (refreshErr: any) {
+            const isNetworkError = refreshErr.message === 'Network Error' || refreshErr.code === 'ERR_NETWORK';
+            if (!isNetworkError) {
+              storage.clearAll();
+              set({ user: null, isAuthenticated: false, isLoading: false });
+            }
+            // On network error/offline, keep the cached session as-is.
+          }
+        })();
+        return;
       }
 
       if (!refreshToken) {
@@ -114,12 +153,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
 
-      // Background token refresh to keep user session fresh
+      // No cached user but a token exists: must validate before unblocking.
       try {
         const response = await authApi.refresh(refreshToken);
         const { accessToken: newAccess, refreshToken: newRefresh, user: newUser } = response.data;
         saveAuthSession(newAccess, newRefresh, newUser);
         set({ user: newUser, isAuthenticated: true, isLoading: false });
+        void prefetchHomeFeed();
+        void prefetchSongs();
       } catch (refreshErr: any) {
         const isNetworkError = refreshErr.message === 'Network Error' || refreshErr.code === 'ERR_NETWORK';
         if (!isNetworkError) {

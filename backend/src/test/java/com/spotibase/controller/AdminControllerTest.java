@@ -72,8 +72,9 @@ class AdminControllerTest extends BaseWebMvcTest {
 
     @Test
     void getDashboard_unauthenticated_isRejected() throws Exception {
+        // Production + TestSecurityConfig entryPoint: unauthenticated => 401 (not 403).
         mockMvc.perform(get("/api/v1/admin/dashboard"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     // ---------- user management ----------

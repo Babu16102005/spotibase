@@ -105,15 +105,18 @@ describe('PlayerSheet', () => {
 
     fireEvent.press(getByLabelText('Previous'));
     await act(async () => {});
-    // previous() now uses reset+add+play (not skipToPrevious)
-    expect(TrackPlayer.reset).toHaveBeenCalled();
+    // previous() skips within the kept queue (no reset+add single).
+    expect(TrackPlayer.reset).not.toHaveBeenCalled();
+    expect(TrackPlayer.add).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 0);
+    expect(TrackPlayer.skip).toHaveBeenCalledWith(0);
     expect(TrackPlayer.play).toHaveBeenCalled();
 
     const nextButtons = getAllByLabelText('Next');
     fireEvent.press(nextButtons[nextButtons.length - 1]);
     await act(async () => {});
-    // next() now uses reset+add+play (not skipToNext)
-    expect(TrackPlayer.reset).toHaveBeenCalled();
+    // next() skips within the kept queue (no reset+add single).
+    expect(TrackPlayer.reset).not.toHaveBeenCalled();
+    expect(TrackPlayer.skipToNext).toHaveBeenCalled();
     expect(TrackPlayer.play).toHaveBeenCalled();
   });
 

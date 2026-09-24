@@ -17,7 +17,7 @@ spring:
     # cache ops time out fast; song pages still load, just uncached.
     type: redis
     redis:
-      time-to-live: 90s
+      time-to-live: 2m
 
   datasource:
     # Host/dev runs must provide this explicitly. A stale hardcoded Supabase
@@ -73,7 +73,10 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      timeout: 2000ms
+      # 1000ms: fail-open cache (see CacheResilienceConfig) must survive
+      # cold-start / cross-AZ latency spikes without 500ing requests.
+      timeout: 1000ms
+      connect-timeout: 1000ms
       lettuce:
         pool:
           max-active: 16
@@ -141,6 +144,17 @@ supabase:
 # Apple Sign-In (id_token verification; required for /auth/social/apple)
 apple:
   client-id: ${APPLE_CLIENT_ID:}
+
+# YouTube proxy (GET /api/v1/youtube/trending|search|resolve).
+# Without YOUTUBE_API_KEY the service serves a built-in 15-entry mock
+# catalogue; with a key it calls YouTube Data API v3 (5s timeout) and
+# fails open to mock on quota 429 / network errors. The key is never logged.
+youtube:
+  api-key: ${YOUTUBE_API_KEY:}
+  enabled: ${YOUTUBE_ENABLED:true}
+  base-url: ${YOUTUBE_BASE_URL:https://www.googleapis.com/youtube/v3}
+  region-code: ${YOUTUBE_REGION_CODE:US}
+  timeout-seconds: ${YOUTUBE_TIMEOUT_SECONDS:5}
 
 # JWT
 jwt:

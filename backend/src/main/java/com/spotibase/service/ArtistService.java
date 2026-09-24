@@ -213,10 +213,7 @@ public class ArtistService {
 
     @Transactional(readOnly = true)
     public List<ArtistResponse> getLikedArtists(String userId) {
-        List<Object[]> rows = likeRepository.findLikedArtistIds(userId);
-        List<String> artistIds = rows.stream()
-                .map(row -> (String) row[0])
-                .collect(Collectors.toList());
+        List<String> artistIds = likeRepository.findAllLikedArtistIds(userId);
         List<ArtistResponse> artists = new ArrayList<>();
         for (String artistId : artistIds) {
             try {

@@ -40,6 +40,15 @@ public class LibraryController {
         List<SongResponse> likedSongs = songService.getLikedSongs(user.getId());
         List<AlbumResponse> likedAlbums = albumService.getLikedAlbums(user.getId());
         List<ArtistResponse> likedArtists = artistService.getLikedArtists(user.getId());
+        // Featured playlists served from cached getFeaturedPlaylists(20).
+        // Fail-open: discovery section may be empty, user library fields stay back-compat.
+        List<PlaylistResponse> featuredPlaylists;
+        try {
+            featuredPlaylists = playlistService.getFeaturedPlaylists(20);
+        } catch (Exception e) {
+            log.warn("Featured playlists unavailable for library, returning empty featured section", e);
+            featuredPlaylists = List.of();
+        }
 
         return ResponseEntity.ok(LibraryResponse.builder()
                 .playlists(playlists)
@@ -50,6 +59,8 @@ public class LibraryController {
                 .totalAlbums(likedAlbums.size())
                 .totalArtists(likedArtists.size())
                 .totalLikedSongs(likedSongs.size())
+                .featuredPlaylists(featuredPlaylists)
+                .totalFeaturedPlaylists(featuredPlaylists.size())
                 .build());
     }
 

@@ -193,13 +193,14 @@ const MiniPlayer: React.FC<MiniPlayerProps> = ({ testID }) => {
 const styles = StyleSheet.create({
   outerWrap: {
     position: 'absolute',
-    bottom: 68,
+    bottom: 60,
     left: 0,
     right: 0,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     overflow: 'hidden',
-    elevation: 12,
+    zIndex: 5,
+    elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.18,

@@ -15,6 +15,8 @@ const SearchScreen = ({ navigation, route }: any) => {
   const { theme } = useThemeStore();
   const playMultiple = usePlayerStore((s) => s.playMultiple);
   const debounceRef = useRef<any>(null);
+  // Cancels the previous in-flight search so slow responses can't overwrite fresh ones.
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   const genreFromParam = route?.params?.genre;
 
@@ -35,18 +37,33 @@ const SearchScreen = ({ navigation, route }: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [genreFromParam]);
 
+  // Abort any in-flight search + pending debounce on unmount.
+  useEffect(() => () => {
+    searchAbortRef.current?.abort();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
   const handleSearch = useCallback(async (q: string) => {
     setQuery(q);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    searchAbortRef.current?.abort();
     if (!q.trim()) {
       setResults(null);
       return;
     }
     debounceRef.current = setTimeout(async () => {
+      // Cancel the previous request before starting a new one.
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
       try {
-        const res = await searchApi.search(q);
+        const res = await searchApi.search(q, undefined, 0, controller.signal);
+        // Stale response (a newer search started while this was in flight): drop it.
+        if (searchAbortRef.current !== controller) return;
         setResults(res.data);
-      } catch (err) {
+      } catch (err: any) {
+        // Aborted requests are expected — not errors.
+        if (controller.signal.aborted || err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
         console.error('Search error:', err);
       }
     }, 300);
@@ -55,6 +72,18 @@ const SearchScreen = ({ navigation, route }: any) => {
   // Memoized per-type renderers so they are not recreated on every keystroke/theme change
   const renderTrending = useCallback((items: string[]) => (
     <View>
+      <TouchableOpacity
+        style={[styles.youtubeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+        onPress={() => navigation?.navigate('YouTubeSongs')}
+        accessibilityRole="button"
+        accessibilityLabel="Discover trending YouTube songs"
+      >
+        <Text style={[styles.youtubeTitle, { color: theme.colors.text }]}>▶ Trending YouTube Songs</Text>
+        <Text style={[styles.youtubeSub, { color: theme.colors.textSecondary }]}>
+          Watch viral hits & music videos
+        </Text>
+        <Text style={[styles.youtubeCta, { color: theme.colors.primary }]}>Open YouTube →</Text>
+      </TouchableOpacity>
       {items.length > 0 && (
         <>
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Trending Searches</Text>
@@ -66,7 +95,7 @@ const SearchScreen = ({ navigation, route }: any) => {
         </>
       )}
     </View>
-  ), [theme, handleSearch]);
+  ), [theme, handleSearch, navigation]);
 
   const renderSongs = useCallback((songs: any[]) => (
     <>
@@ -149,7 +178,7 @@ const SearchScreen = ({ navigation, route }: any) => {
           autoCapitalize="none"
         />
         {query ? (
-          <TouchableOpacity onPress={() => { setQuery(''); setResults(null); }}>
+          <TouchableOpacity onPress={() => { searchAbortRef.current?.abort(); setQuery(''); setResults(null); }}>
             <Text style={{ color: theme.colors.textSecondary }}>✕</Text>
           </TouchableOpacity>
         ) : null}
@@ -174,6 +203,10 @@ const styles = StyleSheet.create({
   tab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 8 },
   tabText: { fontSize: 13, fontWeight: '600' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12 },
+  youtubeCard: { marginHorizontal: 16, marginTop: 8, marginBottom: 4, borderRadius: 12, borderWidth: 1, padding: 14 },
+  youtubeTitle: { fontSize: 15, fontWeight: '800' },
+  youtubeSub: { fontSize: 12, marginTop: 4 },
+  youtubeCta: { fontSize: 13, fontWeight: '800', marginTop: 8 },
 });
 
 export default SearchScreen;

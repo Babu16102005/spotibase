@@ -14,4 +14,10 @@ public interface PlaylistCollaboratorRepository extends JpaRepository<PlaylistCo
     boolean existsByPlaylistIdAndUserId(String playlistId, String userId);
 
     void deleteByPlaylistIdAndUserId(String playlistId, String userId);
+
+    // Bulk cleanup for playlist delete: removes all collaborator links for a
+    // playlist in one statement. No FK cascade exists for playlist_collaborators
+    // (playlistId is a plain column, not a JPA relation), so callers must invoke
+    // this explicitly before deleting the Playlist row.
+    void deleteAllByPlaylistId(String playlistId);
 }

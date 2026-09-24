@@ -20,6 +20,7 @@ import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import AlbumScreen from '../screens/album/AlbumScreen';
 import ArtistScreen from '../screens/artist/ArtistScreen';
 import PlaylistScreen from '../screens/playlist/PlaylistScreen';
+import YouTubeSongsScreen from '../screens/youtube/YouTubeSongsScreen';
 import MiniPlayer from '../components/MiniPlayer';
 import Sidebar, { TabKey } from '../components/Sidebar';
 import PlayBar from '../components/PlayBar';
@@ -34,6 +35,7 @@ export type RootStackParamList = {
   Album: { id: string };
   Artist: { id: string };
   Playlist: { id: string };
+  YouTubeSongs: undefined;
   Profile: undefined;
   Settings: undefined;
   Admin: undefined;
@@ -209,6 +211,7 @@ const RootNavigator = () => {
         {isAuthenticated ? (
           <>
             <RootStack.Screen name="Main" component={MainTabs} />
+            <RootStack.Screen name="YouTubeSongs" component={YouTubeSongsScreen} />
             <RootStack.Screen name="Album" component={AlbumScreen} />
             <RootStack.Screen name="Artist" component={ArtistScreen} />
             <RootStack.Screen name="Playlist" component={PlaylistScreen} />

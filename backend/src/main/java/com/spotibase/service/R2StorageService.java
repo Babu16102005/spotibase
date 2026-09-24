@@ -1,5 +1,8 @@
 package com.spotibase.service;
 
+import com.spotibase.exception.InvalidRangeException;
+import com.spotibase.exception.R2UpstreamException;
+import com.spotibase.exception.ResourceNotFoundException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +12,8 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.retry.RetryPolicy;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -17,6 +22,7 @@ import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
 
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 @Slf4j
@@ -56,10 +62,17 @@ public class R2StorageService {
 
         AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKeyId, secretAccessKey);
 
+        // Bounded R2 calls: a hung upstream must degrade to 502 fast instead
+        // of pinning stream threads (10s total, 5s per attempt, 2 retries).
         this.s3Client = S3Client.builder()
                 .region(Region.of(region))
                 .endpointOverride(URI.create("https://" + accountId + ".r2.cloudflarestorage.com"))
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .overrideConfiguration(ClientOverrideConfiguration.builder()
+                        .apiCallTimeout(Duration.ofSeconds(10))
+                        .apiCallAttemptTimeout(Duration.ofSeconds(5))
+                        .retryPolicy(RetryPolicy.builder().numRetries(2).build())
+                        .build())
                 .build();
 
         ensureBucketExists();
@@ -139,9 +152,13 @@ public class R2StorageService {
                     .key(key)
                     .contentType(file.getContentType())
                     .contentLength(file.getSize())
+                    .cacheControl("public, max-age=3600")
                     .build();
 
-            s3Client.putObject(request, RequestBody.fromBytes(file.getBytes()));
+            // P0-4: stream the upload — fromBytes(file.getBytes()) loads the
+            // whole file into heap (OOM on large FLAC). fromInputStream pipes
+            // bytes with a known length, keeping contentLength/type/cacheControl.
+            s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
             invalidateStorageCache();
             log.info("File uploaded to R2: {}", key);
         } catch (IOException e) {
@@ -258,11 +275,20 @@ public class R2StorageService {
 
     // ---- Range streaming (proxy mode) ---------------------------------
 
+    /** Default first chunk for un-ranged requests: 1MB for <300ms audio start. */
+    public static final long DEFAULT_CHUNK_BYTES = 1048576L;
+
     public record R2ObjectStream(ResponseInputStream<GetObjectResponse> stream,
                                  long objectSize,
                                  long start,
                                  long end,
-                                 String contentType) {
+                                 String contentType,
+                                 String eTag) {
+
+        public R2ObjectStream(ResponseInputStream<GetObjectResponse> stream,
+                              long objectSize, long start, long end, String contentType) {
+            this(stream, objectSize, start, end, contentType, null);
+        }
 
         public boolean isPartial() {
             return start > 0 || end < objectSize - 1;
@@ -270,79 +296,221 @@ public class R2StorageService {
     }
 
     /**
+     * Parsed single-range request. {@code suffix=true} is {@code bytes=-N}
+     * (last N bytes, {@code end} holds N); otherwise {@code end==-1} means
+     * open-ended {@code bytes=N-}. {@code null} (from {@link #parseRange})
+     * means "no Range header".
+     */
+    public record ParsedRange(boolean suffix, long start, long end) {}
+
+    /**
+     * Parses a {@code Range} header into a single-range request.
+     * Returns {@code null} for a missing/blank header. Malformed values
+     * (bad numbers, missing dash, multipart, wrong unit) throw
+     * {@link InvalidRangeException} so callers return 416 — never 500.
+     */
+    public static ParsedRange parseRange(String rangeHeader) {
+        if (rangeHeader == null || rangeHeader.isBlank()) {
+            return null;
+        }
+        String header = rangeHeader.trim();
+        if (!header.startsWith("bytes=")) {
+            throw new InvalidRangeException("Unsupported range unit: " + header);
+        }
+        String spec = header.substring("bytes=".length()).trim();
+        if (spec.contains(",")) {
+            // Multipart ranges are not supported by the proxy (single-range only).
+            throw new InvalidRangeException("Multipart ranges not supported: " + header);
+        }
+        int dash = spec.indexOf('-');
+        if (dash < 0) {
+            throw new InvalidRangeException("Malformed Range header: " + header);
+        }
+        String first = spec.substring(0, dash).trim();
+        String last = spec.substring(dash + 1).trim();
+        try {
+            if (first.isEmpty()) {
+                // Suffix range: bytes=-N (last N bytes).
+                if (last.isEmpty()) {
+                    throw new InvalidRangeException("Malformed Range header: " + header);
+                }
+                long suffixLength = Long.parseLong(last);
+                if (suffixLength <= 0) {
+                    throw new InvalidRangeException("Invalid suffix range: " + header);
+                }
+                return new ParsedRange(true, -1, suffixLength);
+            }
+            long start = Long.parseLong(first);
+            if (start < 0) {
+                throw new InvalidRangeException("Invalid range start: " + header);
+            }
+            if (last.isEmpty()) {
+                return new ParsedRange(false, start, -1);
+            }
+            long end = Long.parseLong(last);
+            if (end < 0) {
+                throw new InvalidRangeException("Invalid range end: " + header);
+            }
+            return new ParsedRange(false, start, end);
+        } catch (NumberFormatException e) {
+            throw new InvalidRangeException("Malformed Range header: " + header);
+        }
+    }
+
+    /**
+     * Resolves a parsed range against the known object size to concrete
+     * {@code [start, end]} (inclusive). Unsatisfiable ranges
+     * ({@code start >= size}, {@code end < start}) throw
+     * {@link InvalidRangeException} (HTTP 416). An {@code end} past EOF is
+     * clamped per RFC 7233 (satisfiable, not an error). An open-ended
+     * {@code bytes=0-} is capped to the default 1MB first chunk for fast
+     * start; {@code bytes=N-} (N&gt;0) returns the full remainder for seeks.
+     */
+    public static long[] resolveRange(ParsedRange parsed, long objectSize) {
+        if (objectSize <= 0) {
+            throw new InvalidRangeException("Empty audio object", objectSize);
+        }
+        if (parsed == null) {
+            return new long[]{0, Math.min(DEFAULT_CHUNK_BYTES - 1, objectSize - 1)};
+        }
+        if (parsed.suffix()) {
+            long n = Math.min(parsed.end(), objectSize);
+            return new long[]{objectSize - n, objectSize - 1};
+        }
+        long start = parsed.start();
+        if (start >= objectSize) {
+            throw new InvalidRangeException(
+                    "Range start " + start + " beyond object size " + objectSize, objectSize);
+        }
+        long end;
+        if (parsed.end() < 0) {
+            end = (start == 0)
+                    ? Math.min(DEFAULT_CHUNK_BYTES - 1, objectSize - 1)
+                    : objectSize - 1;
+        } else {
+            end = Math.min(parsed.end(), objectSize - 1);
+        }
+        if (end < start) {
+            throw new InvalidRangeException("Invalid range: end before start", objectSize);
+        }
+        return new long[]{start, end};
+    }
+
+    /**
+     * Maps S3 failures to API semantics: missing key -&gt; 404, bad range
+     * -&gt; 416, everything else -&gt; 502 (never leak SDK internals, never 500).
+     */
+    private RuntimeException mapStorageException(S3Exception e, String key) {
+        int status = e.statusCode();
+        String code = e.awsErrorDetails() != null && e.awsErrorDetails().errorCode() != null
+                ? e.awsErrorDetails().errorCode() : "";
+        if (status == 404 || "NoSuchKey".equals(code) || "NoSuchBucket".equals(code)
+                || e instanceof NoSuchKeyException) {
+            return new ResourceNotFoundException("Audio object not found for key: " + key);
+        }
+        if (status == 416 || "InvalidRange".equals(code) || "RequestedRangeNotSatisfiable".equals(code)) {
+            return new InvalidRangeException("Requested range not satisfiable for key: " + key);
+        }
+        log.error("R2 request failed for key {} (status={}, code={}): {}",
+                key, status, code, e.getMessage());
+        return new R2UpstreamException("Audio storage temporarily unavailable", e);
+    }
+
+    /**
      * Reads an object (optionally a byte range) from R2 so the backend can
      * proxy it with Range + CORS headers. r2.dev public URLs send no CORS
      * headers, so browsers cannot consume a direct redirect.
+     *
+     * <p>Malformed ranges throw {@link InvalidRangeException} (416), missing
+     * keys throw {@link ResourceNotFoundException} (404), and upstream
+     * failures throw {@link R2UpstreamException} (502).
      */
     public R2ObjectStream readRange(String key, String rangeHeader) {
         if (s3Client == null) {
             throw new IllegalStateException("R2StorageService not initialized - check R2 configuration");
         }
-        GetObjectRequest.Builder builder = GetObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key);
+        ParsedRange parsed = parseRange(rangeHeader);
 
-        long start = 0;
-        long end = -1;
-        if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
-            String spec = rangeHeader.substring("bytes=".length()).trim();
-            int dash = spec.indexOf('-');
-            if (dash >= 0) {
-                String startPart = dash > 0 ? spec.substring(0, dash).trim() : "0";
-                start = startPart.isEmpty() ? 0 : Long.parseLong(startPart);
-                String endPart = dash + 1 < spec.length() ? spec.substring(dash + 1).trim() : "";
-                if (!endPart.isEmpty()) {
-                    end = Long.parseLong(endPart);
-                }
-                // For low-latency, if client asks for open-ended bytes=0- , limit to 1MB
-                if (end < 0 && start == 0) {
-                    end = 1048575;
-                }
-                builder.range("bytes=" + start + "-" + (end >= 0 ? end : ""));
-            }
-        } else if (rangeHeader == null) {
-            // No range - default to first 1MB for instant start
-            start = 0;
-            end = 1048575;
-            builder.range("bytes=0-1048575");
+        // Pass a concrete single-range spec to S3. Suffix ranges go through
+        // verbatim (S3 resolves them); open-ended bytes=0- is capped to the
+        // default first chunk for instant start, matching resolveRange().
+        String s3Range;
+        if (parsed == null) {
+            s3Range = "bytes=0-" + (DEFAULT_CHUNK_BYTES - 1);
+        } else if (parsed.suffix()) {
+            s3Range = "bytes=-" + parsed.end();
+        } else if (parsed.end() >= 0) {
+            s3Range = "bytes=" + parsed.start() + "-" + parsed.end();
+        } else if (parsed.start() == 0) {
+            s3Range = "bytes=0-" + (DEFAULT_CHUNK_BYTES - 1);
+        } else {
+            s3Range = "bytes=" + parsed.start() + "-";
         }
 
-        ResponseInputStream<GetObjectResponse> response = s3Client.getObject(builder.build());
+        final ResponseInputStream<GetObjectResponse> response;
+        try {
+            response = s3Client.getObject(GetObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .range(s3Range)
+                    .build());
+        } catch (S3Exception e) {
+            throw mapStorageException(e, key);
+        }
 
-        // Content-Range header from R2 looks like "bytes 0-99/31976252"
+        // Content-Range from R2 looks like "bytes 0-99/31976252" and is
+        // authoritative for the true start/end/objectSize (covers S3 clamping).
+        long start = 0;
+        long end = -1;
         long objectSize = response.response().contentLength();
         String contentRange = response.response().contentRange();
         if (contentRange != null && contentRange.startsWith("bytes ")) {
             String body = contentRange.substring("bytes ".length());
             int slash = body.indexOf('/');
             String rangePart = slash >= 0 ? body.substring(0, slash) : body;
-            objectSize = Long.parseLong(body.substring(slash + 1));
-            int dash = rangePart.indexOf('-');
-            if (dash >= 0) {
-                start = Long.parseLong(rangePart.substring(0, dash));
-                end = Long.parseLong(rangePart.substring(dash + 1));
+            try {
+                objectSize = Long.parseLong(body.substring(slash + 1));
+                int dash = rangePart.indexOf('-');
+                if (dash >= 0) {
+                    start = Long.parseLong(rangePart.substring(0, dash));
+                    end = Long.parseLong(rangePart.substring(dash + 1));
+                }
+            } catch (NumberFormatException | IndexOutOfBoundsException e) {
+                log.warn("Unparseable R2 Content-Range '{}' for key {}, falling back to contentLength",
+                        contentRange, key);
             }
         }
         if (end < 0) {
             end = objectSize - 1;
         }
 
-        return new R2ObjectStream(response, objectSize, start, end,
-                response.response().contentType() != null ? response.response().contentType() : "application/octet-stream");
+        String contentType = response.response().contentType() != null
+                ? response.response().contentType() : "application/octet-stream";
+        return new R2ObjectStream(response, objectSize, start, end, contentType,
+                response.response().eTag());
     }
 
-    public record R2ObjectInfo(long size, String contentType) {}
+    public record R2ObjectInfo(long size, String contentType, String eTag) {
+        public R2ObjectInfo(long size, String contentType) {
+            this(size, contentType, null);
+        }
+    }
 
     public R2ObjectInfo headObject(String key) {
         if (s3Client == null) {
             throw new IllegalStateException("R2StorageService not initialized - check R2 configuration");
         }
-        HeadObjectResponse response = s3Client.headObject(HeadObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .build());
-        return new R2ObjectInfo(response.contentLength(),
-                response.contentType() != null ? response.contentType() : "application/octet-stream");
+        try {
+            HeadObjectResponse response = s3Client.headObject(HeadObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build());
+            return new R2ObjectInfo(response.contentLength(),
+                    response.contentType() != null ? response.contentType() : "application/octet-stream",
+                    response.eTag());
+        } catch (S3Exception e) {
+            throw mapStorageException(e, key);
+        }
     }
 
     /**

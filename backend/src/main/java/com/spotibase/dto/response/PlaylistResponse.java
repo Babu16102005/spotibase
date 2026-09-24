@@ -26,6 +26,7 @@ public class PlaylistResponse implements Serializable {
     private long totalDurationMs;
     private String type;
     private boolean archived;
+    // Dedicated editorial flag (Playlist.featured column), NOT an isPublic proxy.
     private boolean featured;
     private long likeCount;
     private boolean liked;

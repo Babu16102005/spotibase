@@ -14,8 +14,10 @@ import com.spotibase.repository.LikeRepository;
 import com.spotibase.repository.SongRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -25,7 +27,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -40,11 +44,34 @@ public class AlbumService {
     private final LikeRepository likeRepository;
     private final StorageService storageService;
 
-    @Cacheable(value = "albums", key = "#id + ':' + #userId")
+    // Self-reference for @Cacheable: same-bean calls bypass the cache proxy.
+    @Autowired
+    @Lazy
+    private AlbumService self;
+
+    /**
+     * Per-request entry point: cached user-agnostic base + batched liked overlay.
+     * Never caches per-user data (previously keyed by userId, which exploded
+     * cardinality and risked leaking liked flags across users on copy mistakes).
+     */
     public AlbumResponse getAlbumById(String id, String userId) {
+        AlbumService cached = self != null ? self : this;
+        AlbumResponse copy = copyAlbumResponse(cached.getAlbumBaseById(id));
+        if (userId != null) {
+            overlayLiked(copy, userId);
+        }
+        return copy;
+    }
+
+    /**
+     * Cached album base (no per-user data): liked=false throughout. Evicted with
+     * the rest of {@code albums} on every album mutation.
+     */
+    @Cacheable(value = "albums", key = "'id:' + #id")
+    public AlbumResponse getAlbumBaseById(String id) {
         Album album = albumRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Album", id));
-        return toAlbumResponse(album, userId);
+        return toAlbumResponse(album, null);
     }
 
     @Transactional
@@ -138,22 +165,127 @@ public class AlbumService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "albums", key = "'featured:' + #userId + ':' + #limit")
     public List<AlbumResponse> getFeaturedAlbums(String userId, int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
+        int safeLimit = Math.max(1, Math.min(limit <= 0 ? 20 : limit, 50));
+        AlbumService cached = self != null ? self : this;
+        return cached.getFeaturedAlbumsBase(safeLimit).stream()
+                .map(this::copyAlbumResponse)
+                .peek(copy -> {
+                    if (userId != null) overlayLiked(copy, userId);
+                })
+                .collect(Collectors.toList());
+    }
+
+    /** Cached featured base (no per-user data); liked flags overlaid per request. */
+    @Transactional(readOnly = true)
+    @Cacheable(value = "albums", key = "'featured:' + #limit")
+    public List<AlbumResponse> getFeaturedAlbumsBase(int limit) {
+        Pageable pageable = PageRequest.of(0, Math.max(1, Math.min(limit, 50)));
         return albumRepository.findFeaturedAlbums(pageable).stream()
-                .map(album -> toAlbumResponse(album, userId))
+                .map(album -> toAlbumResponse(album, null))
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(value = "albums", key = "'newReleases:' + #userId + ':' + #limit")
     public List<AlbumResponse> getNewReleases(String userId, int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
+        int safeLimit = Math.max(1, Math.min(limit <= 0 ? 20 : limit, 50));
+        AlbumService cached = self != null ? self : this;
+        return cached.getNewReleasesBase(safeLimit).stream()
+                .map(this::copyAlbumResponse)
+                .peek(copy -> {
+                    if (userId != null) overlayLiked(copy, userId);
+                })
+                .collect(Collectors.toList());
+    }
+
+    /** Cached new-releases base (no per-user data); liked flags overlaid per request. */
+    @Transactional(readOnly = true)
+    @Cacheable(value = "albums", key = "'newReleases:' + #limit")
+    public List<AlbumResponse> getNewReleasesBase(int limit) {
+        Pageable pageable = PageRequest.of(0, Math.max(1, Math.min(limit, 50)));
         LocalDate since = LocalDate.now().minusMonths(1);
         return albumRepository.findNewReleases(since, pageable).stream()
-                .map(album -> toAlbumResponse(album, userId))
+                .map(album -> toAlbumResponse(album, null))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Overlays per-user liked flags on a defensive copy: one album EXISTS query
+     * plus one batched song IN query (no N+1). Never called on a cached instance.
+     */
+    private void overlayLiked(AlbumResponse copy, String userId) {
+        copy.setLiked(likeRepository.existsByUserIdAndAlbumId(userId, copy.getId()));
+        if (copy.getSongs() != null && !copy.getSongs().isEmpty()) {
+            List<String> songIds = copy.getSongs().stream()
+                    .map(SongResponse::getId)
+                    .collect(Collectors.toList());
+            Set<String> likedSongIds = new HashSet<>(likeRepository.findLikedSongIds(userId, songIds));
+            copy.getSongs().forEach(s -> s.setLiked(likedSongIds.contains(s.getId())));
+        }
+    }
+
+    /**
+     * Defensive copy of a cached AlbumResponse (including nested SongResponses)
+     * so liked overlays cannot mutate the cached base.
+     */
+    private AlbumResponse copyAlbumResponse(AlbumResponse src) {
+        if (src == null) {
+            return null;
+        }
+        List<SongResponse> songsCopy = null;
+        if (src.getSongs() != null) {
+            songsCopy = src.getSongs().stream()
+                    .map(s -> SongResponse.builder()
+                            .id(s.getId())
+                            .title(s.getTitle())
+                            .artistId(s.getArtistId())
+                            .artistName(s.getArtistName())
+                            .albumId(s.getAlbumId())
+                            .albumName(s.getAlbumName())
+                            .genreId(s.getGenreId())
+                            .genreName(s.getGenreName())
+                            .language(s.getLanguage())
+                            .composer(s.getComposer())
+                            .lyrics(s.getLyrics())
+                            .duration(s.getDuration())
+                            .durationMs(s.getDurationMs())
+                            .releaseDate(s.getReleaseDate())
+                            .trackNumber(s.getTrackNumber())
+                            .discNumber(s.getDiscNumber())
+                            .fileUrl(s.getFileUrl())
+                            .coverUrl(s.getCoverUrl())
+                            .fileFormat(s.getFileFormat())
+                            .fileSize(s.getFileSize())
+                            .bitrate(s.getBitrate())
+                            .sampleRate(s.getSampleRate())
+                            .explicit(s.isExplicit())
+                            .archived(s.isArchived())
+                            .featured(s.isFeatured())
+                            .playCount(s.getPlayCount())
+                            .liked(s.isLiked())
+                            .createdAt(s.getCreatedAt())
+                            .build())
+                    .collect(Collectors.toList());
+        }
+        return AlbumResponse.builder()
+                .id(src.getId())
+                .name(src.getName())
+                .description(src.getDescription())
+                .artistId(src.getArtistId())
+                .artistName(src.getArtistName())
+                .genreId(src.getGenreId())
+                .genreName(src.getGenreName())
+                .coverUrl(src.getCoverUrl())
+                .releaseDate(src.getReleaseDate())
+                .songCount(src.getSongCount())
+                .totalDurationMs(src.getTotalDurationMs())
+                .type(src.getType())
+                .archived(src.isArchived())
+                .featured(src.isFeatured())
+                .liked(src.isLiked())
+                .songs(songsCopy)
+                .createdAt(src.getCreatedAt())
+                .build();
     }
 
     public List<AlbumResponse> getAlbumsByArtist(String artistId) {
@@ -187,7 +319,20 @@ public class AlbumService {
             builder.liked(likeRepository.existsByUserIdAndAlbumId(userId, album.getId()));
         }
 
-        List<SongResponse> songResponses = songRepository.findByAlbumIdOrderByTrackNumber(album.getId())
+        List<com.spotibase.entity.Song> songs = songRepository.findByAlbumIdOrderByTrackNumber(album.getId());
+
+        // Batch liked check: one IN query instead of N per-song EXISTS queries.
+        final Set<String> likedSongIds;
+        if (userId != null && !songs.isEmpty()) {
+            List<String> songIds = songs.stream()
+                    .map(com.spotibase.entity.Song::getId)
+                    .collect(Collectors.toList());
+            likedSongIds = new HashSet<>(likeRepository.findLikedSongIds(userId, songIds));
+        } else {
+            likedSongIds = Set.of();
+        }
+
+        List<SongResponse> songResponses = songs
                 .stream()
                 .map(song -> {
                     SongResponse.SongResponseBuilder sb = SongResponse.builder()
@@ -224,7 +369,7 @@ public class AlbumService {
                         sb.genreName(song.getGenre().getName());
                     }
                     if (userId != null) {
-                        sb.liked(likeRepository.existsByUserIdAndSongId(userId, song.getId()));
+                        sb.liked(likedSongIds.contains(song.getId()));
                     }
 
                     return sb.build();
@@ -246,10 +391,7 @@ public class AlbumService {
 
     @Transactional(readOnly = true)
     public List<AlbumResponse> getLikedAlbums(String userId) {
-        List<Object[]> rows = likeRepository.findLikedAlbumIds(userId);
-        List<String> albumIds = rows.stream()
-                .map(row -> (String) row[0])
-                .collect(Collectors.toList());
+        List<String> albumIds = likeRepository.findAllLikedAlbumIds(userId);
         List<AlbumResponse> albums = new ArrayList<>();
         for (String albumId : albumIds) {
             try {
