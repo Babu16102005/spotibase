@@ -1,4 +1,4 @@
-import axios, { AxiosHeaders, AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosHeaders, AxiosInstance, AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { Platform } from 'react-native';
 import {
   AuthResponse,
@@ -127,6 +127,63 @@ export const getTrackStreamUrl = (track: { id?: string; fileUrl?: string }): str
 
 const storage = getStorage('spotibase-auth');
 
+/**
+ * Per-request timeout budget.
+ *
+ * Two layers (kept compatible with the existing `axios.create({timeout: 30000})`
+ * contract asserted by client.test):
+ * - CREATE stays 30s: the documented ceiling for slow ops.
+ * - `apiClient.defaults.timeout` is set to READ_TIMEOUT_MS (10s) right after
+ *   creation: every read without an explicit override fails fast at 10s while
+ *   keeping its single-argument `get(url)` call shape.
+ * - Search passes an explicit 8s override (fail fast while typing).
+ * - Uploads (multipart bulk/avatar/cover, voice) keep 0 (no timeout) or their
+ *   existing explicit value — large FLAC files take a while.
+ * - Known-slow admin storage ops opt back up to the 30s ceiling explicitly.
+ */
+export const READ_TIMEOUT_MS = 10_000;
+export const SEARCH_TIMEOUT_MS = 8_000;
+
+/**
+ * YouTube catalog budget — aligns with the backend total 5s split
+ * (Bs 3s search + Bh 2s hydration, hydration cap 20, pooled WebClient).
+ * Search/trending/resolve must fail fast at 5s while typing/scrolling.
+ */
+export const YOUTUBE_SEARCH_TIMEOUT_MS = 5_000;
+
+/**
+ * Ordered home tier served by `GET /api/v1/home?tier=`.
+ * Backend contract: critical = recently-played + trending,
+ * secondary = browse/catalog, heavy = made-for-you + daily-mixes,
+ * `all` = legacy full feed.
+ */
+export type HomeTierParam = 'critical' | 'secondary' | 'heavy';
+
+/**
+ * Per-tier client timeout budgets, wired via `reqOpts` in
+ * `homeApi.getHomeTier`. Budgets sit above the server budgets
+ * (critical 2000ms / secondary 2500ms / heavy 4000ms) plus network
+ * headroom; blur-abort still fail-fasts via per-tier AbortController.
+ */
+export const HOME_TIER_TIMEOUT_MS: Record<HomeTierParam, number> = {
+  critical: 5_000,
+  secondary: 8_000,
+  heavy: 12_000,
+};
+
+/**
+ * Build an axios request config. Returns `undefined` when only a signal was
+ * *not* given: no-signal reads ride the 10s instance default so call sites
+ * keep their single-argument shape (`apiClient.get(url)`).
+ */
+const reqOpts = (
+  signal?: AbortSignal,
+  timeout?: number
+): { signal: AbortSignal; timeout?: number } | undefined => {
+  if (!signal) return undefined;
+  return { signal, ...(timeout != null ? { timeout } : {}) };
+};
+
 // Single-flight refresh: concurrent 401s share one /auth/refresh call instead
 // of racing (a loser could otherwise wipe tokens stored by the winner).
 let refreshPromise: Promise<AuthResponse> | null = null;
@@ -196,6 +253,11 @@ const apiClient: AxiosInstance = axios.create({
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
+
+// Runtime read budget: plain reads fail fast at 10s (see READ_TIMEOUT_MS).
+// The 30s create value above remains the ceiling — uploads and known-slow
+// ops override it explicitly per request.
+apiClient.defaults.timeout = READ_TIMEOUT_MS;
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -270,7 +332,13 @@ apiClient.interceptors.response.use(
             url: fullUrl,
             data: originalRequest.data,
             headers: retryHeaders,
-            timeout: originalRequest.timeout || 30000,
+            // Preserve the original per-request budget (e.g. YouTube 5s,
+            // search 8s, reads 10s, uploads 0 = no timeout). `??` (not `||`)
+            // keeps an explicit 0 (no timeout) from replaying as 30s.
+            timeout: originalRequest.timeout ?? 30000,
+            // Preserve cancellation: a debounced search aborted while the
+            // base-URL retry was in flight must not resurrect as a stale success.
+            signal: (originalRequest as { signal?: AbortSignal }).signal,
           });
 
           setBaseUrl(candidate);
@@ -283,7 +351,7 @@ apiClient.interceptors.response.use(
         }
       }
     }
-    if ((error.response?.status === 401 || (error.response?.status === 403 && storage.getString('refreshToken'))) && !originalRequest._retry) {
+    if ((error.response?.status === 401) && !originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = storage.getString('refreshToken');
       if (!refreshToken) {
@@ -340,6 +408,50 @@ export const authApi = {
   resetPassword: (token: string, newPassword: string) => apiClient.post('/auth/reset-password', { token, newPassword }),
 };
 
+/**
+ * In-flight GET dedup: identical concurrent reads share one promise instead
+ * of hitting the network N times (double onEndReached, focus+prefetch races,
+ * StrictMode double-effects). This is the transport-level counterpart to
+ * React Query's key-based dedup — screens without React Query (AllSongs
+ * manual paging) get the same protection, which is why AllSongs no longer
+ * needs its own `inFlightRef` guard.
+ *
+ * Requests carrying an AbortSignal keep their own lifecycle and are never
+ * coalesced: a debounced search aborted mid-flight must not resolve another
+ * caller, and vice versa.
+ */
+const inflightGets = new Map<string, Promise<any>>();
+
+/** Test/dev escape hatch: drop all coalesced entries. */
+export const clearRequestDedup = (): void => {
+  inflightGets.clear();
+};
+
+const callGet = <T>(url: string, config?: object): Promise<AxiosResponse<T>> =>
+  // Preserve the exact single-argument call shape when there is no config so
+  // existing call sites/tests observing `get(url)` keep matching.
+  (config === undefined ? apiClient.get<T>(url) : apiClient.get<T>(url, config));
+
+export const dedupedGet = <T = any>(
+  url: string,
+  config?: { signal?: AbortSignal; timeout?: number }
+): Promise<AxiosResponse<T>> => {
+  if (config?.signal) return callGet<T>(url, config);
+  const key = `GET ${url}`;
+  const existing = inflightGets.get(key);
+  if (existing) return existing as Promise<AxiosResponse<T>>;
+  // callGet runs synchronously so call-site expectations (`get` invoked on
+  // the same tick) hold; Promise.resolve adopts real axios promises and also
+  // tolerates mocked transports that return undefined (jest).
+  const p: Promise<AxiosResponse<T>> = Promise.resolve(callGet<T>(url, config));
+  const cleanup = () => {
+    if (inflightGets.get(key) === p) inflightGets.delete(key);
+  };
+  p.then(cleanup, cleanup);
+  inflightGets.set(key, p);
+  return p;
+};
+
 export const userApi = {
   getMe: () => apiClient.get<UserResponse>('/users/me'),
   updateProfile: (data: UpdateProfileRequest) => apiClient.put<UserResponse>('/users/me', data),
@@ -349,9 +461,11 @@ export const userApi = {
   // `multipart/form-data; boundary=...` (same as aiApi.voice).
   updateAvatar: (file: FormData) => apiClient.put<UserResponse>('/users/me/avatar', file, {
     headers: multipartHeaders(),
+    timeout: 0, // uploads never time out on the client
   }),
   updateCover: (file: FormData) => apiClient.put<UserResponse>('/users/me/cover', file, {
     headers: multipartHeaders(),
+    timeout: 0, // uploads never time out on the client
   }),
   changePassword: (oldPassword: string, newPassword: string) =>
     apiClient.put('/users/me/password', { oldPassword, newPassword }),
@@ -363,12 +477,25 @@ export const userApi = {
 };
 
 export const songApi = {
-  getAll: (page = 0, size = 20) =>
-    apiClient.get<PagedResponse<SongResponse>>(`/songs?page=${page}&size=${size}`),
-  getById: (id: string) => apiClient.get<SongResponse>(`/songs/${id}`),
-  getTrending: (limit = 20) => apiClient.get<SongResponse[]>(`/songs/trending?limit=${limit}`),
-  getNewReleases: (limit = 20) => apiClient.get<SongResponse[]>(`/songs/new-releases?limit=${limit}`),
-  getFeatured: (limit = 20) => apiClient.get<SongResponse[]>(`/songs/featured?limit=${limit}`),
+  getAll: (page = 0, size = 20, signal?: AbortSignal) =>
+    dedupedGet<PagedResponse<SongResponse>>(`/songs?page=${page}&size=${size}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getById: (id: string, signal?: AbortSignal) =>
+    dedupedGet<SongResponse>(`/songs/${id}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  /**
+   * Cursor catalogue page. Tried first by useSongs; falls back to getAll when
+   * the backend answers 404/405 (see query/useSongs).
+   */
+  getCursor: (cursorId: string | null, size = 20, signal?: AbortSignal) => {
+    const qs = [`size=${size}`];
+    if (cursorId != null) qs.push(`cursorId=${encodeURIComponent(cursorId)}`);
+    return dedupedGet(`/songs/cursor?${qs.join('&')}`, reqOpts(signal, READ_TIMEOUT_MS));
+  },
+  getTrending: (limit = 20, signal?: AbortSignal) =>
+    dedupedGet<SongResponse[]>(`/songs/trending?limit=${limit}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getNewReleases: (limit = 20, signal?: AbortSignal) =>
+    dedupedGet<SongResponse[]>(`/songs/new-releases?limit=${limit}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getFeatured: (limit = 20, signal?: AbortSignal) =>
+    dedupedGet<SongResponse[]>(`/songs/featured?limit=${limit}`, reqOpts(signal, READ_TIMEOUT_MS)),
   like: (id: string) => apiClient.post(`/songs/${id}/like`),
   unlike: (id: string) => apiClient.delete(`/songs/${id}/like`),
   delete: (id: string) => apiClient.delete(`/songs/${id}`),
@@ -418,28 +545,36 @@ export const songApi = {
 };
 
 export const albumApi = {
-  getAll: (page = 0, size = 20) =>
-    apiClient.get<PagedResponse<AlbumResponse>>(`/albums?page=${page}&size=${size}`),
-  getById: (id: string) => apiClient.get<AlbumResponse>(`/albums/${id}`),
-  getFeatured: (limit = 20) => apiClient.get<AlbumResponse[]>(`/albums/featured?limit=${limit}`),
-  getNewReleases: (limit = 20) => apiClient.get<AlbumResponse[]>(`/albums/new-releases?limit=${limit}`),
+  getAll: (page = 0, size = 20, signal?: AbortSignal) =>
+    dedupedGet<PagedResponse<AlbumResponse>>(`/albums?page=${page}&size=${size}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getById: (id: string, signal?: AbortSignal) =>
+    dedupedGet<AlbumResponse>(`/albums/${id}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getFeatured: (limit = 20, signal?: AbortSignal) =>
+    dedupedGet<AlbumResponse[]>(`/albums/featured?limit=${limit}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getNewReleases: (limit = 20, signal?: AbortSignal) =>
+    dedupedGet<AlbumResponse[]>(`/albums/new-releases?limit=${limit}`, reqOpts(signal, READ_TIMEOUT_MS)),
   like: (id: string) => apiClient.post(`/albums/${id}/like`),
   unlike: (id: string) => apiClient.delete(`/albums/${id}/like`),
 };
 
 export const artistApi = {
-  getAll: (page = 0, size = 20) =>
-    apiClient.get<PagedResponse<ArtistResponse>>(`/artists?page=${page}&size=${size}`),
-  getById: (id: string) => apiClient.get<ArtistResponse>(`/artists/${id}`),
-  getTop: (limit = 20) => apiClient.get<ArtistResponse[]>(`/artists/top?limit=${limit}`),
-  getFeatured: (limit = 20) => apiClient.get<ArtistResponse[]>(`/artists/featured?limit=${limit}`),
+  getAll: (page = 0, size = 20, signal?: AbortSignal) =>
+    dedupedGet<PagedResponse<ArtistResponse>>(`/artists?page=${page}&size=${size}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getById: (id: string, signal?: AbortSignal) =>
+    dedupedGet<ArtistResponse>(`/artists/${id}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getTop: (limit = 20, signal?: AbortSignal) =>
+    dedupedGet<ArtistResponse[]>(`/artists/top?limit=${limit}`, reqOpts(signal, READ_TIMEOUT_MS)),
+  getFeatured: (limit = 20, signal?: AbortSignal) =>
+    dedupedGet<ArtistResponse[]>(`/artists/featured?limit=${limit}`, reqOpts(signal, READ_TIMEOUT_MS)),
   follow: (id: string) => apiClient.post(`/artists/${id}/follow`),
   unfollow: (id: string) => apiClient.delete(`/artists/${id}/follow`),
 };
 
 export const playlistApi = {
-  getAll: () => apiClient.get<PlaylistResponse[]>('/playlists'),
-  getById: (id: string) => apiClient.get<PlaylistResponse>(`/playlists/${id}`),
+  getAll: (signal?: AbortSignal) =>
+    dedupedGet<PlaylistResponse[]>('/playlists', reqOpts(signal, READ_TIMEOUT_MS)),
+  getById: (id: string, signal?: AbortSignal) =>
+    dedupedGet<PlaylistResponse>(`/playlists/${id}`, reqOpts(signal, READ_TIMEOUT_MS)),
   create: (data: CreatePlaylistRequest) => apiClient.post<PlaylistResponse>('/playlists', data),
   update: (id: string, data: Partial<CreatePlaylistRequest>) =>
     apiClient.put<PlaylistResponse>(`/playlists/${id}`, data),
@@ -451,7 +586,8 @@ export const playlistApi = {
     apiClient.put(`/playlists/${id}/songs/reorder`, reorderList),
   like: (id: string) => apiClient.post(`/playlists/${id}/like`),
   unlike: (id: string) => apiClient.delete(`/playlists/${id}/like`),
-  getFeatured: (limit = 20) => apiClient.get<PlaylistResponse[]>(`/playlists/featured?limit=${limit}`),
+  getFeatured: (limit = 20, signal?: AbortSignal) =>
+    dedupedGet<PlaylistResponse[]>(`/playlists/featured?limit=${limit}`, reqOpts(signal, READ_TIMEOUT_MS)),
   togglePublic: (id: string) => apiClient.put(`/playlists/${id}/public`),
   toggleCollaborative: (id: string) => apiClient.put(`/playlists/${id}/collaborative`),
 };
@@ -460,17 +596,46 @@ export const searchApi = {
   search: (query: string, types = 'song,album,artist,playlist', page = 0, signal?: AbortSignal) =>
     apiClient.get<SearchResponse>(
       `/search?query=${encodeURIComponent(query)}&types=${types}&page=${page}`,
-      signal ? { signal } : undefined
+      // 8s fail-fast budget; AbortSignal forwarded so debounced keystrokes
+      // cancel superseded searches. Never deduped: each keystroke owns its
+      // lifecycle (see query/useSearch).
+      { ...(signal ? { signal } : {}), timeout: SEARCH_TIMEOUT_MS }
     ),
-  suggestions: (query: string, limit = 10) =>
+  suggestions: (query: string, limit = 10, signal?: AbortSignal) =>
     apiClient.get<string[]>(
-      `/search/suggestions?query=${encodeURIComponent(query)}&limit=${limit}`
+      `/search/suggestions?query=${encodeURIComponent(query)}&limit=${limit}`,
+      { ...(signal ? { signal } : {}), timeout: SEARCH_TIMEOUT_MS }
     ),
-  trending: () => apiClient.get<string[]>('/search/trending'),
+  trending: (signal?: AbortSignal) =>
+    dedupedGet<string[]>('/search/trending', reqOpts(signal, READ_TIMEOUT_MS)),
 };
 
 export const homeApi = {
-  getHome: () => apiClient.get<HomeResponse>('/home'),
+  getHome: (signal?: AbortSignal) =>
+    dedupedGet<HomeResponse>('/home', reqOpts(signal, READ_TIMEOUT_MS)),
+  /**
+   * Staged tier fetch: `GET /home?tier=<tier>&fields=card`.
+   *
+   * - `critical`  → recently-played + trending (paints first, 5s budget:
+   *   server 2000ms + network headroom).
+   * - `secondary` → browse/catalog sections (8s budget: server 2500ms +
+   *   network headroom).
+   * - `heavy`     → made-for-you + daily-mixes (12s budget: server 4000ms +
+   *   network headroom).
+   *
+   * `fields=card` projects song items to the slim card shape. Each call
+   * carries its own AbortSignal (per-tier AbortController in useHomeTiers),
+   * so a superseded tier never resolves over a newer one.
+   */
+  getHomeTier: (
+    tier: HomeTierParam,
+    signal?: AbortSignal,
+    fields: string = 'card'
+  ) =>
+    dedupedGet<HomeResponse>(
+      `/home?tier=${encodeURIComponent(tier)}&fields=${encodeURIComponent(fields)}`,
+      reqOpts(signal, HOME_TIER_TIMEOUT_MS[tier])
+    ),
 };
 
 export const queueApi = {
@@ -485,14 +650,20 @@ export const queueApi = {
 };
 
 export const libraryApi = {
-  getLibrary: () => apiClient.get<LibraryResponse>('/library'),
-  getPlaylists: () => apiClient.get<PlaylistResponse[]>('/library/playlists'),
-  getAlbums: () => apiClient.get<AlbumResponse[]>('/library/albums'),
-  getArtists: () => apiClient.get<ArtistResponse[]>('/library/artists'),
-  getLikedSongs: () => apiClient.get<SongResponse[]>('/library/liked-songs'),
-  getRecent: () => apiClient.get<SongResponse[]>('/library/recent'),
-  getHistory: (page = 0) =>
-    apiClient.get<PagedResponse<SongResponse>>(`/library/history?page=${page}`),
+  getLibrary: (signal?: AbortSignal) =>
+    dedupedGet<LibraryResponse>('/library', reqOpts(signal, READ_TIMEOUT_MS)),
+  getPlaylists: (signal?: AbortSignal) =>
+    dedupedGet<PlaylistResponse[]>('/library/playlists', reqOpts(signal, READ_TIMEOUT_MS)),
+  getAlbums: (signal?: AbortSignal) =>
+    dedupedGet<AlbumResponse[]>('/library/albums', reqOpts(signal, READ_TIMEOUT_MS)),
+  getArtists: (signal?: AbortSignal) =>
+    dedupedGet<ArtistResponse[]>('/library/artists', reqOpts(signal, READ_TIMEOUT_MS)),
+  getLikedSongs: (signal?: AbortSignal) =>
+    dedupedGet<SongResponse[]>('/library/liked-songs', reqOpts(signal, READ_TIMEOUT_MS)),
+  getRecent: (signal?: AbortSignal) =>
+    dedupedGet<SongResponse[]>('/library/recent', reqOpts(signal, READ_TIMEOUT_MS)),
+  getHistory: (page = 0, signal?: AbortSignal) =>
+    dedupedGet<PagedResponse<SongResponse>>(`/library/history?page=${page}`, reqOpts(signal, READ_TIMEOUT_MS)),
 };
 
 export const settingsApi = {
@@ -524,8 +695,12 @@ export const adminApi = {
   featureSong: (songId: string) => apiClient.post('/admin/feature/song', { songId }),
   featurePlaylist: (playlistId: string) =>
     apiClient.post('/admin/feature/playlist', { playlistId }),
-  syncStorage: () => apiClient.post<AdminDashboardResponse>('/admin/storage/sync'),
-  clearAllStorage: () => apiClient.post<AdminDashboardResponse>('/admin/storage/clear-all'),
+  syncStorage: () => apiClient.post<AdminDashboardResponse>('/admin/storage/sync', undefined, {
+    timeout: 30000, // server-side bucket walk can take a while
+  }),
+  clearAllStorage: () => apiClient.post<AdminDashboardResponse>('/admin/storage/clear-all', undefined, {
+    timeout: 30000, // server-side bucket walk can take a while
+  }),
   getUserGrowth: () => apiClient.get('/admin/analytics/user-growth'),
   getTopSongs: () => apiClient.get('/admin/analytics/top-songs'),
   getTopGenres: () => apiClient.get('/admin/analytics/top-genres'),

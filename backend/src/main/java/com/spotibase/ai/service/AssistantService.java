@@ -170,7 +170,7 @@ public class AssistantService {
      * Realtime partial preview: {@code {text, context}} to FastAPI
      * {@code POST /speech/partial} (800ms budget) then a read-only top-5
      * catalog lookup. NEVER dispatches, queues, likes, edits playlists, or
-     * pushes realtime events — the full {@link #handleVoice} (3s) path
+     * pushes realtime events — the full {@link #handleVoice} (9s) path
      * executes. Every failure returns a clarification preview (200 shape),
      * never throws.
      */

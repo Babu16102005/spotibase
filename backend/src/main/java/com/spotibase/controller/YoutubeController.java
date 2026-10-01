@@ -1,5 +1,6 @@
 package com.spotibase.controller;
 
+import com.spotibase.config.YoutubeConfig;
 import com.spotibase.dto.response.YoutubeResolveResponse;
 import com.spotibase.dto.response.YoutubeSearchResponse;
 import com.spotibase.dto.response.YoutubeTrendingResponse;
@@ -19,6 +20,14 @@ import org.springframework.web.bind.annotation.RestController;
  * YouTube proxy: trending / search / resolve over YouTube Data API v3 with a
  * mock fallback when no key is configured or quota is exhausted.
  *
+ * <p>India-first defaults: trending {@code regionCode} defaults to the
+ * configured {@code youtube.region-code} ({@code IN}); search additionally
+ * defaults {@code regionCode}, {@code relevanceLanguage} and {@code hl} to
+ * the configured {@code youtube.region-code} /
+ * {@code youtube.relevance-language} ({@code IN}/{@code ta}, with
+ * {@code hl} falling back to {@code relevanceLanguage}) so Tamil content
+ * ranks without callers passing locale params.
+ *
  * <p>All endpoints require authentication (default {@code anyRequest}
  * rule in {@code SecurityConfig}); the user principal is logged for audit.
  * Limits are clamped to {@code 1..50}; missing/blank {@code q} and
@@ -34,35 +43,43 @@ public class YoutubeController {
     private static final int DEFAULT_LIMIT = 15;
 
     private final YoutubeService youtubeService;
+    private final YoutubeConfig youtubeConfig;
 
     @GetMapping("/trending")
     public ResponseEntity<YoutubeTrendingResponse> trending(
-            @RequestParam(required = false, defaultValue = "US") String regionCode,
+            @RequestParam(required = false) String regionCode,
             @RequestParam(required = false) String maxResults,
             @RequestParam(required = false) String limit,
             @RequestParam(required = false) String pageToken,
             @CurrentUser CustomUserDetails user) {
-        String region = regionCode == null || regionCode.isBlank() ? "US" : regionCode.trim();
+        String region = regionCode == null || regionCode.isBlank() ? defaultRegion() : regionCode.trim();
         if (!region.matches("(?i)[A-Z]{2}")) {
             throw new BadRequestException("regionCode must be a 2-letter ISO region code");
         }
-        // Canonical: maxResults. Legacy mobile alias: limit. pageToken is
-        // accepted (no-op) so paginating clients don't 400.
+        // Canonical: maxResults. Legacy mobile alias: limit. pageToken is an
+        // opaque scroll cursor (live nextPageToken or mock offset); blank/null
+        // means the first page so old clients keep working.
         int limitVal = parseLimit(firstNonBlank(maxResults, limit), "maxResults");
-        log.info("YouTube trending: region={} limit={} user={}", region, limitVal, userId(user));
-        return ResponseEntity.ok(youtubeService.getTrending(region.toUpperCase(), limitVal));
+        String token = pageToken == null || pageToken.isBlank() ? null : pageToken.trim();
+        log.info("YouTube trending: region={} limit={} pageToken={} user={}",
+                region, limitVal, token != null ? "present" : "none", userId(user));
+        return ResponseEntity.ok(youtubeService.getTrending(region.toUpperCase(), limitVal, token));
     }
 
     @GetMapping("/search")
     public ResponseEntity<YoutubeSearchResponse> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String query,
+            @RequestParam(required = false) String regionCode,
+            @RequestParam(required = false) String relevanceLanguage,
+            @RequestParam(required = false) String hl,
             @RequestParam(required = false) String maxResults,
             @RequestParam(required = false) String limit,
             @RequestParam(required = false) String pageToken,
             @CurrentUser CustomUserDetails user) {
-        // Canonical: q. Legacy mobile alias: query. pageToken accepted
-        // (forward-compat pagination; currently no-op on mock/live lists).
+        // Canonical: q. Legacy mobile alias: query. pageToken is an opaque
+        // scroll cursor (live nextPageToken or mock offset); blank/null means
+        // the first page so old clients keep working.
         String effective = firstNonBlank(q, query);
         if (effective == null || effective.isBlank()) {
             throw new BadRequestException("Query parameter 'q' is required");
@@ -70,9 +87,31 @@ public class YoutubeController {
         if (effective.trim().length() > 200) {
             throw new BadRequestException("Query parameter 'q' must be at most 200 characters");
         }
+        String region = regionCode == null || regionCode.isBlank() ? defaultRegion() : regionCode.trim();
+        if (!region.matches("(?i)[A-Z]{2}")) {
+            throw new BadRequestException("regionCode must be a 2-letter ISO region code");
+        }
+        String lang = relevanceLanguage == null || relevanceLanguage.isBlank()
+                ? defaultLanguage() : relevanceLanguage.trim();
+        if (!lang.matches("(?i)[A-Z]{2}")) {
+            throw new BadRequestException("relevanceLanguage must be a 2-letter language code");
+        }
+        // hl defaults to the resolved relevanceLanguage (mirrors the service),
+        // so ?relevanceLanguage=fr without hl searches with hl=fr.
+        String interfaceLang = hl == null || hl.isBlank() ? lang : hl.trim();
+        if (!interfaceLang.matches("(?i)[A-Z]{2}")) {
+            throw new BadRequestException("hl must be a 2-letter language code");
+        }
         int limitVal = parseLimit(firstNonBlank(maxResults, limit), "maxResults");
-        log.info("YouTube search: q='{}' limit={} user={}", effective.trim(), limitVal, userId(user));
-        return ResponseEntity.ok(youtubeService.search(effective.trim(), limitVal));
+        String regionUpper = region.toUpperCase();
+        String langLower = lang.toLowerCase();
+        String hlLower = interfaceLang.toLowerCase();
+        String token = pageToken == null || pageToken.isBlank() ? null : pageToken.trim();
+        log.info("YouTube search: q='{}' region={} lang={} hl={} limit={} pageToken={} user={}",
+                effective.trim(), regionUpper, langLower, hlLower, limitVal,
+                token != null ? "present" : "none", userId(user));
+        return ResponseEntity.ok(
+                youtubeService.search(effective.trim(), regionUpper, langLower, hlLower, limitVal, token));
     }
 
     @GetMapping("/resolve")
@@ -120,13 +159,30 @@ public class YoutubeController {
     }
 
     private int clamp(int maxResults) {
-        if (maxResults <= 0) {
-            return DEFAULT_LIMIT;
+        if (maxResults < 1 || maxResults > MAX_LIMIT) {
+            throw new BadRequestException(
+                    "Query parameter 'maxResults' must be an integer between 1 and " + MAX_LIMIT);
         }
-        return Math.min(maxResults, MAX_LIMIT);
+        return maxResults;
     }
 
     private String userId(CustomUserDetails user) {
         return user != null ? user.getId() : "anonymous";
+    }
+
+    /**
+     * Config-bound defaults for missing/blank locale params. {@code YoutubeConfig}
+     * already defaults these via {@code @Value} ({@code IN}/{@code ta}); the
+     * literals below are a last-resort safety net for a blank misconfiguration
+     * so callers still get India/Tamil ranking instead of a 400.
+     */
+    private String defaultRegion() {
+        String configured = youtubeConfig.getRegionCode();
+        return configured == null || configured.isBlank() ? "IN" : configured.trim();
+    }
+
+    private String defaultLanguage() {
+        String configured = youtubeConfig.getRelevanceLanguage();
+        return configured == null || configured.isBlank() ? "ta" : configured.trim();
     }
 }

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Text, TouchableOpacity, Image, StyleSheet, Dimensions, Platform } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, Dimensions, Platform } from 'react-native';
 import { ArtistResponse } from '../types';
 import { useThemeStore } from '../store';
 import { formatCount, coverSource } from '../utils';
+import AppImage from './AppImage';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = Math.min((width - 64) / 2.5, 180);
@@ -38,8 +39,9 @@ const ArtistCard: React.FC<ArtistCardProps> = ({ artist, onPress }) => {
       activeOpacity={0.8}
       {...onHover}
     >
-      <Image
-        source={coverSource(artist.imageUrl)}
+      <AppImage
+        source={coverSource(artist.imageUrl, 200)}
+        recyclingKey={artist.id}
         style={[styles.image, { borderColor: theme.colors.border }]}
       />
       <Text style={[styles.name, { color: theme.colors.text }]} numberOfLines={1}>{artist.name}</Text>

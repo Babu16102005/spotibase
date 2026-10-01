@@ -41,8 +41,6 @@ export const MULTICOLOR_PALETTES = {
   aurora: ['#f7f7f7', '#e100ff', '#3A29FF', '#07080D'],    // Exact ReactBits Soft Aurora Palette
 };
 
-const PATTERN_TYPES = ['fluid', 'aurora', 'cosmic', 'geometric'] as const;
-
 const resolveHeaderColors = (textStr: string, customColors?: string[], currentPattern?: 'fluid' | 'aurora' | 'cosmic' | 'geometric'): string[] => {
   if (customColors && customColors.length >= 4) return customColors;
   if (currentPattern && PATTERN_PALETTES[currentPattern]) {
@@ -67,53 +65,31 @@ const GreetingHeaderComponent: React.FC<GreetingHeaderProps> = ({
 }) => {
   const { theme, greetingPattern: storeGreetingPattern } = useThemeStore();
 
-  // Stable resolver — maps store pattern to valid active pattern string
-  const resolvePattern = React.useCallback((): 'fluid' | 'aurora' | 'cosmic' | 'geometric' => {
-    if (pattern) return pattern;
-    if (storeGreetingPattern && storeGreetingPattern !== 'RANDOM') {
-      const lower = storeGreetingPattern.toLowerCase();
-      if (lower === 'aurora' || lower === 'radial') return 'aurora';
-      if (lower === 'cosmic') return 'cosmic';
-      if (lower === 'geometric') return 'geometric';
-      return 'fluid';
-    }
-    return PATTERN_TYPES[Math.floor(Math.random() * PATTERN_TYPES.length)];
+  // Stable resolver — maps store pattern to fluid (default) or aurora.
+  // Legacy values (RANDOM, COSMIC, GEOMETRIC, unknown) fall back to fluid.
+  const resolvePattern = React.useCallback((): 'fluid' | 'aurora' => {
+    if (pattern === 'fluid' || pattern === 'aurora') return pattern;
+    if (pattern) return 'fluid';
+    if (!storeGreetingPattern) return 'fluid';
+    const lower = storeGreetingPattern.toLowerCase();
+    if (lower === 'aurora' || lower === 'radial') return 'aurora';
+    return 'fluid';
   }, [pattern, storeGreetingPattern]);
 
   // State for pattern and animation speed combination
-  const [activePattern, setActivePattern] = React.useState<'fluid' | 'aurora' | 'cosmic' | 'geometric'>(
+  const [activePattern, setActivePattern] = React.useState<'fluid' | 'aurora'>(
     resolvePattern()
   );
   const [activeSpeed, setActiveSpeed] = React.useState<number>(
-    speed || (resolvePattern() === 'fluid' ? 0.35 : resolvePattern() === 'aurora' ? 0.6 : 1.0)
+    speed || (resolvePattern() === 'fluid' ? 0.35 : 0.6)
   );
 
   // React directly to store changes
   useEffect(() => {
-    if (pattern) {
-      setActivePattern(pattern);
-      setActiveSpeed(speed || (pattern === 'fluid' ? 0.35 : pattern === 'aurora' ? 0.6 : 1.0));
-      return;
-    }
-    if (storeGreetingPattern && storeGreetingPattern !== 'RANDOM') {
-      const lower = storeGreetingPattern.toLowerCase();
-      const nextPat: 'fluid' | 'aurora' | 'cosmic' | 'geometric' =
-        lower === 'aurora' || lower === 'radial'
-          ? 'aurora'
-          : lower === 'cosmic'
-          ? 'cosmic'
-          : lower === 'geometric'
-          ? 'geometric'
-          : 'fluid';
-      setActivePattern(nextPat);
-      setActiveSpeed(speed || (nextPat === 'fluid' ? 0.35 : nextPat === 'aurora' ? 0.6 : 1.0));
-    } else {
-      // RANDOM: pick a new random pattern
-      const randPat = PATTERN_TYPES[Math.floor(Math.random() * PATTERN_TYPES.length)];
-      setActivePattern(randPat);
-      setActiveSpeed(speed || (randPat === 'fluid' ? 0.35 : randPat === 'aurora' ? 0.6 : 1.0));
-    }
-  }, [storeGreetingPattern, pattern, speed]);
+    const nextPat = resolvePattern();
+    setActivePattern(nextPat);
+    setActiveSpeed(speed || (nextPat === 'fluid' ? 0.35 : 0.6));
+  }, [storeGreetingPattern, pattern, speed, resolvePattern]);
 
   const text = greetingText || getGreeting();
   const headerColors = React.useMemo(

@@ -35,11 +35,67 @@ Allowed actions:
 PLAY, PAUSE, RESUME, NEXT, PREVIOUS,
 PLAY_SONG, SEARCH_SONG, SEARCH_ARTIST, SEARCH_ALBUM,
 PLAY_BY_MOOD, PLAY_BY_GENRE, PLAY_BY_LANGUAGE, PLAY_SIMILAR,
+PLAY_RANDOM, PLAY_LIKED,
 ADD_TO_QUEUE, REMOVE_FROM_QUEUE, CLEAR_QUEUE,
 LIKE_CURRENT, UNLIKE_CURRENT,
 ADD_TO_PLAYLIST, REMOVE_FROM_PLAYLIST, CREATE_PLAYLIST,
 SHUFFLE_ON, SHUFFLE_OFF, REPEAT_ON, REPEAT_OFF, SET_VOLUME,
 GET_CURRENT_SONG, GET_QUEUE, GET_RECOMMENDATIONS
+
+Random-song requests (no title, artist, mood, language, or genre given):
+use PLAY_RANDOM with empty parameters {}. Do NOT emit SEARCH_SONG with a
+junk query like "Any". Always include "searchQuery": "" for PLAY_RANDOM.
+- "play any song" -> {"actions": [{"action": "PLAY_RANDOM", "parameters": {}}], "response": "Playing a random song.", "searchQuery": ""}
+- "play anything" / "play something good" / "play a random song" / "surprise me" / "shuffle play" -> PLAY_RANDOM, parameters {}.
+- "play Something by Anirudh" is NOT random (explicit artist) -> SEARCH_SONG with song+artist.
+- "play something similar to this" is NOT random -> PLAY_SIMILAR.
+- Bare "play" alone stays RESUME; do not map it to PLAY_RANDOM.
+
+Liked-songs library requests: use PLAY_LIKED with empty parameters {}.
+Do NOT emit SEARCH_SONG with a junk query like "My Liked".
+Always include "searchQuery": "" for PLAY_LIKED.
+- "play my liked songs" -> {"actions": [{"action": "PLAY_LIKED", "parameters": {}}], "response": "Playing your liked songs.", "searchQuery": ""}
+- "play the like playlist any song" / "play songs I liked" / "play my favourites" / "play my favorites" / "play my liked playlist" -> PLAY_LIKED, parameters {}.
+- When a request mentions BOTH liked and random wording ("play the like playlist any song"), prefer PLAY_LIKED.
+- "like this" / "like" alone is LIKE_CURRENT, not PLAY_LIKED.
+
+Play-intent rule (never clarify vague play requests):
+For ANY request containing play / listen / enjoy plus any other word, ALWAYS
+return the closest PLAY-family action with extracted words — NEVER return
+CLARIFICATION_NEEDED or an empty actions array. Put leftover words into
+query/parameters (strip only politeness: please/some/me/a/the).
+- "play me a song" / "play something nice" / "play any song" -> PLAY_RANDOM, parameters {}.
+- "play some Tamil songs" -> PLAY_BY_LANGUAGE {"language": "TAMIL"}.
+- Vague/gibberish play text still plays (backend best-effort matches closest);
+  never ask the user to rephrase a play request.
+Guards: bare "play" alone stays RESUME; "like this" / "like" alone stays LIKE_CURRENT.
+
+Lyric-identification rule (identify ANY lyric line, never clarify):
+For ANY request that carries a song lyric line — long descriptive / quoted /
+narrative framing like "which goes", "that goes", "goes like",
+"song that says", "song which says", "that says", "lyrics/lyric/lines",
+quoted text ("..."), or a bare lyric line with/without leading play —
+ALWAYS return SEARCH_SONG with the FULL lyric line preserved in
+query/parameters for web-search identification
+(backend chain: local lyrics -> websearch -> library match).
+Strip ONLY framing (which goes, song that says, lyrics, play, please);
+never strip the lyric to junk single words. Never clarify lyric requests.
+- "play that song which goes 'hello from the other side'" -> SEARCH_SONG {"query": "hello from the other side"}.
+- "the song that says neethane en ponvasantham" -> SEARCH_SONG {"query": "neethane en ponvasantham"}.
+- bare "hello from the other side" (no verb, lyric line) -> SEARCH_SONG with the full line.
+- Short exact titles ("play shape of you") stay unchanged SEARCH_SONG.
+
+Mood-inference rule (infer mood from feeling words, never clarify):
+For ANY request containing a feeling/mood word, ALWAYS infer the closest
+canonical mood and return PLAY_BY_MOOD (with language/genre facets when
+present) — NEVER return CLARIFICATION_NEEDED or an empty actions array.
+- "feel good", "feel-good", "feelgood", "makes me happy", "make me happy",
+  "uplifting", "uplift", "upbeat", "cheerful", "joyful" -> PLAY_BY_MOOD {"mood": "HAPPY"}.
+- Generalize synonyms: HAPPY (happy/joy/cheerful/feel good/uplifting/upbeat),
+  SAD (sad/lonely/heartbreak/depressed/blue), ENERGETIC (energetic/hype/pumped/workout/gym/high energy),
+  CALM (calm/relax/relaxed/relaxing/peaceful/soothing/mellow), ROMANTIC (romantic/love/romance),
+  PARTY (party/dance/celebration/club), FOCUSED (focused/focus/study/concentrate).
+- "play feel good songs" -> {"actions": [{"action": "PLAY_BY_MOOD", "parameters": {"mood": "HAPPY"}}], "response": "Playing feel good songs."}.
 
 Mood vocabulary (normalize to these):
 CALM, HAPPY, SAD, ENERGETIC, ROMANTIC, FOCUSED, MOTIVATED, MELANCHOLIC, CHILL, PARTY, NOSTALGIC, DREAMY

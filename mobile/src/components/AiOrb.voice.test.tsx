@@ -12,7 +12,9 @@ import {
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
 import { AiOrb } from './AiOrb';
-import { aiApi } from '../api/client';
+import { aiApi, songApi, searchApi } from '../api/client';
+import { usePlayerStore } from '../store';
+import { useYouTubePlayerStore } from '../store/youtubePlayerStore';
 
 // ── Mocks ────────────────────────────────────────────────────────────────
 // jest.setup.js already stubs expo-audio / expo-speech-recognition with
@@ -363,6 +365,206 @@ describe('AiOrb mic voice input', () => {
       for (const pattern of FORBIDDEN_GENERIC) {
         expect(pattern.test('No audio')).toBe(false);
       }
+    });
+  });
+
+  describe('PLAY_RANDOM / PLAY_LIKED (backend live-served actions)', () => {
+    const mockSongGetById = (songApi.getById as jest.Mock);
+    const mockSearch = (searchApi.search as jest.Mock);
+    let playMultipleSpy: jest.Mock;
+    let realPlayMultiple: any;
+
+    const likedSong = (id: string, title: string) => ({
+      id,
+      title,
+      artistName: 'Anirudh',
+      albumName: 'Hits',
+      duration: 200,
+      audioUrl: `https://cdn/${id}.mp3`,
+      coverUrl: `https://cdn/${id}.jpg`,
+    });
+
+    // Drive handleText via long-press -> keyboard mode -> Send.
+    const sendTextCommand = async (screen: any, text: string) => {
+      await act(async () => {
+        fireEvent(screen.getByTestId('ai-orb-button'), 'longPress');
+      });
+      fireEvent.changeText(screen.getByPlaceholderText(/type a command/i), text);
+      await act(async () => {
+        fireEvent.press(screen.getByText('Send'));
+      });
+    };
+
+    beforeEach(() => {
+      realPlayMultiple = usePlayerStore.getState().playMultiple;
+      playMultipleSpy = jest.fn(async () => {});
+      usePlayerStore.setState({ playMultiple: playMultipleSpy as any });
+    });
+
+    afterEach(() => {
+      act(() => {
+        usePlayerStore.setState({ playMultiple: realPlayMultiple });
+      });
+    });
+
+    it('PLAY_RANDOM resolves the served id and plays it via playMultiple', async () => {
+      mockSongGetById.mockImplementation(async (id: string) => ({
+        data: likedSong(id, 'Midnight Dreams'),
+      }));
+      mockAiText.mockResolvedValueOnce({
+        data: {
+          actions: [{ action: 'PLAY_RANDOM', parameters: {} }],
+          results: [{ songs: ['r1'], displayText: 'Playing Midnight Dreams' }],
+          response: 'Playing Midnight Dreams',
+        },
+      });
+
+      const screen = render(<AiOrb />);
+      await sendTextCommand(screen, 'play something random');
+
+      await waitFor(() => expect(mockSongGetById).toHaveBeenCalledWith('r1'));
+      await waitFor(() => expect(playMultipleSpy).toHaveBeenCalledTimes(1));
+      expect(playMultipleSpy).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 'r1', title: 'Midnight Dreams' })],
+        0
+      );
+      // No searchApi fallback: the backend id is the source of truth.
+      expect(mockSearch).not.toHaveBeenCalled();
+      // User visibly sees the track play (previously silently ignored).
+      await waitFor(() => expect(screen.getByText('Playing Midnight Dreams')).toBeTruthy());
+    });
+
+    it('PLAY_LIKED plays the full served liked queue in most-recent-first order', async () => {
+      const ids = ['l1', 'l2', 'l3', 'l4', 'l5', 'l6', 'l7'];
+      mockSongGetById.mockImplementation(async (id: string) => ({
+        data: likedSong(id, `Liked ${id}`),
+      }));
+      mockAiText.mockResolvedValueOnce({
+        data: {
+          actions: [{ action: 'PLAY_LIKED', parameters: {} }],
+          results: [{ songs: ids, displayText: `Playing your liked songs (${ids.length} songs)` }],
+          response: `Playing your liked songs (${ids.length} songs)`,
+        },
+      });
+
+      const screen = render(<AiOrb />);
+      await sendTextCommand(screen, 'play my liked songs');
+
+      await waitFor(() => expect(playMultipleSpy).toHaveBeenCalledTimes(1));
+      const [played, startIndex] = playMultipleSpy.mock.calls[0];
+      // All 7 served ids resolve (no 5-cap truncation) in served order.
+      expect(played.map((s: any) => s.id)).toEqual(ids);
+      expect(startIndex).toBe(0);
+      expect(mockSongGetById).toHaveBeenCalledTimes(ids.length);
+      // No searchApi fallback: backend ids are the source of truth.
+      expect(mockSearch).not.toHaveBeenCalled();
+      // Success refines to the liked-songs line with the first title.
+      await waitFor(() => expect(screen.getByText('Playing liked songs - Liked l1')).toBeTruthy());
+    });
+  });
+
+  describe('PLAY_YOUTUBE (QUEUED_YOUTUBE fallback when not in local catalog)', () => {
+    const mockSearch = (searchApi.search as jest.Mock);
+    let playVideoSpy: jest.Mock;
+    let realPlayVideo: any;
+
+    const sendTextCommand = async (screen: any, text: string) => {
+      await act(async () => {
+        fireEvent(screen.getByTestId('ai-orb-button'), 'longPress');
+      });
+      fireEvent.changeText(screen.getByPlaceholderText(/type a command/i), text);
+      await act(async () => {
+        fireEvent.press(screen.getByText('Send'));
+      });
+    };
+
+    beforeEach(() => {
+      realPlayVideo = useYouTubePlayerStore.getState().playVideo;
+      playVideoSpy = jest.fn();
+      useYouTubePlayerStore.setState({ playVideo: playVideoSpy as any });
+    });
+
+    afterEach(() => {
+      act(() => {
+        useYouTubePlayerStore.setState({ playVideo: realPlayVideo });
+      });
+    });
+
+    it('plays the lyric-identified video via the global single player + response bubble', async () => {
+      mockAiText.mockResolvedValueOnce({
+        data: {
+          actions: [
+            {
+              action: 'PLAY_YOUTUBE',
+              parameters: {
+                videoId: 'YQHsXMglC9A',
+                title: 'Hello',
+                channelTitle: 'Adele',
+              },
+            },
+          ],
+          results: [{ displayText: 'Found on YouTube: Hello', status: 'QUEUED_YOUTUBE' }],
+          response: 'Found on YouTube: Hello',
+        },
+      });
+
+      const screen = render(<AiOrb />);
+      await sendTextCommand(screen, 'hello by adele lyrics');
+
+      await waitFor(() => expect(playVideoSpy).toHaveBeenCalledTimes(1));
+      expect(playVideoSpy).toHaveBeenCalledWith({
+        videoId: 'YQHsXMglC9A',
+        title: 'Hello',
+        channelTitle: 'Adele',
+        thumbnailUrl: 'https://i.ytimg.com/vi/YQHsXMglC9A/hqdefault.jpg',
+      });
+      await waitFor(() => expect(screen.getByText('Playing Hello on YouTube')).toBeTruthy());
+      // Audio catalog is untouched: no local search fallback for YouTube ids.
+      expect(mockSearch).not.toHaveBeenCalled();
+    });
+
+    it('reads video fields from result when parameters are empty', async () => {
+      mockAiText.mockResolvedValueOnce({
+        data: {
+          actions: [{ action: 'PLAY_YOUTUBE', parameters: {} }],
+          results: [
+            {
+              videoId: 'YQHsXMglC9A',
+              title: 'Hello',
+              channelTitle: 'Adele',
+              displayText: 'Found on YouTube: Hello',
+              status: 'QUEUED_YOUTUBE',
+            },
+          ],
+          response: 'Found on YouTube: Hello',
+        },
+      });
+
+      const screen = render(<AiOrb />);
+      await sendTextCommand(screen, 'hello adele');
+
+      await waitFor(() => expect(playVideoSpy).toHaveBeenCalledTimes(1));
+      expect(playVideoSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 'YQHsXMglC9A', title: 'Hello' })
+      );
+      await waitFor(() => expect(screen.getByText('Playing Hello on YouTube')).toBeTruthy());
+    });
+
+    it('shows displayText only and never plays on invalid/missing videoId', async () => {
+      mockAiText.mockResolvedValueOnce({
+        data: {
+          actions: [{ action: 'PLAY_YOUTUBE', parameters: { videoId: 'bad', title: 'Hello' } }],
+          results: [{ displayText: 'Found on YouTube: Hello', status: 'QUEUED_YOUTUBE' }],
+          response: 'Found on YouTube: Hello',
+        },
+      });
+
+      const screen = render(<AiOrb />);
+      await sendTextCommand(screen, 'hello adele');
+
+      await waitFor(() => expect(screen.getByText('Found on YouTube: Hello')).toBeTruthy());
+      expect(playVideoSpy).not.toHaveBeenCalled();
+      expect(screen.queryByText(/on YouTube.*Playing|Playing Hello on YouTube/)).toBeNull();
     });
   });
 });

@@ -22,14 +22,15 @@ public class AiConfig {
     /**
      * FastAPI (Qwen/STT) WebClient budgets:
      *  - 800ms connect timeout (partial / fast-fail budget for voice)
-     *  - 3s response timeout (full understand budget; callers fall back to
-     *    local simple-command / mock handling on timeout)
+     *  - 10s response timeout (backs the 9s voice-full budget: CF 4s + 1s
+     *    retry + mock fallback + understand cache; text path fails fast at
+     *    its own 3s per-request timeout)
      */
     @Bean
     public WebClient aiWebClient() {
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 800)
-                .responseTimeout(Duration.ofSeconds(3));
+                .responseTimeout(Duration.ofSeconds(10));
         return WebClient.builder()
                 .baseUrl(aiServiceUrl)
                 .clientConnector(new ReactorClientHttpConnector(httpClient))

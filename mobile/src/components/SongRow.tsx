@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   StyleSheet,
   Animated,
   Easing,
@@ -12,7 +11,8 @@ import {
 } from 'react-native';
 import { SongResponse } from '../types';
 import { useThemeStore, usePlayerStore, useSelectionStore } from '../store';
-import { formatDuration, coverSource, PLACEHOLDER_IMAGE } from '../utils';
+import { formatDuration, coverSource } from '../utils';
+import AppImage from './AppImage';
 import Icon from './Icon';
 import SongOptionsMenuModal from './SongOptionsMenuModal';
 
@@ -224,10 +224,12 @@ const SongRow: React.FC<SongRowProps> = ({
             )}
           </View>
 
-          {/* expo-image is not installed: use RN Image with a small CDN thumb (200px) + bundled placeholder while loading. */}
-          <Image
+          {/* List thumb (200px CDN variant). AppImage uses expo-image
+              (cachePolicy memory-disk + recyclingKey) when installed, else RN
+              Image — identical props either way. */}
+          <AppImage
             source={coverSource(song.coverUrl, 200)}
-            defaultSource={PLACEHOLDER_IMAGE}
+            recyclingKey={song.id}
             style={styles.cover}
           />
 

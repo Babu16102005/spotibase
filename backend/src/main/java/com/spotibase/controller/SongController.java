@@ -3,6 +3,7 @@ package com.spotibase.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.spotibase.dto.request.CreateSongRequest;
 import com.spotibase.dto.response.PagedResponse;
+import com.spotibase.dto.response.SongCardResponse;
 import com.spotibase.dto.response.SongResponse;
 import com.spotibase.entity.Song;
 import com.spotibase.exception.InvalidRangeException;
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -36,6 +38,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/v1/songs")
@@ -49,62 +52,125 @@ public class SongController {
     private final R2StorageService r2StorageService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Catalog lists: shared rows are {@code public, max-age=60} for guests;
+     * authenticated responses overlay per-user liked flags, so they stay
+     * {@code private, max-age=30} (same convention as {@code HomeController}).
+     */
+    private static CacheControl catalogCacheControl(String userId) {
+        return userId != null
+                ? CacheControl.maxAge(30, TimeUnit.SECONDS).cachePrivate()
+                : CacheControl.maxAge(60, TimeUnit.SECONDS).cachePublic();
+    }
+
+    /** Clamp a page size: {@code <=0} falls back to {@code def}, hard-capped at {@code max}. */
+    private static int clampSize(int size, int def, int max) {
+        return size <= 0 ? def : Math.min(size, max);
+    }
+
+    /**
+     * @param fields {@code card} returns slim cards (capped at 30);
+     *               missing/anything else returns full {@link SongResponse}s (cap 50).
+     */
     @GetMapping
-    public ResponseEntity<PagedResponse<SongResponse>> getAllSongs(
+    public ResponseEntity<?> getAllSongs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "full") String fields,
             @CurrentUser CustomUserDetails user) {
+        boolean card = SongCardResponse.isCardView(fields);
         int safePage = Math.max(0, page);
-        // Clamp: page size defaults to 20, hard cap 50 to protect DB/cache.
-        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
-        log.info("Get all songs, page: {}, size: {} (requested page={}, size={})", safePage, safeSize, page, size);
+        // Card tiles render fast lists: cap 30 (full shape keeps the 50 cap).
+        int safeSize = clampSize(size, 20, card ? 30 : 50);
+        log.info("Get all songs, page: {}, size: {} (requested page={}, size={}, fields={})",
+                safePage, safeSize, page, size, fields);
         String userId = user != null ? user.getId() : null;
-        return ResponseEntity.ok(songService.getAllSongs(safePage, safeSize, userId));
+        PagedResponse<SongResponse> result = songService.getAllSongs(safePage, safeSize, userId);
+        if (card) {
+            return ResponseEntity.ok()
+                    .cacheControl(catalogCacheControl(userId))
+                    .body(SongCardResponse.projectPage(result));
+        }
+        return ResponseEntity.ok().cacheControl(catalogCacheControl(userId)).body(result);
     }
 
     /**
      * Cursor-based infinite scroll: pass the last seen song id as
      * {@code cursorId} to fetch the next slice. Prefer this over deep
      * page offsets for large catalogs (index-only id scan + batch fetch).
+     *
+     * @param fields {@code card} returns slim cards (capped at 30).
      */
     @GetMapping("/cursor")
-    public ResponseEntity<List<SongResponse>> getSongsCursor(
+    public ResponseEntity<?> getSongsCursor(
             @RequestParam(required = false) String cursorId,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "full") String fields,
             @CurrentUser CustomUserDetails user) {
-        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
+        boolean card = SongCardResponse.isCardView(fields);
+        int safeSize = clampSize(size, 20, card ? 30 : 50);
         String userId = user != null ? user.getId() : null;
-        log.info("Get songs cursor: cursorId={}, size={}", cursorId, safeSize);
-        return ResponseEntity.ok(songService.getSongsAfterCursor(cursorId, safeSize, userId));
+        log.info("Get songs cursor: cursorId={}, size={}, fields={}", cursorId, safeSize, fields);
+        List<SongResponse> result = songService.getSongsAfterCursor(cursorId, safeSize, userId);
+        if (card) {
+            return ResponseEntity.ok()
+                    .cacheControl(catalogCacheControl(userId))
+                    .body(SongCardResponse.fromList(result));
+        }
+        return ResponseEntity.ok().cacheControl(catalogCacheControl(userId)).body(result);
     }
 
+    /**
+     * @param fields {@code card} returns slim cards (capped at 30).
+     */
     // NEW: Optimized home feed endpoint
     @GetMapping("/home")
-    public ResponseEntity<PagedResponse<SongResponse>> getHomeFeed(
+    public ResponseEntity<?> getHomeFeed(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "full") String fields,
             @CurrentUser CustomUserDetails user) {
+        boolean card = SongCardResponse.isCardView(fields);
         int safePage = Math.max(0, page);
-        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
-        log.info("Get home feed, page: {}, size: {}", safePage, safeSize);
+        int safeSize = clampSize(size, 20, card ? 30 : 50);
+        log.info("Get home feed, page: {}, size: {}, fields={}", safePage, safeSize, fields);
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         String userId = user != null ? user.getId() : null;
-        return ResponseEntity.ok(songService.getHomeFeed(userId, pageable));
+        PagedResponse<SongResponse> result = songService.getHomeFeed(userId, pageable);
+        if (card) {
+            return ResponseEntity.ok()
+                    .cacheControl(catalogCacheControl(userId))
+                    .body(SongCardResponse.projectPage(result));
+        }
+        return ResponseEntity.ok().cacheControl(catalogCacheControl(userId)).body(result);
     }
 
+    /**
+     * Fast search endpoint (catalog-backed, capped at 20 per page).
+     *
+     * @param fields {@code card} returns slim cards instead of full songs.
+     */
     // NEW: Fast search endpoint
     @GetMapping("/search")
-    public ResponseEntity<PagedResponse<SongResponse>> searchSongs(
+    public ResponseEntity<?> searchSongs(
             @RequestParam String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "full") String fields,
             @CurrentUser CustomUserDetails user) {
+        boolean card = SongCardResponse.isCardView(fields);
         int safePage = Math.max(0, page);
-        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
-        log.info("Search songs: {}", q);
+        int safeSize = clampSize(size, 20, 20);
+        log.info("Search songs: {} (fields={})", q, fields);
         Pageable pageable = PageRequest.of(safePage, safeSize);
         String userId = user != null ? user.getId() : null;
-        return ResponseEntity.ok(songService.searchSongs(q, userId, pageable));
+        PagedResponse<SongResponse> result = songService.searchSongs(q, userId, pageable);
+        if (card) {
+            return ResponseEntity.ok()
+                    .cacheControl(catalogCacheControl(userId))
+                    .body(SongCardResponse.projectPage(result));
+        }
+        return ResponseEntity.ok().cacheControl(catalogCacheControl(userId)).body(result);
     }
 
     @GetMapping("/{id}")
@@ -178,31 +244,64 @@ public class SongController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * @param fields {@code card} returns slim cards (capped at 30).
+     */
     @GetMapping("/trending")
-    public ResponseEntity<List<SongResponse>> getTrendingSongs(@CurrentUser CustomUserDetails user,
-                                                                @RequestParam(defaultValue = "20") int limit) {
-        int safeLimit = limit <= 0 ? 20 : Math.min(limit, 50);
-        log.info("Get trending songs, limit: {} (requested {})", safeLimit, limit);
+    public ResponseEntity<?> getTrendingSongs(@CurrentUser CustomUserDetails user,
+                                             @RequestParam(defaultValue = "20") int limit,
+                                             @RequestParam(defaultValue = "full") String fields) {
+        boolean card = SongCardResponse.isCardView(fields);
+        int safeLimit = clampSize(limit, 20, card ? 30 : 50);
+        log.info("Get trending songs, limit: {} (requested {}, fields={})", safeLimit, limit, fields);
         String userId = user != null ? user.getId() : null;
-        return ResponseEntity.ok(songService.getTrendingSongs(userId, safeLimit));
+        List<SongResponse> result = songService.getTrendingSongs(userId, safeLimit);
+        if (card) {
+            return ResponseEntity.ok()
+                    .cacheControl(catalogCacheControl(userId))
+                    .body(SongCardResponse.fromList(result));
+        }
+        return ResponseEntity.ok().cacheControl(catalogCacheControl(userId)).body(result);
     }
 
+    /**
+     * @param fields {@code card} returns slim cards (capped at 30).
+     */
     @GetMapping("/new-releases")
-    public ResponseEntity<List<SongResponse>> getNewReleases(@CurrentUser CustomUserDetails user,
-                                                              @RequestParam(defaultValue = "20") int limit) {
-        int safeLimit = limit <= 0 ? 20 : Math.min(limit, 50);
-        log.info("Get new releases, limit: {} (requested {})", safeLimit, limit);
+    public ResponseEntity<?> getNewReleases(@CurrentUser CustomUserDetails user,
+                                            @RequestParam(defaultValue = "20") int limit,
+                                            @RequestParam(defaultValue = "full") String fields) {
+        boolean card = SongCardResponse.isCardView(fields);
+        int safeLimit = clampSize(limit, 20, card ? 30 : 50);
+        log.info("Get new releases, limit: {} (requested {}, fields={})", safeLimit, limit, fields);
         String userId = user != null ? user.getId() : null;
-        return ResponseEntity.ok(songService.getNewReleases(userId, safeLimit));
+        List<SongResponse> result = songService.getNewReleases(userId, safeLimit);
+        if (card) {
+            return ResponseEntity.ok()
+                    .cacheControl(catalogCacheControl(userId))
+                    .body(SongCardResponse.fromList(result));
+        }
+        return ResponseEntity.ok().cacheControl(catalogCacheControl(userId)).body(result);
     }
 
+    /**
+     * @param fields {@code card} returns slim cards (capped at 30).
+     */
     @GetMapping("/featured")
-    public ResponseEntity<List<SongResponse>> getFeaturedSongs(@CurrentUser CustomUserDetails user,
-                                                                @RequestParam(defaultValue = "20") int limit) {
-        int safeLimit = limit <= 0 ? 20 : Math.min(limit, 50);
-        log.info("Get featured songs, limit: {} (requested {})", safeLimit, limit);
+    public ResponseEntity<?> getFeaturedSongs(@CurrentUser CustomUserDetails user,
+                                              @RequestParam(defaultValue = "20") int limit,
+                                              @RequestParam(defaultValue = "full") String fields) {
+        boolean card = SongCardResponse.isCardView(fields);
+        int safeLimit = clampSize(limit, 20, card ? 30 : 50);
+        log.info("Get featured songs, limit: {} (requested {}, fields={})", safeLimit, limit, fields);
         String userId = user != null ? user.getId() : null;
-        return ResponseEntity.ok(songService.getFeaturedSongs(userId, safeLimit));
+        List<SongResponse> result = songService.getFeaturedSongs(userId, safeLimit);
+        if (card) {
+            return ResponseEntity.ok()
+                    .cacheControl(catalogCacheControl(userId))
+                    .body(SongCardResponse.fromList(result));
+        }
+        return ResponseEntity.ok().cacheControl(catalogCacheControl(userId)).body(result);
     }
 
     @PostMapping("/{id}/like")

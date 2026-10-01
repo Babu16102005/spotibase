@@ -47,4 +47,16 @@ public interface ArtistRepository extends JpaRepository<Artist, String> {
     int deleteFollower(@Param("artistId") String artistId, @Param("userId") String userId);
 
     long countByUserId(String userId);
+
+    /**
+     * Batched per-artist counts for list responses: 2 GROUP BY queries per
+     * page instead of 2N per-row COUNT queries in toArtistResponse loops.
+     * Returns rows of [artistId, count]. Counting semantics match
+     * countByArtistId (all rows, including archived) to keep contracts.
+     */
+    @Query("SELECT s.artist.id, COUNT(s) FROM Song s WHERE s.artist.id IN :ids GROUP BY s.artist.id")
+    List<Object[]> countSongsByArtistIds(@Param("ids") List<String> ids);
+
+    @Query("SELECT a.artist.id, COUNT(a) FROM Album a WHERE a.artist.id IN :ids GROUP BY a.artist.id")
+    List<Object[]> countAlbumsByArtistIds(@Param("ids") List<String> ids);
 }

@@ -1,245 +1,279 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  FlatList,
+  InteractionManager,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { homeApi } from '../../api/client';
-import { useThemeStore, usePlayerStore, useAuthStore } from '../../store';
-import { HomeSection, SongResponse, AlbumResponse, ArtistResponse, PlaylistResponse } from '../../types';
-import SongCard from '../../components/SongCard';
-import AlbumCard from '../../components/AlbumCard';
-import ArtistCard from '../../components/ArtistCard';
-import PlaylistCard from '../../components/PlaylistCard';
+import { useThemeStore, useAuthStore } from '../../store';
+import { HomeSection } from '../../types';
 import SectionHeader from '../../components/SectionHeader';
 import { CardSkeleton, SongSkeleton } from '../../components/SkeletonLoader';
 import { getGreeting } from '../../utils';
-import Icon from '../../components/Icon';
 import GreetingHeader from '../../components/GreetingHeader';
-import { isHomeFeedFresh, readHomeFeed, writeHomeFeed } from '../../cache/homeFeedCache';
+import { getSectionTier } from '../../cache/homeFeedCache';
+import { useHomeTiers, type HomeTierParam } from '../../query/useHomeTiers';
+import HomeSectionRow from './HomeSectionRow';
 
-const PILLS = [
-  { label: 'Songs', icon: 'songs' as const },
-  { label: 'Albums', icon: 'library' as const },
-  { label: 'Playlists', icon: 'music' as const },
-];
+/** User-facing tier names for the inline error retry rows. */
+const TIER_DISPLAY_NAMES: Record<HomeTierParam, string> = {
+  critical: 'Critical',
+  secondary: 'Secondary',
+  heavy: 'Heavy',
+};
 
 const HomeScreen = ({ navigation }: any) => {
-  const [data, setData] = useState<any>(() => readHomeFeed());
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(() => !data);
+  // Heavy personalization rows mount after interactions so the critical
+  // paint is never blocked (cached heavy still shows instantly — see below).
+  const [heavyReady, setHeavyReady] = useState(false);
   const { theme } = useThemeStore();
-  const playMultiple = usePlayerStore((s) => s.playMultiple);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const {
+    data,
+    tierSections,
+    statusPerTier,
+    refetchStale,
+    refetchAll,
+    refetchTier,
+    abortAll,
+  } = useHomeTiers({ enabled: isAuthenticated });
 
-  const fetchHome = useCallback(async (force = false) => {
-    // Never hit a protected endpoint while logged out: without a token the
-    // backend answers 401 and the refresh interceptor has nothing to work
-    // with, so skip instead of logging an expected 401 on every focus.
-    if (!useAuthStore.getState().isAuthenticated) {
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-    if (!force && isHomeFeedFresh()) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const res = await homeApi.getHome();
-      const nextData = { ...res.data, greeting: getGreeting() };
-      setData(nextData);
-      writeHomeFeed(nextData);
-    } catch (err: any) {
-      const status = err?.response?.status;
-      if (status === 401 || status === 403) {
-        // Session expired/revoked: log out once (RootNavigator redirects to
-        // Login). A refresh network failure is tagged by the api client — keep
-        // the cached feed instead of wiping a session that may still be valid.
-        if (!err?._refreshNetworkError && useAuthStore.getState().isAuthenticated) {
-          useAuthStore.getState().logout();
-        }
-      } else if (!err?.response) {
-        // Offline/transient: keep the cached feed silently.
-      } else {
-        console.error('Failed to fetch home:', err);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      setHeavyReady(true);
+    });
+    return () => task.cancel();
   }, []);
 
-  // Cached data paints immediately. Network refresh only runs when the feed is
-  // older than 30s (Spotify-style stale-while-revalidate), or on pull-to-refresh.
+  // Cached data paints immediately. Only stale tiers refetch
+  // (stale-tier-only refetch); in-flight tier requests cancel on blur.
+  // Greeting is refreshed inside the hook on every run so it stays correct
+  // even on full cache hits.
   useFocusEffect(
     useCallback(() => {
-      fetchHome(false);
-    }, [fetchHome, isAuthenticated])
+      void refetchStale();
+      return () => abortAll();
+    }, [refetchStale, abortAll, isAuthenticated])
   );
 
-  const onRefresh = () => { setRefreshing(true); fetchHome(true); };
-
-  const renderSection = useCallback((section: HomeSection) => {
-    if (!section.items || section.items.length === 0) return null;
-    const isTrendingSection =
-      section.id?.toLowerCase().includes('trend') ||
-      section.title?.toLowerCase().includes('trend');
-
-    switch (section.type) {
-      case 'SONG':
-        return (
-          <View key={section.id}>
-            <SectionHeader
-              title={section.title}
-              subtitle={section.subtitle}
-              actionLabel={isTrendingSection ? 'YouTube' : undefined}
-              onAction={isTrendingSection ? () => navigation?.navigate('YouTubeSongs') : undefined}
-            />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {(section.items as SongResponse[]).slice(0, 10).map((item, i) => (
-                <View key={item.id || i} style={{ width: 160, marginRight: 12 }}>
-                  <SongCard
-                    song={item}
-                    compact
-                    onPress={() => playMultiple(section.items as SongResponse[], i)}
-                  />
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        );
-      case 'ALBUM':
-        return (
-          <View key={section.id}>
-            <SectionHeader title={section.title} subtitle={section.subtitle} />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {(section.items as AlbumResponse[]).slice(0, 10).map((item) => (
-                <AlbumCard key={item.id} album={item} onPress={() => navigation?.navigate('Album', { id: item.id })} />
-              ))}
-            </ScrollView>
-          </View>
-        );
-      case 'ARTIST':
-        return null;
-      case 'PLAYLIST':
-        return (
-          <View key={section.id}>
-            <SectionHeader title={section.title} subtitle={section.subtitle} />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {(section.items as PlaylistResponse[]).slice(0, 10).map((item) => (
-                <PlaylistCard key={item.id} playlist={item} onPress={() => navigation?.navigate('Playlist', { id: item.id })} />
-              ))}
-            </ScrollView>
-          </View>
-        );
-      case 'GENRE':
-        return (
-          <View key={section.id}>
-            <SectionHeader title={section.title} subtitle={section.subtitle} />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {(section.items as any[]).slice(0, 10).map((item, i) => (
-                <TouchableOpacity
-                  key={item.id || i}
-                  style={[styles.genreCard, { backgroundColor: item.color || theme.colors.surface }]}
-                  onPress={() => navigation?.navigate('Songs')}
-                >
-                  <Text style={styles.genreName}>{item.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        );
-      default:
-        return null;
+  // Pull-to-refresh forces every tier (heavy is fetched, not deferred).
+  const onRefresh = useCallback(async () => {
+    if (!useAuthStore.getState().isAuthenticated) return;
+    setRefreshing(true);
+    try {
+      await refetchAll();
+    } finally {
+      setRefreshing(false);
     }
-  }, [playMultiple, theme, navigation]);
+  }, [refetchAll]);
+
+  // Nested Tab -> Root navigation: YouTubeSongs lives on the RootStack, not
+  // inside MainTabs, so navigate via the parent (falls back to direct for
+  // tests / flat hierarchies).
+  const goToYouTubeSongs = useCallback(() => {
+    try {
+      const parent = navigation?.getParent?.();
+      if (parent?.navigate) {
+        parent.navigate('YouTubeSongs');
+        return;
+      }
+    } catch {}
+    navigation?.navigate('YouTubeSongs');
+  }, [navigation]);
+
+  const onPillPress = useCallback(
+    (pillLabel: string) => {
+      if (pillLabel === 'Songs') {
+        navigation?.navigate('Songs');
+      } else if (
+        pillLabel === 'Liked Songs' ||
+        pillLabel === 'Albums' ||
+        pillLabel === 'Playlists'
+      ) {
+        // Library hosts Liked Songs + Liked Albums + Your/Featured Playlists.
+        navigation?.navigate('Library');
+      } else {
+        navigation?.navigate('Songs');
+      }
+    },
+    [navigation]
+  );
+
+  // Heavy rows render once interactions settle — unless the heavy tier
+  // already resolved from cache, in which case it paints immediately.
+  const showHeavy =
+    heavyReady || statusPerTier.heavy === 'success';
+
+  // Order guaranteed: the hook merges critical (recently-played →
+  // trending) → secondary → heavy; here we only gate heavy visibility.
+  const visibleSections = useMemo(
+    () =>
+      data.sections.filter(
+        (s: HomeSection) => showHeavy || getSectionTier(s) !== 'heavy'
+      ),
+    [data.sections, showHeavy]
+  );
+
+  // Per-section skeletons while a tier is pending — never a global spinner.
+  // A tier with data renders its rows; only tiers with nothing yet show a
+  // placeholder.
+  const pendingSkeletonTiers = useMemo(
+    () =>
+      (['critical', 'secondary', 'heavy'] as HomeTierParam[]).filter(
+        (tier) =>
+          statusPerTier[tier] === 'pending' &&
+          tierSections[tier].length === 0 &&
+          (tier !== 'heavy' || showHeavy)
+      ),
+    [statusPerTier, tierSections, showHeavy]
+  );
+
+  // Inline retry rows for tiers that errored with nothing on screen, so
+  // error+empty never looks blank (pull-to-refresh is no longer the only
+  // recovery). Tiers with data keep their rows; only empty tiers show this.
+  const errorRetryTiers = useMemo(
+    () =>
+      (['critical', 'secondary', 'heavy'] as HomeTierParam[]).filter(
+        (tier) =>
+          statusPerTier[tier] === 'error' &&
+          tierSections[tier].length === 0 &&
+          (tier !== 'heavy' || showHeavy)
+      ),
+    [statusPerTier, tierSections, showHeavy]
+  );
+
+  const handleRetryTier = useCallback(
+    (tier: HomeTierParam) => {
+      void refetchTier(tier);
+    },
+    [refetchTier]
+  );
+
+  const renderSection = useCallback(
+    ({ item }: { item: HomeSection }) => (
+      <HomeSectionRow
+        section={item}
+        navigation={navigation}
+        onYouTubePress={goToYouTubeSongs}
+      />
+    ),
+    [navigation, goToYouTubeSongs]
+  );
+
+  const keyExtractor = useCallback((item: HomeSection) => item.id, []);
+
+  const listHeader = useMemo(
+    () => (
+      <GreetingHeader
+        greetingText={data?.greeting ?? getGreeting()}
+        loading={
+          statusPerTier.critical === 'pending' &&
+          tierSections.critical.length === 0
+        }
+        onPillPress={onPillPress}
+      />
+    ),
+    [
+      data?.greeting,
+      onPillPress,
+      statusPerTier.critical,
+      tierSections.critical.length,
+    ]
+  );
+
+  const listFooter = useMemo(() => {
+    if (pendingSkeletonTiers.length === 0 && errorRetryTiers.length === 0) {
+      return <View style={{ height: 100 }} />;
+    }
+    return (
+      <View>
+        {pendingSkeletonTiers.map((tier) => (
+          <View key={`skeleton-${tier}`}>
+            <SectionHeader title="Loading" subtitle=" " />
+            {tier === 'critical' ? (
+              <>
+                <CardSkeleton count={5} />
+                <SongSkeleton />
+              </>
+            ) : (
+              <CardSkeleton count={3} />
+            )}
+          </View>
+        ))}
+        {errorRetryTiers.map((tier) => (
+          <Pressable
+            key={`retry-${tier}`}
+            testID={`home-retry-${tier}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Retry loading ${tier} sections`}
+            accessibilityHint={`Reloads the ${TIER_DISPLAY_NAMES[tier]} home sections`}
+            onPress={() => handleRetryTier(tier)}
+            style={({ pressed }) => [
+              styles.retryRow,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                opacity: pressed ? 0.7 : 1,
+              },
+            ]}
+          >
+            <Text
+              style={[styles.retryText, { color: theme.colors.textSecondary }]}
+            >
+              {`Couldn't load ${TIER_DISPLAY_NAMES[tier]} - Tap to retry`}
+            </Text>
+          </Pressable>
+        ))}
+        <View style={{ height: 100 }} />
+      </View>
+    );
+  }, [pendingSkeletonTiers, errorRetryTiers, handleRetryTier, theme]);
 
   return (
-    <ScrollView
+    <FlatList
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
-    >
-      <GreetingHeader
-        greetingText={data?.greeting}
-        loading={loading}
-        onPillPress={(pillLabel) => {
-          if (pillLabel === 'Liked Songs') {
-            navigation?.navigate('Library');
-          } else {
-            navigation?.navigate('Songs');
-          }
-        }}
-      />
-
-      {loading ? (
-        <View>
-          <CardSkeleton count={5} />
-          <SongSkeleton />
-          <CardSkeleton count={3} />
-        </View>
-      ) : (
-        <>
-          <SectionHeader
-            title="Trending Now"
-            subtitle="YouTube hits & viral songs"
-            actionLabel="Open YouTube"
-            onAction={() => navigation?.navigate('YouTubeSongs')}
-          />
-          {data?.sections?.map(renderSection)}
-        </>
-      )}
-      <View style={{ height: 100 }} />
-    </ScrollView>
+      data={visibleSections}
+      keyExtractor={keyExtractor}
+      renderItem={renderSection}
+      ListHeaderComponent={listHeader}
+      ListFooterComponent={listFooter}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={theme.colors.primary}
+        />
+      }
+      windowSize={5}
+      maxToRenderPerBatch={4}
+      initialNumToRender={4}
+      removeClippedSubviews={false}
+      accessibilityLabel="Home feed"
+    />
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  hero: {
-    paddingTop: Platform.OS === 'web' ? 24 : 48,
-    paddingBottom: 20,
-    borderRadius: 0,
-  },
-  greeting: {
-    fontSize: 30,
-    fontWeight: '800',
-    letterSpacing: -0.8,
+  retryRow: {
+    marginHorizontal: 16,
+    marginVertical: 8,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
-  },
-  pillScroll: {
-    marginTop: 0,
-  },
-  pillRow: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    gap: 8,
-  },
-  pillText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  horizontalScroll: { paddingHorizontal: 16, paddingBottom: 8 },
-  genreCard: {
-    width: 140,
-    height: 80,
-    marginRight: 12,
+    paddingVertical: 12,
     borderRadius: 12,
-    padding: 12,
-    justifyContent: 'flex-end',
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  genreName: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
+  retryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

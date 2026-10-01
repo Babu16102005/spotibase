@@ -146,15 +146,25 @@ apple:
   client-id: ${APPLE_CLIENT_ID:}
 
 # YouTube proxy (GET /api/v1/youtube/trending|search|resolve).
-# Without YOUTUBE_API_KEY the service serves a built-in 15-entry mock
-# catalogue; with a key it calls YouTube Data API v3 (5s timeout) and
+# Without YOUTUBE_API_KEY the service serves a built-in 19-entry mock
+# catalogue (15 + 4 Tamil/Kollywood); with a key it calls YouTube Data API v3 (5s timeout) and
 # fails open to mock on quota 429 / network errors. The key is never logged.
 youtube:
   api-key: ${YOUTUBE_API_KEY:}
   enabled: ${YOUTUBE_ENABLED:true}
   base-url: ${YOUTUBE_BASE_URL:https://www.googleapis.com/youtube/v3}
-  region-code: ${YOUTUBE_REGION_CODE:US}
+  region-code: ${YOUTUBE_REGION_CODE:IN}
+  relevance-language: ${YOUTUBE_RELEVANCE_LANGUAGE:ta}
   timeout-seconds: ${YOUTUBE_TIMEOUT_SECONDS:5}
+  # Split of the total outbound budget (Bs + Bh <= total, all in seconds):
+  # search-timeout-seconds (Bs) for search.list — unset (-1) defaults to max(1, timeout-seconds - 2).
+  search-timeout-seconds: ${YOUTUBE_SEARCH_TIMEOUT_SECONDS:-1}
+  # hydration-timeout-seconds (Bh) for videos.list hydration — unset (-1) defaults to
+  # max(1, timeout-seconds - search-timeout-seconds). Explicit values are clamped to
+  # 1..30s then normalised so Bs + Bh never exceeds timeout-seconds.
+  hydration-timeout-seconds: ${YOUTUBE_HYDRATION_TIMEOUT_SECONDS:-1}
+  # Max ids per videos.list hydration call (1..25, default 20) to keep hydration fast.
+  hydration-max-ids: ${YOUTUBE_HYDRATION_MAX_IDS:20}
 
 # JWT
 jwt:

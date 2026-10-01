@@ -40,6 +40,7 @@ public class PlaylistService {
     private final PlaylistSongRepository playlistSongRepository;
     private final PlaylistCollaboratorRepository playlistCollaboratorRepository;
     private final SongRepository songRepository;
+    private final LikeRepository likeRepository;
     private final UserRepository userRepository;
     private final StorageService storageService;
 
@@ -411,14 +412,23 @@ public class PlaylistService {
         List<String> songIds = playlistSongs.stream()
                 .map(PlaylistSong::getSongId)
                 .collect(Collectors.toList());
-        List<Song> songs = songIds.isEmpty() ? List.of() : songRepository.findByIds(songIds);
+        // Single batch fetch with core relations (artist/album/genre) instead
+        // of N lazy loads, plus one liked IN query instead of N EXISTS.
+        List<Song> songs = songIds.isEmpty() ? List.of()
+                : songRepository.findByIdsWithCoreRelations(songIds);
         Map<String, Song> songMap = songs.stream()
-                .collect(Collectors.toMap(Song::getId, Function.identity()));
+                .collect(Collectors.toMap(Song::getId, Function.identity(), (a, b) -> a));
+        final Set<String> likedIds;
+        if (userId != null && !songIds.isEmpty()) {
+            likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, songIds));
+        } else {
+            likedIds = Set.of();
+        }
 
         List<SongResponse> songResponses = playlistSongs.stream()
                 .map(ps -> songMap.get(ps.getSongId()))
                 .filter(Objects::nonNull)
-                .map(song -> toSongResponse(song, userId))
+                .map(song -> toSongResponse(song, likedIds.contains(song.getId())))
                 .collect(Collectors.toList());
 
         boolean liked = userId != null && playlistRepository.isLikedByUser(playlist.getId(), userId);
@@ -447,7 +457,7 @@ public class PlaylistService {
                 .build();
     }
 
-    private SongResponse toSongResponse(Song song, String userId) {
+    private SongResponse toSongResponse(Song song, boolean liked) {
         SongResponse.SongResponseBuilder builder = SongResponse.builder()
                 .id(song.getId())
                 .title(song.getName())
@@ -482,9 +492,7 @@ public class PlaylistService {
             builder.genreId(song.getGenre().getId());
             builder.genreName(song.getGenre().getName());
         }
-        if (userId != null) {
-            builder.liked(songRepository.existsByUserIdAndSongId(userId, song.getId()));
-        }
+        builder.liked(liked);
 
         return builder.build();
     }
@@ -516,7 +524,8 @@ public class PlaylistService {
     @Transactional(readOnly = true)
     public List<PlaylistResponse> getPlaylistsByIds(List<String> ids, String userId) {
         if (ids == null || ids.isEmpty()) return List.of();
-        List<Playlist> playlists = playlistRepository.findAllById(ids);
+        // Owner fetch-joined batch (no N lazy user loads in the loop below).
+        List<Playlist> playlists = playlistRepository.findAllByIdsWithUser(ids);
         return playlists.stream()
                 .map(playlist -> toPlaylistResponse(playlist, userId))
                 .collect(Collectors.toList());

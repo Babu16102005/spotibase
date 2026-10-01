@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -108,19 +109,18 @@ public class ArtistService {
     @Transactional(readOnly = true)
     @Cacheable(value = "artists", key = "'top:' + #limit")
     public List<ArtistResponse> getTopArtists(int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
-        return artistRepository.findTopArtists(pageable).stream()
-                .map(artist -> toArtistResponse(artist, null))
-                .collect(Collectors.toList());
+        int safeLimit = limit <= 0 ? 20 : Math.min(limit, 50);
+        Pageable pageable = PageRequest.of(0, safeLimit);
+        // Batched counts + no per-row queries (see toArtistResponses).
+        return toArtistResponses(artistRepository.findTopArtists(pageable), null);
     }
 
     @Transactional(readOnly = true)
     @Cacheable(value = "artists", key = "'featured:' + #limit")
     public List<ArtistResponse> getFeaturedArtists(int limit) {
-        Pageable pageable = PageRequest.of(0, limit);
-        return artistRepository.findFeaturedArtists(pageable).stream()
-                .map(artist -> toArtistResponse(artist, null))
-                .collect(Collectors.toList());
+        int safeLimit = limit <= 0 ? 20 : Math.min(limit, 50);
+        Pageable pageable = PageRequest.of(0, safeLimit);
+        return toArtistResponses(artistRepository.findFeaturedArtists(pageable), null);
     }
 
     public Map<String, Object> getArtistStats(String id) {
@@ -180,6 +180,8 @@ public class ArtistService {
     }
 
     public ArtistResponse toArtistResponse(Artist artist, String userId) {
+        // Single-item path (detail pages): per-row counts are fine for 1 row.
+        // List paths must use toArtistResponses (GROUP BY batch) instead.
         long albumCount = albumRepository.countByArtistId(artist.getId());
         long songCount = songRepository.countByArtistId(artist.getId());
 
@@ -205,32 +207,79 @@ public class ArtistService {
 
     @Transactional(readOnly = true)
     public List<ArtistResponse> getAllArtists(int page, int size, String userId) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "monthlyListeners"));
-        return artistRepository.findAll(pageable).stream()
-                .map(artist -> toArtistResponse(artist, userId))
-                .collect(Collectors.toList());
+        int safePage = Math.max(0, page);
+        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "monthlyListeners"));
+        // Batched: 2 GROUP BY counts + 1 liked IN query per page (no 3N).
+        return toArtistResponses(artistRepository.findAll(pageable).getContent(), userId);
     }
 
     @Transactional(readOnly = true)
     public List<ArtistResponse> getLikedArtists(String userId) {
         List<String> artistIds = likeRepository.findAllLikedArtistIds(userId);
-        List<ArtistResponse> artists = new ArrayList<>();
-        for (String artistId : artistIds) {
-            try {
-                artists.add(getArtistById(artistId, userId));
-            } catch (Exception e) {
-                log.warn("Could not load liked artist: {}", artistId);
-            }
+        if (artistIds == null || artistIds.isEmpty()) {
+            return List.of();
         }
-        return artists;
+        // Bounded + batched: avoid per-id getArtistById loop (3 queries each).
+        List<String> capped = artistIds.size() > 200 ? artistIds.subList(0, 200) : artistIds;
+        return getArtistsByIds(capped, userId);
     }
 
     @Transactional(readOnly = true)
     public List<ArtistResponse> getArtistsByIds(List<String> ids, String userId) {
         if (ids == null || ids.isEmpty()) return List.of();
-        List<Artist> artists = artistRepository.findAllById(ids);
+        // Cap IN-clause size; preserve caller order for search hydration.
+        List<String> capped = ids.size() > 100 ? ids.subList(0, 100) : ids;
+        Map<String, Artist> byId = artistRepository.findAllById(capped).stream()
+                .collect(Collectors.toMap(Artist::getId, a -> a, (a, b) -> a));
+        List<Artist> ordered = capped.stream()
+                .map(byId::get)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+        return toArtistResponses(ordered, userId);
+    }
+
+    /**
+     * Batched list mapping: 2 GROUP BY count queries + 1 liked IN query per
+     * call instead of 3N per-row queries (countByArtistId x2 + EXISTS).
+     * Same ArtistResponse contract as the single-item path.
+     */
+    private List<ArtistResponse> toArtistResponses(List<Artist> artists, String userId) {
+        if (artists == null || artists.isEmpty()) {
+            return List.of();
+        }
+        List<String> ids = artists.stream().map(Artist::getId).collect(Collectors.toList());
+        Map<String, Long> songCounts = artistRepository.countSongsByArtistIds(ids).stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> ((Number) row[1]).longValue(),
+                        (a, b) -> a));
+        Map<String, Long> albumCounts = artistRepository.countAlbumsByArtistIds(ids).stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> ((Number) row[1]).longValue(),
+                        (a, b) -> a));
+        final Set<String> followedIds;
+        if (userId != null) {
+            followedIds = new java.util.HashSet<>(likeRepository.findLikedArtistIds(userId, ids));
+        } else {
+            followedIds = Set.of();
+        }
         return artists.stream()
-                .map(artist -> toArtistResponse(artist, userId))
+                .map(artist -> ArtistResponse.builder()
+                        .id(artist.getId())
+                        .name(artist.getName())
+                        .bio(artist.getBio())
+                        .imageUrl(artist.getImageUrl())
+                        .coverUrl(artist.getCoverUrl())
+                        .monthlyListeners(artist.getMonthlyListeners())
+                        .followerCount(artist.getFollowerCount())
+                        .verified(artist.isVerified())
+                        .followed(userId != null && followedIds.contains(artist.getId()))
+                        .albumCount(albumCounts.getOrDefault(artist.getId(), 0L).intValue())
+                        .songCount(songCounts.getOrDefault(artist.getId(), 0L).intValue())
+                        .createdAt(artist.getCreatedAt())
+                        .build())
                 .collect(Collectors.toList());
     }
 }

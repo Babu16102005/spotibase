@@ -26,9 +26,9 @@ CF_ACCOUNT_ID = os.getenv("CF_ACCOUNT_ID", "")
 CF_AI_TOKEN = os.getenv("CF_AI_TOKEN", "")
 CF_MODEL = os.getenv("CF_MODEL", "@cf/qwen/qwen3-30b-a3b-fp8")
 try:
-    CF_TIMEOUT_S = float(os.getenv("CF_TIMEOUT_S", "2.5"))
+    CF_TIMEOUT_S = float(os.getenv("CF_TIMEOUT_S", "4.0"))
 except ValueError:
-    CF_TIMEOUT_S = 2.5
+    CF_TIMEOUT_S = 4.0
 PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "assistant_system.txt"
 
 SYSTEM_PROMPT = ""
@@ -64,12 +64,13 @@ def _load_qwen_transformers():
 
 
 # ---------------------------------------------------------------------------
-# 30-action allow-list (single source of truth — routes import this).
+# 32-action allow-list (single source of truth — routes import this).
 # ---------------------------------------------------------------------------
 ALLOWED_ACTIONS = frozenset({
     "PLAY", "PAUSE", "RESUME", "NEXT", "PREVIOUS",
     "PLAY_SONG", "SEARCH_SONG", "SEARCH_ARTIST", "SEARCH_ALBUM",
     "PLAY_BY_MOOD", "PLAY_BY_GENRE", "PLAY_BY_LANGUAGE", "PLAY_SIMILAR",
+    "PLAY_RANDOM", "PLAY_LIKED",
     "ADD_TO_QUEUE", "REMOVE_FROM_QUEUE", "CLEAR_QUEUE",
     "LIKE_CURRENT", "UNLIKE_CURRENT",
     "ADD_TO_PLAYLIST", "REMOVE_FROM_PLAYLIST", "CREATE_PLAYLIST",
@@ -84,13 +85,37 @@ CLARIFICATION_SUGGESTIONS = [
 ]
 
 # ---- Mood / keyword heuristics (used in mock + as fallback) ----
+# Canonical moods: HAPPY/SAD/ENERGETIC/CALM/ROMANTIC/PARTY/FOCUSED (+ legacy
+# CHILL/DREAMY/MELANCHOLIC/MOTIVATED/NOSTALGIC kept for compat — do not rename).
+# Feeling-word variants NEVER clarify: any feeling word -> PLAY_BY_MOOD.
 MOOD_MAP = {
-    "calm": "CALM", "relax": "CALM", "relaxed": "CALM", "peaceful": "CALM", "soothing": "CALM", "chill": "CHILL",
-    "happy": "HAPPY", "joy": "HAPPY", "cheerful": "HAPPY", "feel good": "HAPPY", "feel-good": "HAPPY",
-    "sad": "SAD", "melancholic": "MELANCHOLIC", "depressed": "SAD", "blue": "SAD",
-    "energetic": "ENERGETIC", "energy": "ENERGETIC", "pumped": "ENERGETIC", "workout": "ENERGETIC", "gym": "ENERGETIC", "party": "PARTY",
-    "romantic": "ROMANTIC", "love": "ROMANTIC", "dreamy": "DREAMY",
-    "focused": "FOCUSED", "study": "FOCUSED", "concentrate": "FOCUSED",
+    "calm": "CALM", "calming": "CALM", "calm down": "CALM",
+    "relax": "CALM", "relaxed": "CALM", "relaxing": "CALM",
+    "peaceful": "CALM", "soothing": "CALM", "mellow": "CALM",
+    "unwind": "CALM", "laid back": "CALM", "chill out": "CALM",
+    "chill": "CHILL",
+    "happy": "HAPPY", "happiness": "HAPPY", "feel happy": "HAPPY",
+    "joy": "HAPPY", "joyful": "HAPPY", "joyous": "HAPPY",
+    "cheerful": "HAPPY", "cheer up": "HAPPY", "cheer me up": "HAPPY",
+    "feel good": "HAPPY", "feel-good": "HAPPY", "feelgood": "HAPPY",
+    "makes me happy": "HAPPY", "make me happy": "HAPPY",
+    "uplifting": "HAPPY", "uplift": "HAPPY", "upbeat": "HAPPY",
+    "good mood": "HAPPY", "positive": "HAPPY",
+    "sad": "SAD", "sadness": "SAD", "depressed": "SAD", "blue": "SAD",
+    "lonely": "SAD", "heartbreak": "SAD", "heartbroken": "SAD",
+    "gloomy": "SAD", "upset": "SAD",
+    "melancholic": "MELANCHOLIC", "melancholy": "MELANCHOLIC",
+    "energetic": "ENERGETIC", "energy": "ENERGETIC", "high energy": "ENERGETIC",
+    "pumped": "ENERGETIC", "pumped up": "ENERGETIC", "pump up": "ENERGETIC",
+    "hype": "ENERGETIC", "hype up": "ENERGETIC",
+    "workout": "ENERGETIC", "gym": "ENERGETIC", "running": "ENERGETIC", "exercise": "ENERGETIC",
+    "party": "PARTY", "dance": "PARTY", "club": "PARTY",
+    "celebration": "PARTY", "celebrate": "PARTY", "festive": "PARTY",
+    "romantic": "ROMANTIC", "romance": "ROMANTIC", "love": "ROMANTIC",
+    "lovely": "ROMANTIC", "date night": "ROMANTIC", "valentine": "ROMANTIC",
+    "dreamy": "DREAMY",
+    "focused": "FOCUSED", "focus": "FOCUSED", "study": "FOCUSED", "studying": "FOCUSED",
+    "concentrate": "FOCUSED", "concentration": "FOCUSED", "deep work": "FOCUSED",
     "motivated": "MOTIVATED",
     "nostalgic": "NOSTALGIC",
 }
@@ -202,7 +227,7 @@ _VERB_PATTERNS = [
 
 SIMPLE_PATTERNS = {
     r"^\s*(next|skip|next song)\s*$": ("NEXT", {}),
-    r"^\s*(pause|pause the song|pause music)\s*$": ("PAUSE", {}),
+    r"^\s*pause(\s+(the\s+)?(song|music))?\s*$": ("PAUSE", {}),
     r"^\s*(resume|continue|play|resume the song)\s*$": ("RESUME", {}),
     r"^\s*(previous|prev|go back)\s*$": ("PREVIOUS", {}),
     r"^\s*like\s*(this|song)?\s*$": ("LIKE_CURRENT", {}),
@@ -224,6 +249,75 @@ def _simple_detect(text: str):
         if re.match(pat, t):
             return [{"action": act, "parameters": params}]
     return None
+
+
+# ---------------------------------------------------------------------------
+# PLAY_RANDOM / PLAY_LIKED realtime wording analysis (new actions).
+# Checked in _mock_understand: PLAY_LIKED before mood/artist/by branches so
+# "play the like playlist any song" wins over junk SEARCH; PLAY_RANDOM late
+# (after PLAY_SIMILAR) so "play something similar to this" and
+# "play Something by Anirudh" keep their precise meanings.
+# No conflict with LIKE_CURRENT ("like this"/"like") — liked requires
+# past-tense "liked", "favourite(s)", or adjacent "like playlist".
+# No conflict with SHUFFLE_ON/OFF ("shuffle on") — random requires the
+# exact phrase "shuffle play".
+# ---------------------------------------------------------------------------
+_LIKED_RE = re.compile(
+    r"\bliked\b|\bfavou?rites?\b|\blike\s+playlist\b",
+)
+_LIKED_FUZZY_VOCAB = ["liked", "favorite", "favourite", "favorites", "favourites"]
+
+_RANDOM_RE = re.compile(
+    r"\bany\b|\banything\b|\bsurprise\s+me\b|\brandom\b|\bshuffle\s+play\b",
+)
+_RANDOM_FUZZY_VOCAB = ["anything", "something", "random", "surprise"]
+
+
+def _is_liked_request(norm: str) -> bool:
+    """True when the user wants their liked-songs library played."""
+    if _LIKED_RE.search(norm):
+        return True
+    # typo-tolerant: "likked", "favourate", "favrite", ... (case already lowered)
+    for tok in re.findall(r"[a-z]+", norm):
+        if len(tok) < 4:
+            continue
+        m = difflib.get_close_matches(tok, _LIKED_FUZZY_VOCAB, n=1, cutoff=0.83)
+        if m:
+            return True
+    return False
+
+
+def _is_random_request(norm: str, parsed: dict) -> bool:
+    """True when the user wants a random catalog song (no filter facets)."""
+    if _RANDOM_RE.search(norm):
+        return True
+    # generic "something" -> random ONLY when it carries no precise meaning:
+    # exclude PLAY_SIMILAR ("something similar to this") and explicit
+    # "play Something by <artist>" (artist/ by-phrase) and any facet query.
+    if re.search(r"\bsomething\b", norm):
+        if "similar" in norm:
+            return False
+        if re.search(r"\bby\b", norm):
+            return False
+        if parsed.get("artist"):
+            return False
+        if parsed.get("moods") or parsed.get("language") or parsed.get("genre"):
+            return False
+        return True
+    # typo-tolerant fallback for longer random words ("someting", "randon",
+    # "suprise"). Short "any"/"eny" stays exact-only to avoid hijacking.
+    for tok in re.findall(r"[a-z]+", norm):
+        if len(tok) < 5:
+            continue
+        m = difflib.get_close_matches(tok, _RANDOM_FUZZY_VOCAB, n=1, cutoff=0.83)
+        if m:
+            if m[0] == "something":
+                if "similar" in norm or re.search(r"\bby\b", norm):
+                    continue
+                if parsed.get("artist"):
+                    continue
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +437,145 @@ def _detect_vibes(t: str) -> List[str]:
         if re.search(r"(^|\W)" + re.escape(v) + r"($|\W)", t) and v.upper().replace(" ", "_") not in vibes:
             vibes.append(v.upper().replace(" ", "_"))
     return vibes
+
+
+# ---------------------------------------------------------------------------
+# Lyric-line identification (human-like AI: ANY song line -> SEARCH_SONG).
+# Long descriptive / quoted / narrative inputs carry a lyric line framed by
+# cues like "which goes", "song that says", "lyrics". The FULL lyric line is
+# preserved in query for the backend identification chain
+# (local lyrics -> websearch -> library match). Only framing is stripped;
+# the lyric itself is never truncated to junk single words. Short exact-title
+# inputs (no cue, no quotes) are untouched and keep the legacy path.
+# ---------------------------------------------------------------------------
+_LYRIC_CUE_PATTERNS = [
+    r"which\s+goes(?:\s+something\s+like|\s+a\s+little\s+like|\s+like)?",
+    r"that\s+goes(?:\s+like)?",
+    r"goes\s+something\s+like",
+    r"goes\s+like",
+    r"song\s+that\s+says",
+    r"song\s+which\s+says",
+    r"song\s+that\s+goes",
+    r"song\s+which\s+goes",
+    r"that\s+says",
+    r"which\s+says",
+    r"song\s+with\s+(?:the\s+)?lyrics?",
+    r"with\s+the\s+lyrics?",
+    r"with\s+lyrics?",
+    r"song\s+with\s+lines?",
+    r"lines?\s+that\s+go",
+    r"line\s+that\s+goes",
+    r"\blyrics?\b",
+    r"\blyric\b",
+    r"\bgoes\b",
+    r"\bsays\b",
+]
+# longest cues first so "which goes like" wins over bare "goes"
+_LYRIC_CUE_PATTERNS = sorted(_LYRIC_CUE_PATTERNS, key=len, reverse=True)
+
+
+def _extract_quoted_lyric(text: str) -> Optional[str]:
+    """Return inner quoted lyric ("...", "...") when present, else None.
+
+    Double/curly quotes always count; single quotes only when they are
+    standalone delimiters (surrounded by boundaries), so apostrophes in
+    don't / I'm never fake a lyric.
+    """
+    try:
+        m = re.search(r'["\u201c\u201d](.+?)["\u201c\u201d]', text)
+        if m and m.group(1).strip() and len(m.group(1).strip()) >= 2:
+            return re.sub(r"\s+", " ", m.group(1).strip())
+        # single-quote delimiters must sit on token boundaries:
+        # opening preceded by start/space/bracket, closing followed by
+        # space/end/punctuation (don't / I'm have letter on both sides).
+        m2 = re.search(r"(?:^|[\s\(\[\{\>])'([^']{2,}?)'(?=[\s\.\,\!\?\:\;\)\]\}]|$)", text)
+        if m2 and len(m2.group(1).strip().split()) >= 2:
+            return re.sub(r"\s+", " ", m2.group(1).strip())
+    except Exception:
+        pass
+    return None
+
+
+def _has_lyric_cue(norm: str) -> bool:
+    """True when normalized text carries lyric-identification framing."""
+    try:
+        for pat in _LYRIC_CUE_PATTERNS:
+            if re.search(pat, norm):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _extract_lyric_query(norm: str, raw_text: str) -> Optional[str]:
+    """Extract the FULL lyric line from a framed request.
+
+    Priority:
+      1. quoted text ("hello ...") when a cue is present OR the quote holds
+         >=2 words (covers: play that song which goes "hello ..." and
+         play "munbe vaa ..." title-in-quotes).
+      2. text AFTER the earliest lyric cue ("which goes X" -> "X",
+         "song that says X" -> "X", "with lyrics X" -> "X").
+    Returns None when no framed lyric is present (short titles untouched).
+    Strips ONLY framing (quotes, cue, leading play filler, trailing colons);
+    never truncates the lyric line itself.
+    """
+    try:
+        quoted = _extract_quoted_lyric(raw_text or norm)
+        if quoted:
+            # quoted + cue is always a lyric; bare quoted >=2 words is also a
+            # lyric/title line worth preserving verbatim.
+            if _has_lyric_cue(norm) or len(quoted.split()) >= 2:
+                cleaned = quoted.strip(" :-\u2013\u2014,.!\"'\u201c\u201d\u2018\u2019`").strip()
+                return cleaned or quoted
+        # earliest cue wins (lyric starts right after it)
+        best: Optional[tuple] = None  # (start, end)
+        for pat in _LYRIC_CUE_PATTERNS:
+            m = re.search(pat, norm)
+            if m:
+                span = (m.start(), m.end())
+                if best is None or span[0] < best[0]:
+                    best = span
+        if best is not None:
+            after = norm[best[1]:].strip()
+            # cue leftovers: leading "like/as/:" and stray quotes
+            after = re.sub(r"^(like|as)\b\s*", "", after).strip()
+            after = after.strip(" :-\u2013\u2014,.!\"'\u201c\u201d\u2018\u2019`")
+            after = re.sub(r"\s+", " ", after).strip()
+            # strip a trailing framing noun left from "play the song lyrics X song"
+            # only when lyric is long (don't eat a 1-word title ending in song)
+            if len(after.split()) > 3:
+                after = re.sub(r"\s+(song|songs|music|lyrics?)\s*$", "", after).strip()
+            if after and len(after) >= 2:
+                return after
+    except Exception:
+        pass
+    return None
+
+
+def _is_bare_lyric_candidate(norm: str, parsed: dict) -> bool:
+    """True for a bare lyric line (no verb, no facets) worth identifying.
+
+    Guards so short gibberish ("xyzqw blarg flimflam", 3 words) still
+    clarifies while a real lyric line (4+ words, no mood/artist/lang/genre)
+    becomes SEARCH_SONG with the full line. Play-verb lines are handled by
+    the residual/vague-play paths above; this is the no-verb fallback.
+    """
+    try:
+        if parsed.get("artist") or parsed.get("moods") or parsed.get("language") or parsed.get("genre"):
+            return False
+        if parsed.get("vibes"):
+            return False
+        words = [w for w in re.findall(r"[A-Za-z\u00C0-\u024F\u1E00-\u1EFF\u0400-\u04FF\u0B80-\u0BFF]+", norm)]
+        # Tamil-script lines have no spaces issue; also accept length heuristic
+        if len(words) >= 4 and len(norm) >= 12:
+            return True
+        # Tamil script (U+0B80-0BFF) lyric without spaces still counts when long
+        if len(norm) >= 15 and re.search(r"[\u0B80-\u0BFF]", norm):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _strip_to_keywords(norm: str) -> str:
@@ -481,6 +714,10 @@ def _build_display_text(action: str, parsed: Dict[str, Any], search_query: str) 
         return f"Searching for {who}."
     if action == "PLAY_SIMILAR":
         return "Playing songs similar to this one."
+    if action == "PLAY_RANDOM":
+        return "Playing a random song."
+    if action == "PLAY_LIKED":
+        return "Playing your liked songs."
     if action in ("NEXT", "PREVIOUS", "PAUSE", "RESUME"):
         return f"{action.title()} executed."
     return f"Searching for {search_query}." if search_query else "Done."
@@ -680,6 +917,46 @@ def _mock_understand(text: str, context=None) -> dict:
         actions = [{"action": "ADD_TO_QUEUE", "parameters": {"target": "CURRENT_SONG"}}]
         res = _with_contract(actions, parsed, norm, "Adding current song to queue.")
         logger.info("[LLM mock] add_to_queue latency_ms=%.1f", (time.perf_counter() - t0) * 1000)
+        return res
+
+    # ---- NEW: PLAY_LIKED (user's liked-songs library, params {}) ----
+    # Before mood/artist/by branches so liked wins over junk SEARCH when both
+    # match ("play the like playlist any song" contains "any" + liked).
+    if _is_liked_request(norm):
+        liked_parsed = dict(parsed, song=None, coreKeywords="")
+        resp = "Playing your liked songs."
+        actions = [{"action": "PLAY_LIKED", "parameters": {}}]
+        res = _with_contract(actions, liked_parsed, norm, resp)
+        res["searchQuery"] = ""
+        res["displayText"] = resp
+        logger.info("[LLM mock] play_liked latency_ms=%.1f text=%r",
+                    (time.perf_counter() - t0) * 1000, text[:80])
+        return res
+
+    # ---- Lyric-line identification (human-like: ANY song line -> SEARCH_SONG)
+    # Framed lyric requests ("which goes ...", "song that says ...", "lyrics",
+    # quoted "...") ALWAYS resolve to SEARCH_SONG with the FULL line preserved
+    # for the backend identification chain (local lyrics -> websearch ->
+    # library match). Only framing is stripped. Checked BEFORE mood/artist/by
+    # so a lyric containing a feeling/artist word still identifies the song.
+    # Short exact titles (no cue, no quotes) return None here and keep legacy.
+    lyric_line = _extract_lyric_query(norm, text)
+    if lyric_line:
+        lyric_q = _smart_title(lyric_line)
+        lyric_params: Dict[str, Any] = {"query": lyric_q}
+        # preserve artist when the request names one alongside the lyric
+        # ("play that song which goes ... by Anirudh")
+        if artist:
+            lyric_params["artist"] = artist
+        lyric_parsed = dict(parsed, song=lyric_q, coreKeywords=lyric_line)
+        lyric_resp = f"Searching for {lyric_q}."
+        lyric_actions = [{"action": "SEARCH_SONG", "parameters": lyric_params}]
+        res = _with_contract(lyric_actions, lyric_parsed, norm, lyric_resp)
+        # contract: full lyric line is the searchable query (never junk words)
+        res["searchQuery"] = lyric_q
+        res["displayText"] = lyric_resp
+        logger.info("[LLM mock] lyric query=%r latency_ms=%.1f",
+                    lyric_line[:80], (time.perf_counter() - t0) * 1000)
         return res
 
     # ---- "play <song> by <artist>" (explicit, highest precision) ----
@@ -900,9 +1177,32 @@ def _mock_understand(text: str, context=None) -> dict:
         res = _with_contract(actions, parsed, norm, "Playing songs similar to this one.")
         return res
 
+    # ---- NEW: PLAY_RANDOM (random catalog song, params {}) ----
+    # After PLAY_SIMILAR / mood / artist branches so precise meanings win
+    # ("play something similar to this" -> PLAY_SIMILAR, "play Something by
+    # Anirudh" -> SEARCH_SONG). Bare PLAY ("play" alone -> RESUME) is
+    # untouched: this only fires on explicit random wording.
+    if _is_random_request(norm, parsed):
+        random_parsed = dict(parsed, song=None, coreKeywords="")
+        resp = "Playing a random song."
+        actions = [{"action": "PLAY_RANDOM", "parameters": {}}]
+        res = _with_contract(actions, random_parsed, norm, resp)
+        res["searchQuery"] = ""
+        res["displayText"] = resp
+        logger.info("[LLM mock] play_random latency_ms=%.1f text=%r",
+                    (time.perf_counter() - t0) * 1000, text[:80])
+        return res
+
     # ---- residual 'play <something>' -> YouTube-like SEARCH_SONG ----
     if "play" in verbs or "search" in verbs:
         core = parsed.get("coreKeywords") or _strip_to_keywords(norm)
+        # pure filler ("play me songs" -> core "songs") is not a query:
+        # fall through to the vague-play fallback (PLAY_RANDOM) below.
+        if core and core.strip().lower() in {
+            "song", "songs", "music", "tune", "tunes", "track", "tracks",
+            "video", "videos", "audio", "songs ",
+        }:
+            core = ""
         if core and len(core) >= 2:
             core_q = _smart_title(core)
             params = {"query": core_q}
@@ -919,6 +1219,75 @@ def _mock_understand(text: str, context=None) -> dict:
             logger.info("[LLM mock] residual-play query=%r latency_ms=%.1f",
                         core, (time.perf_counter() - t0) * 1000)
             return res
+
+    # ---- vague play-intent never clarifies (mirrors CF system-prompt rule) ----
+    # Any play/listen/enjoy request with extra words ALWAYS yields a play-family
+    # action realtime — never CLARIFICATION_NEEDED. Leftover words go into
+    # query/parameters (politeness stripped: please/some/me/a/the). Guards above
+    # stay: bare "play" -> RESUME (SIMPLE_PATTERNS), "like this" -> LIKE_CURRENT.
+    if re.search(r"\b(play|listen|enjoy)\b", norm):
+        words = norm.split()
+        if len(words) > 1:
+            remainder = parsed.get("coreKeywords") or _strip_to_keywords(norm)
+            for _ in range(3):
+                new = re.sub(
+                    r"^(please|kindly|some|me|a|the|an|my|to|for|of|enjoy|listen|play)\b\s*",
+                    "", remainder, flags=re.I).strip()
+                new = re.sub(
+                    r"\s+(please|song|songs|music|track|tracks|tune|tunes|video|videos|audio|number|numbers|pls|plz)\s*$",
+                    "", new, flags=re.I).strip()
+                new = re.sub(r"\s+", " ", new).strip()
+                if new == remainder:
+                    break
+                remainder = new
+            noise = {"a", "an", "the", "some", "me", "my", "please", "kindly",
+                     "this", "that", "it", "song", "songs", "music", "pls", "plz",
+                     "to", "for", "of", "enjoy", "listen", "play"}
+            if remainder and len(remainder) >= 2 and remainder.lower() not in noise:
+                core_q = _smart_title(remainder)
+                params: Dict[str, Any] = {"query": core_q}
+                if lang:
+                    params["language"] = lang
+                if genre:
+                    params["genre"] = genre
+                if moods:
+                    params["mood"] = moods[0]
+                actions = [{"action": "SEARCH_SONG", "parameters": params}]
+                resp = f"Searching for {core_q}."
+                res = _with_contract(actions, parsed, norm, resp)
+                res["displayText"] = resp
+                logger.info("[LLM mock] vague-play query=%r latency_ms=%.1f",
+                            remainder, (time.perf_counter() - t0) * 1000)
+                return res
+            # empty/politeness-only remainder ("play me a song") -> generic play
+            rand_parsed = dict(parsed, song=None, coreKeywords="")
+            resp = "Playing a random song."
+            actions = [{"action": "PLAY_RANDOM", "parameters": {}}]
+            res = _with_contract(actions, rand_parsed, norm, resp)
+            res["searchQuery"] = ""
+            res["displayText"] = resp
+            logger.info("[LLM mock] vague-play-random latency_ms=%.1f text=%r",
+                        (time.perf_counter() - t0) * 1000, text[:80])
+            return res
+
+    # ---- bare lyric line (no verb, no facets) -> SEARCH_SONG ----
+    # A bare lyric line without leading play ("hello from the other side",
+    # Tamil "kanmani anbodu ...") must still identify the song via the backend
+    # chain (local lyrics -> websearch -> library match). Only long,
+    # facet-free inputs qualify so short gibberish ("xyzqw blarg flimflam")
+    # still clarifies.
+    if _is_bare_lyric_candidate(norm, parsed):
+        bare_q = _smart_title(re.sub(r"\s+", " ", norm).strip(" :-\u2013\u2014,.!\"'\u201c\u201d\u2018\u2019`"))
+        bare_params: Dict[str, Any] = {"query": bare_q}
+        bare_parsed = dict(parsed, song=bare_q, coreKeywords=norm)
+        bare_resp = f"Searching for {bare_q}."
+        bare_actions = [{"action": "SEARCH_SONG", "parameters": bare_params}]
+        res = _with_contract(bare_actions, bare_parsed, norm, bare_resp)
+        res["searchQuery"] = bare_q
+        res["displayText"] = bare_resp
+        logger.info("[LLM mock] bare-lyric query=%r latency_ms=%.1f",
+                    norm[:80], (time.perf_counter() - t0) * 1000)
+        return res
 
     # fallback clarification with 3 suggestions
     logger.info("[LLM mock] clarification latency_ms=%.1f text=%r",
@@ -938,6 +1307,76 @@ def _sanitize_actions(actions: Any) -> tuple:
         else:
             hallucinated = True
     return clean, hallucinated
+
+
+def _enforce_no_search_contract(j: dict) -> dict:
+    """PLAY_RANDOM / PLAY_LIKED carry no search semantics: force empty
+    searchQuery (the generic setdefault backfill would otherwise invent junk
+    like "Any" / "My Liked" from parsed keywords when the model omits the
+    field). Also clears a stray parsed song title. Never raises."""
+    try:
+        acts = [a.get("action") for a in j.get("actions", []) if isinstance(a, dict)]
+    except Exception:
+        return j
+    if acts and all(a in ("PLAY_RANDOM", "PLAY_LIKED") for a in acts):
+        j["searchQuery"] = ""
+        try:
+            pk = j.get("parsedKeywords")
+            if isinstance(pk, dict):
+                pk["song"] = None
+        except Exception:
+            pass
+        if not j.get("displayText"):
+            j["displayText"] = j.get("response", "")
+    return j
+
+
+def _apply_lyric_contract_fix(j: dict, norm: str, text: str) -> dict:
+    """Force CF/transformers SEARCH_SONG contract to the FULL lyric line.
+
+    Live models already emit the right action query (lyric preserved) but the
+    generic backfill derives searchQuery from parsed keywords, which still
+    contain framing ("That Which Goes ..."). When a framed lyric is present,
+    override searchQuery + parsed song with the clean lyric so both fields
+    carry the full line for the backend identification chain
+    (local lyrics -> websearch -> library match). Never raises.
+    """
+    try:
+        lyric = _extract_lyric_query(norm, text)
+        if not lyric:
+            return j
+        lq = _smart_title(lyric)
+        j["searchQuery"] = lq
+        try:
+            for a in j.get("actions", []) or []:
+                if isinstance(a, dict) and a.get("action") == "SEARCH_SONG":
+                    params = a.get("parameters") or {}
+                    q = str(params.get("query") or params.get("song") or "")
+                    ql = q.lower()
+                    # replace only when missing or framing-contaminated; a clean
+                    # model lyric (contains the line) is normalized to lq.
+                    framing = ("which goes" in ql or "that goes" in ql
+                               or "goes like" in ql or "that says" in ql
+                               or "which says" in ql or "lyrics" in ql
+                               or "lyric" in ql)
+                    if (not q or lyric.lower() not in ql or framing):
+                        # keep artist facet when the model provided one
+                        artist = params.get("artist")
+                        params["query"] = lq
+                        if artist:
+                            params["artist"] = artist
+                        a["parameters"] = params
+        except Exception:
+            pass
+        try:
+            pk = j.get("parsedKeywords")
+            if isinstance(pk, dict):
+                pk["song"] = lq
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return j
 
 
 # ---------------------------------------------------------------------------
@@ -1079,9 +1518,13 @@ def understand(text: str, context=None) -> dict:
 
     result = _understand_uncached(text, context)
 
-    # Don't cache clarifications: only successful understands are reusable.
-    # Clarifications depend on transient context and would poison repeat queries.
-    if not result.get("clarificationNeeded"):
+    # Don't cache clarifications or empty-action results: only successful
+    # understands (>=1 action) are reusable. Empty actions[] (e.g. one CF
+    # empty response) would otherwise poison identical retries for 300s.
+    # Clarifications depend on transient context/failures.
+    actions = result.get("actions")
+    if (not result.get("clarificationNeeded")
+            and isinstance(actions, list) and len(actions) >= 1):
         try:
             from app.services import cache_service
             cache_service.put_understand(text, AI_MODE, context, result)
@@ -1132,6 +1575,7 @@ def _understand_uncached(text: str, context=None) -> dict:
                                         "I didn't understand that. Could you rephrase? "
                                         f"Try: {', '.join(repr(s) for s in CLARIFICATION_SUGGESTIONS)}")
                     j["actions"] = clean
+                    j = _enforce_no_search_contract(j)
                     # backfill contract fields if model omitted them
                     norm = normalize_entry(text)
                     parsed = _parse_keywords(norm)
@@ -1143,6 +1587,7 @@ def _understand_uncached(text: str, context=None) -> dict:
                     j.setdefault("searchQuery", _build_search_query(parsed, norm))
                     j.setdefault("displayText", j.get("response", ""))
                     j.setdefault("clarificationNeeded", False)
+                    j = _apply_lyric_contract_fix(j, norm, text)
                     return j
             return _mock_understand(text, context)
         except Exception as e:
@@ -1171,6 +1616,7 @@ def _understand_uncached(text: str, context=None) -> dict:
                             norm = normalize_entry(text)
                             return _clarify(norm, _parse_keywords(norm))
                         j["actions"] = clean
+                        j = _enforce_no_search_contract(j)
                         return j
                 return _mock_understand(text, context)
             except Exception as e:
@@ -1206,7 +1652,13 @@ def _understand_uncached(text: str, context=None) -> dict:
                         return _clarify(norm, _parse_keywords(norm),
                                         "I didn't understand that. Could you rephrase? "
                                         f"Try: {', '.join(repr(s) for s in CLARIFICATION_SUGGESTIONS)}")
+                    # Empty-action CF responses must not win: fall back to mock
+                    # so controls (e.g. "pause the music") still resolve and the
+                    # empty result is never cached (poison guard).
+                    if not clean:
+                        return _mock_understand(text, context)
                     j["actions"] = clean
+                    j = _enforce_no_search_contract(j)
                     # backfill contract fields if model omitted them
                     norm = normalize_entry(text)
                     parsed = _parse_keywords(norm)
@@ -1218,6 +1670,7 @@ def _understand_uncached(text: str, context=None) -> dict:
                     j.setdefault("searchQuery", _build_search_query(parsed, norm))
                     j.setdefault("displayText", j.get("response", ""))
                     j.setdefault("clarificationNeeded", False)
+                    j = _apply_lyric_contract_fix(j, norm, text)
                     return j
             return _mock_understand(text, context)
         except Exception as e:

@@ -1,5 +1,6 @@
 package com.spotibase.controller;
 
+import com.spotibase.config.YoutubeConfig;
 import com.spotibase.dto.response.YoutubeResolveResponse;
 import com.spotibase.dto.response.YoutubeSearchResponse;
 import com.spotibase.dto.response.YoutubeTrendingResponse;
@@ -48,6 +49,9 @@ class YoutubeControllerTest extends BaseWebMvcTest {
     @MockBean
     private YoutubeService youtubeService;
 
+    @MockBean
+    private YoutubeConfig youtubeConfig;
+
     private YoutubeVideoResponse mockVideo() {
         return YoutubeVideoResponse.builder()
                 .videoId(KNOWN_ID)
@@ -65,8 +69,8 @@ class YoutubeControllerTest extends BaseWebMvcTest {
 
     @Test
     void trending_authenticated_returns200WithMockSource() throws Exception {
-        when(youtubeService.getTrending("US", 15)).thenReturn(YoutubeTrendingResponse.builder()
-                .regionCode("US")
+        when(youtubeService.getTrending("IN", 15, null)).thenReturn(YoutubeTrendingResponse.builder()
+                .regionCode("IN")
                 .maxResults(15)
                 .count(1)
                 .source("MOCK")
@@ -76,16 +80,16 @@ class YoutubeControllerTest extends BaseWebMvcTest {
         mockMvc.perform(get("/api/v1/youtube/trending")
                         .with(user(TestUsers.regularUser("user-1"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.regionCode").value("US"))
+                .andExpect(jsonPath("$.regionCode").value("IN"))
                 .andExpect(jsonPath("$.source").value("MOCK"))
                 .andExpect(jsonPath("$.videos[0].videoId").value(KNOWN_ID));
 
-        verify(youtubeService).getTrending("US", 15);
+        verify(youtubeService).getTrending("IN", 15, null);
     }
 
     @Test
     void trending_customRegionAndLimit_forwardedUppercase() throws Exception {
-        when(youtubeService.getTrending("IN", 5)).thenReturn(YoutubeTrendingResponse.builder()
+        when(youtubeService.getTrending("IN", 5, null)).thenReturn(YoutubeTrendingResponse.builder()
                 .regionCode("IN")
                 .maxResults(5)
                 .count(1)
@@ -100,25 +104,37 @@ class YoutubeControllerTest extends BaseWebMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.regionCode").value("IN"));
 
-        verify(youtubeService).getTrending("IN", 5);
+        verify(youtubeService).getTrending("IN", 5, null);
     }
 
     @Test
-    void trending_oversizedLimit_clampedTo50() throws Exception {
-        when(youtubeService.getTrending("US", 50)).thenReturn(YoutubeTrendingResponse.builder()
-                .regionCode("US")
-                .maxResults(50)
-                .count(1)
-                .source("MOCK")
-                .videos(List.of(mockVideo()))
-                .build());
-
+    void trending_oversizedLimit_returns400() throws Exception {
         mockMvc.perform(get("/api/v1/youtube/trending")
                         .param("maxResults", "500")
                         .with(user(TestUsers.regularUser("user-1"))))
-                .andExpect(status().isOk());
+                .andExpect(status().isBadRequest());
 
-        verify(youtubeService).getTrending("US", 50);
+        verifyNoInteractions(youtubeService);
+    }
+
+    @Test
+    void trending_zeroLimit_returns400() throws Exception {
+        mockMvc.perform(get("/api/v1/youtube/trending")
+                        .param("maxResults", "0")
+                        .with(user(TestUsers.regularUser("user-1"))))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(youtubeService);
+    }
+
+    @Test
+    void trending_nonNumericLimit_returns400() throws Exception {
+        mockMvc.perform(get("/api/v1/youtube/trending")
+                        .param("maxResults", "abc")
+                        .with(user(TestUsers.regularUser("user-1"))))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(youtubeService);
     }
 
     @Test
@@ -153,7 +169,7 @@ class YoutubeControllerTest extends BaseWebMvcTest {
 
     @Test
     void search_authenticated_returns200() throws Exception {
-        when(youtubeService.search("lofi", 15)).thenReturn(YoutubeSearchResponse.builder()
+        when(youtubeService.search("lofi", "IN", "ta", "ta", 15, null)).thenReturn(YoutubeSearchResponse.builder()
                 .query("lofi")
                 .maxResults(15)
                 .count(1)
@@ -169,7 +185,7 @@ class YoutubeControllerTest extends BaseWebMvcTest {
                 .andExpect(jsonPath("$.source").value("MOCK"))
                 .andExpect(jsonPath("$.videos[0].videoId").value(KNOWN_ID));
 
-        verify(youtubeService).search("lofi", 15);
+        verify(youtubeService).search("lofi", "IN", "ta", "ta", 15, null);
     }
 
     @Test

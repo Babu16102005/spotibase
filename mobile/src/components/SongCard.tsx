@@ -1,8 +1,9 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet, Platform, Animated, PanResponder } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, PanResponder } from 'react-native';
 import { SongResponse } from '../types';
 import { usePlayerStore, useThemeStore, useSelectionStore } from '../store';
 import { formatDuration, coverSource } from '../utils';
+import AppImage from './AppImage';
 import Icon from './Icon';
 import SongOptionsMenuModal from './SongOptionsMenuModal';
 
@@ -177,7 +178,7 @@ const SongCard: React.FC<SongCardProps> = ({
           {...onHoverProps}
         >
           <View style={styles.compactArt}>
-            <Image source={coverSource(song.coverUrl)} style={styles.compactCover} />
+            <AppImage source={coverSource(song.coverUrl, 200)} recyclingKey={song.id} style={styles.compactCover} />
             {activeSelectionMode && (
               <View
                 style={[
@@ -282,8 +283,9 @@ const SongCard: React.FC<SongCardProps> = ({
               {isCurrent ? '\u25CF' : index + 1}
             </Text>
           ) : null}
-          <Image
-            source={coverSource(song.coverUrl)}
+          <AppImage
+            source={coverSource(song.coverUrl, 200)}
+            recyclingKey={song.id}
             style={styles.cover}
           />
           <View style={styles.info}>

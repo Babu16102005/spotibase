@@ -33,7 +33,7 @@ const AlbumScreen = ({ route, navigation }: any) => {
 
   const header = useCallback(() => (
     <View style={styles.header}>
-      <Image source={coverSource(album?.coverUrl)} style={[styles.cover, { borderColor: theme.colors.border }]} />
+      <Image source={coverSource(album?.coverUrl, 800)} style={[styles.cover, { borderColor: theme.colors.border }]} />
       <Text style={[styles.title, { color: theme.colors.text }]}>{album?.name}</Text>
       <Text style={[styles.artist, { color: theme.colors.textSecondary }]}>{album?.artistName}</Text>
       <Text style={[styles.meta, { color: theme.colors.textTertiary }]}>

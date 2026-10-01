@@ -11,6 +11,7 @@ const getWebAudio = (): HTMLAudioElement | null => {
 };
 
 import { getStorage } from '../utils';
+import { emitAudioStarted, onVideoStarted } from './playbackExclusion';
 
 const MAX_QUEUE_CAPACITY = 100;
 const queueStorage = getStorage('spotibase-cache');
@@ -121,20 +122,33 @@ const pingDirectPlayCount = (trackId?: string, streamUrl?: string) => {
 };
 
 /**
- * P0-2 reverse exclusion: audio winning must pause any playing YouTube video
- * so audio + video never overlap. Lazy require (not a static import):
- * youtubePlayerStore imports playerStore, so a top-level import would cycle.
- * Deferred require runs after both modules are initialized (same pattern as
- * the downloadStore lazy import below) and stays synchronous so the video
- * pauses in the same tick audio starts.
+ * P0-3 sync reverse exclusion: audio winning must pause any playing YouTube
+ * video so audio + video never overlap. Uses the shared playbackExclusion
+ * bus (imported synchronously by both stores) so the video pauses in the
+ * same tick — no dynamic import() async gap where both keep playing.
  */
 const notifyYoutubeAudioStarted = () => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const yt = require('./youtubePlayerStore') as typeof import('./youtubePlayerStore');
-    yt.useYouTubePlayerStore.getState().notifyAudioStarted();
+    emitAudioStarted();
   } catch {}
 };
+
+/**
+ * Video wins: invalidate any in-flight audio play/next/prev so a pending
+ * resolvePlaybackUrl/playOnWeb continuation cannot flip back to playing
+ * after the video already paused audio. The sync listener below bumps the
+ * epoch in the same tick via the shared exclusion bus (no dynamic import,
+ * no cycle: this module never imports youtubePlayerStore statically).
+ */
+export const abortPendingAudioForVideo = () => {
+  playRequestId++;
+};
+
+try {
+  onVideoStarted(() => {
+    playRequestId++;
+  });
+} catch {}
 
 /**
  * Offline-first URL resolution. Fallback chain:
@@ -1019,7 +1033,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   addToQueue: async (track) => {
     const currentQueue = get().queue;
-    // Deduplicate and keep maximum 5 songs in queue cache
+    // Deduplicate and cap to MAX_QUEUE_CAPACITY (100) in memory + cache.
     const filtered = currentQueue.filter((t) => t.id !== track.id);
     let nextQueue = [...filtered, track];
     if (nextQueue.length > MAX_QUEUE_CAPACITY) {

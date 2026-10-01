@@ -57,6 +57,22 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_GATEWAY, "Audio storage temporarily unavailable");
     }
 
+    @ExceptionHandler(YoutubeQuotaExceededException.class)
+    public ResponseEntity<ErrorResponse> handleYoutubeQuota(YoutubeQuotaExceededException ex) {
+        // Fail-closed safety net: YoutubeService normally fails open to mock
+        // data, so this only fires if quota escapes the service layer.
+        log.warn("YouTube quota exceeded: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, "YouTube quota exceeded, retry later");
+    }
+
+    @ExceptionHandler(YoutubeUpstreamException.class)
+    public ResponseEntity<ErrorResponse> handleYoutubeUpstream(YoutubeUpstreamException ex) {
+        // Fail-closed safety net: YoutubeService normally fails open to mock
+        // data, so this only fires if an upstream 400 escapes the service layer.
+        log.warn("YouTube upstream failure: {}", ex.getMessage());
+        return buildErrorResponse(HttpStatus.BAD_GATEWAY, "YouTube service temporarily unavailable");
+    }
+
     @ExceptionHandler(InvalidRangeException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRange(InvalidRangeException ex) {
         // Safety net: the stream path answers 416 directly with a Content-Range
@@ -103,8 +119,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
+            String fieldName;
             String errorMessage = error.getDefaultMessage();
+            if (error instanceof FieldError fieldError) {
+                fieldName = fieldError.getField();
+            } else {
+                fieldName = error.getObjectName() != null ? error.getObjectName() : "request";
+            }
             errors.put(fieldName, errorMessage);
         });
         ErrorResponse response = ErrorResponse.builder()

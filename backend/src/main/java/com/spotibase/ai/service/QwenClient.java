@@ -27,9 +27,16 @@ public class QwenClient {
     @Value("${ai.fallback-on-error:true}")
     private boolean fallbackOnError = true;
 
-    /** Partial (fast) budget for voice STT; full understand budget. */
+    /** Partial (fast) budget for voice STT; full understand budgets. */
     private static final Duration PARTIAL_TIMEOUT = Duration.ofMillis(800);
-    private static final Duration FULL_TIMEOUT = Duration.ofSeconds(3);
+    /** Text understand budget (CF p50 ~1.6s, p95 ~3.2s — 3s keeps failures fast). */
+    private static final Duration TEXT_TIMEOUT = Duration.ofSeconds(3);
+    /**
+     * Voice full budget: STT + CF understand (CF_TIMEOUT_S=4.0) + 1s retry +
+     * mock fallback + understand cache. 9s covers the full chain so the
+     * per-request timeout never fires before CF finishes.
+     */
+    private static final Duration VOICE_FULL_TIMEOUT = Duration.ofSeconds(9);
 
     public record QwenResponse(List<AssistantCommand> actions, String response, boolean clarificationNeeded, String clarificationQuestion) {}
 
@@ -58,8 +65,8 @@ public class QwenClient {
                     .bodyValue(body)
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .timeout(FULL_TIMEOUT)
-                    .block(FULL_TIMEOUT);
+                    .timeout(TEXT_TIMEOUT)
+                    .block(TEXT_TIMEOUT);
 
             if (resp == null) return Optional.empty();
             return Optional.of(mapToQwenResponse(resp));
@@ -84,7 +91,7 @@ public class QwenClient {
                 builder.part("context", om.writeValueAsString(context));
             }
 
-            // Full 3s budget for STT+understand (AiConfig responseTimeout backs this;
+            // Full 9s budget for STT+understand (AiConfig responseTimeout backs this;
             // per-request timeout below guarantees fallback even if connector config drifts).
             Map<String, Object> resp = aiWebClient.post()
                     .uri("/speech/voice")
@@ -92,8 +99,8 @@ public class QwenClient {
                     .bodyValue(builder.build())
                     .retrieve()
                     .bodyToMono(Map.class)
-                    .timeout(FULL_TIMEOUT)
-                    .block(FULL_TIMEOUT);
+                    .timeout(VOICE_FULL_TIMEOUT)
+                    .block(VOICE_FULL_TIMEOUT);
 
             if (resp == null) return Optional.empty();
             return Optional.of(mapToQwenResponse(resp));
@@ -106,7 +113,7 @@ public class QwenClient {
     /**
      * Partial-timeout variant for latency-sensitive voice callers: fails fast
      * after 800ms so the caller can render a partial state, then the full
-     * {@link #understandVoice} path (3s) completes the result.
+     * {@link #understandVoice} path (9s) completes the result.
      */
     public Optional<QwenResponse> understandVoicePartial(byte[] audio, String filename,
                                                          String transcriptFallback, AssistantContext context) {

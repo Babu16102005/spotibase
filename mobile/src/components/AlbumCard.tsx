@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Platform } from 'react-native';
 import { AlbumResponse } from '../types';
 import { useThemeStore } from '../store';
 import { coverSource } from '../utils';
+import AppImage from './AppImage';
 import Icon from './Icon';
 
 interface AlbumCardProps {
@@ -26,7 +27,7 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album, onPress, variant = 'grid' 
   if (variant === 'list') {
     return (
       <TouchableOpacity style={[styles.listContainer, { backgroundColor: 'transparent' }]} onPress={onPress} activeOpacity={0.7}>
-        <Image source={coverSource(album.coverUrl)} style={styles.listCover} />
+        <AppImage source={coverSource(album.coverUrl, 200)} recyclingKey={album.id} style={styles.listCover} />
         <View style={styles.listInfo}>
           <Text style={[styles.listTitle, { color: theme.colors.text }]} numberOfLines={1}>{album.name}</Text>
           <Text style={[styles.listSubtitle, { color: theme.colors.textSecondary }]}>{album.artistName} \u2022 {album.songCount} songs</Text>
@@ -53,7 +54,7 @@ const AlbumCard: React.FC<AlbumCardProps> = ({ album, onPress, variant = 'grid' 
       {...onHover}
     >
       <View style={styles.artWrap}>
-        <Image source={coverSource(album.coverUrl)} style={styles.gridCover} />
+        <AppImage source={coverSource(album.coverUrl, 200)} recyclingKey={album.id} style={styles.gridCover} />
         {hovered && (
           <View style={[styles.playOverlay, { backgroundColor: theme.colors.primary }]}>
             <Icon name="play" size={16} color="#000000" />

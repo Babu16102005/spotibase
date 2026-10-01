@@ -203,7 +203,7 @@ public class AssistantController {
      *
      * <p>Read-only by construction: the service layer never dispatches,
      * queues, likes, edits playlists, or pushes realtime events on this path.
-     * The full {@code POST /api/v1/ai/voice} (3s) executes the real actions
+     * The full {@code POST /api/v1/ai/voice} (9s) executes the real actions
      * and is unchanged.
      *
      * <p>Contract: every failure (blank text, AI timeout, search error,

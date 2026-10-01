@@ -12,6 +12,16 @@ import lombok.NoArgsConstructor;
  * <p>{@code source} is {@code LIVE} for YouTube Data API v3 responses and
  * {@code MOCK} for the built-in offline fallback (no API key configured or
  * upstream quota/network failure). The API key itself is never exposed here.
+ *
+ * <p>Playback-safety flags (issue #153): {@code embeddable} mirrors
+ * {@code status.embeddable}; {@code privacyStatus} mirrors
+ * {@code status.privacyStatus} ({@code public}/{@code unlisted}/{@code private});
+ * {@code allowedRegions}/{@code blockedRegions} mirror
+ * {@code contentDetails.regionRestriction.allowed/blocked};
+ * {@code ageRestricted} is true when
+ * {@code contentDetails.contentRating.ytRating=ytAgeRestricted}.
+ * Null means "unknown" (e.g. search hydration failed) and must be treated as
+ * playable by fail-open filtering.
  */
 @Data
 @Builder
@@ -19,7 +29,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class YoutubeVideoResponse implements Serializable {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
 
     private String videoId;
     private String title;
@@ -34,4 +44,14 @@ public class YoutubeVideoResponse implements Serializable {
     private long viewCount;
     /** LIVE or MOCK — tells clients whether this row came from the quota-backed API. */
     private String source;
+    /** Mirrors {@code status.embeddable}. Null = unknown (treat as playable, fail-open). */
+    private Boolean embeddable;
+    /** Mirrors {@code status.privacyStatus}. Null = unknown (treat as playable). */
+    private String privacyStatus;
+    /** Mirrors {@code contentDetails.regionRestriction.allowed}. Null/empty = no allowlist. */
+    private java.util.List<String> allowedRegions;
+    /** Mirrors {@code contentDetails.regionRestriction.blocked}. Null/empty = not blocked. */
+    private java.util.List<String> blockedRegions;
+    /** True when {@code contentDetails.contentRating.ytRating=ytAgeRestricted}. Null = unknown. */
+    private Boolean ageRestricted;
 }

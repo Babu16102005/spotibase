@@ -121,7 +121,7 @@ const PlaylistScreen = ({ route, navigation }: any) => {
 
   const header = useCallback(() => (
     <View style={styles.header}>
-      <Image source={coverSource(playlist?.coverUrl)} style={[styles.cover, { borderColor: theme.colors.border }]} />
+      <Image source={coverSource(playlist?.coverUrl, 800)} style={[styles.cover, { borderColor: theme.colors.border }]} />
       <Text style={[styles.title, { color: theme.colors.text }]}>{playlist?.name}</Text>
       <Text style={[styles.owner, { color: theme.colors.textSecondary }]}>
         {playlist?.username} • {playlist?.songCount} songs

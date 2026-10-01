@@ -40,12 +40,18 @@ const SearchScreen = ({ navigation, route }: any) => {
   // Abort any in-flight search + pending debounce on unmount.
   useEffect(() => () => {
     searchAbortRef.current?.abort();
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
   }, []);
 
   const handleSearch = useCallback(async (q: string) => {
     setQuery(q);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
     searchAbortRef.current?.abort();
     if (!q.trim()) {
       setResults(null);
@@ -70,11 +76,22 @@ const SearchScreen = ({ navigation, route }: any) => {
   }, []);
 
   // Memoized per-type renderers so they are not recreated on every keystroke/theme change
+  const goToYouTubeSongs = useCallback(() => {
+    try {
+      const parent = navigation?.getParent?.();
+      if (parent?.navigate) {
+        parent.navigate('YouTubeSongs');
+        return;
+      }
+    } catch {}
+    navigation?.navigate('YouTubeSongs');
+  }, [navigation]);
+
   const renderTrending = useCallback((items: string[]) => (
     <View>
       <TouchableOpacity
         style={[styles.youtubeCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
-        onPress={() => navigation?.navigate('YouTubeSongs')}
+        onPress={goToYouTubeSongs}
         accessibilityRole="button"
         accessibilityLabel="Discover trending YouTube songs"
       >
@@ -95,7 +112,7 @@ const SearchScreen = ({ navigation, route }: any) => {
         </>
       )}
     </View>
-  ), [theme, handleSearch, navigation]);
+  ), [theme, handleSearch, goToYouTubeSongs]);
 
   const renderSongs = useCallback((songs: any[]) => (
     <>
@@ -178,7 +195,15 @@ const SearchScreen = ({ navigation, route }: any) => {
           autoCapitalize="none"
         />
         {query ? (
-          <TouchableOpacity onPress={() => { searchAbortRef.current?.abort(); setQuery(''); setResults(null); }}>
+          <TouchableOpacity onPress={() => {
+            if (debounceRef.current) {
+              clearTimeout(debounceRef.current);
+              debounceRef.current = null;
+            }
+            searchAbortRef.current?.abort();
+            setQuery('');
+            setResults(null);
+          }}>
             <Text style={{ color: theme.colors.textSecondary }}>✕</Text>
           </TouchableOpacity>
         ) : null}

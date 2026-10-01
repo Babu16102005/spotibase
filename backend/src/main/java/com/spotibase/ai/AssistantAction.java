@@ -19,6 +19,13 @@ public enum AssistantAction {
     PLAY_BY_GENRE,
     PLAY_BY_LANGUAGE,
     PLAY_SIMILAR,
+    PLAY_RANDOM,
+    PLAY_LIKED,
+
+    // YouTube fallback (lyric identification miss in local catalog):
+    // backend resolves the lyric line via YouTube search and the app plays
+    // it with youtubePlayerStore.playVideo({ videoId, title, ... }).
+    PLAY_YOUTUBE,
 
     // Queue
     ADD_TO_QUEUE,

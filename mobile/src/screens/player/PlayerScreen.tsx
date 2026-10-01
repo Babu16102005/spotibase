@@ -84,7 +84,7 @@ const PlayerScreen = ({ navigation }: any) => {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={[styles.artWrap, { width: artSize, height: artSize }]}>
           <Image
-            source={coverSource(currentTrack.coverUrl)}
+            source={coverSource(currentTrack.coverUrl, 800)}
             style={[styles.cover, { borderColor: theme.colors.border }]}
           />
         </View>

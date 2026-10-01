@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { UserResponse, LoginRequest, RegisterRequest } from '../types';
 import { authApi } from '../api/client';
 import { getStorage } from '../utils';
+import { queryClient } from '../query/queryClient';
 import { prefetchHomeFeed } from '../cache/homeFeedCache';
 import { prefetchSongs } from '../cache/songListCache';
 
@@ -68,6 +69,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await authApi.login(data);
       const { accessToken, refreshToken, user } = response.data;
       saveAuthSession(accessToken, refreshToken, user);
+      try {
+        queryClient.clear();
+      } catch {}
       set({ user, isAuthenticated: true, isLoading: false });
       void prefetchHomeFeed();
       void prefetchSongs();
@@ -84,6 +88,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await authApi.register(data);
       const { accessToken, refreshToken, user } = response.data;
       saveAuthSession(accessToken, refreshToken, user);
+      try {
+        queryClient.clear();
+      } catch {}
       set({ user, isAuthenticated: true, isLoading: false });
       void prefetchHomeFeed();
       void prefetchSongs();
@@ -100,6 +107,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await authApi.socialAuth(provider, idToken);
       const { accessToken, refreshToken, user } = response.data;
       saveAuthSession(accessToken, refreshToken, user);
+      try {
+        queryClient.clear();
+      } catch {}
       set({ user, isAuthenticated: true, isLoading: false });
       void prefetchHomeFeed();
       void prefetchSongs();
@@ -114,6 +124,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       feedCache.clearAll();
     } catch {}
+    try {
+      queryClient.clear();
+    } catch {}
+    // Scoped queue teardown: clear the in-memory player queue + TrackPlayer
+    // without touching other caches beyond the feedCache wipe above (which
+    // already drops the persisted queue key). Fire-and-forget so logout never blocks.
+    try {
+      const { usePlayerStore } = require('./playerStore') as typeof import('./playerStore');
+      void usePlayerStore.getState().clearQueue().catch(() => {});
+    } catch {}
     set({ user: null, isAuthenticated: false, isLoading: false, error: null });
   },
 
@@ -124,7 +144,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // If we have cached credentials & user, restore instantly and unblock the
       // UI (isLoading=false) BEFORE the network refresh. The refresh below runs
-      // in the background so a slow backend never gates app start.
+      // in the background so a slow backend never gates app start. Single
+      // prefetch: home+songs warm once here; the post-refresh path does not
+      // re-prefetch the same feed.
       if (cachedUser && refreshToken) {
         set({ user: cachedUser, isAuthenticated: true, isLoading: false });
         void prefetchHomeFeed();
@@ -135,11 +157,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             const { accessToken: newAccess, refreshToken: newRefresh, user: newUser } = response.data;
             saveAuthSession(newAccess, newRefresh, newUser);
             set({ user: newUser, isAuthenticated: true, isLoading: false });
-            void prefetchHomeFeed();
           } catch (refreshErr: any) {
             const isNetworkError = refreshErr.message === 'Network Error' || refreshErr.code === 'ERR_NETWORK';
             if (!isNetworkError) {
               storage.clearAll();
+              try {
+                queryClient.clear();
+              } catch {}
               set({ user: null, isAuthenticated: false, isLoading: false });
             }
             // On network error/offline, keep the cached session as-is.
@@ -165,6 +189,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const isNetworkError = refreshErr.message === 'Network Error' || refreshErr.code === 'ERR_NETWORK';
         if (!isNetworkError) {
           storage.clearAll();
+          try {
+            queryClient.clear();
+          } catch {}
           set({ user: null, isAuthenticated: false, isLoading: false });
         } else {
           // On network error or offline, maintain the cached session!

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Text, TouchableOpacity, Image, StyleSheet, Dimensions, Platform } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, Dimensions, Platform } from 'react-native';
 import { PlaylistResponse } from '../types';
 import { useThemeStore } from '../store';
 import { coverSource } from '../utils';
+import AppImage from './AppImage';
 import Icon from './Icon';
 
 const { width } = Dimensions.get('window');
@@ -41,7 +42,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist, onPress, onLongPr
       activeOpacity={0.8}
       {...onHover}
     >
-      <Image source={coverSource(playlist.coverUrl)} style={styles.cover} />
+      <AppImage source={coverSource(playlist.coverUrl, 200)} recyclingKey={playlist.id} style={styles.cover} />
       <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>{playlist.name}</Text>
       <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
         {playlist.songCount} songs {playlist.isPublic ? '\u2022 Public' : '\u2022 Private'}

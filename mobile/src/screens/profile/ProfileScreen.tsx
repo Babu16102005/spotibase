@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, useThemeStore } from '../../store';
 import SongUploader from '../../components/SongUploader';
 import GlassButton from '../../components/GlassButton';
@@ -8,10 +9,14 @@ import { coverSource } from '../../utils';
 const ProfileScreen = ({ navigation }: any) => {
   const { user, logout } = useAuthStore();
   const { theme, themeMode, setThemeMode, greetingPattern, setGreetingPattern } = useThemeStore();
+  const insets = useSafeAreaInsets();
   const isAdmin = user?.role === 'ADMIN';
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 + insets.bottom }]}
+    >
       <View style={styles.header}>
         <Image
           source={coverSource(user?.avatarUrl)}
@@ -46,7 +51,7 @@ const ProfileScreen = ({ navigation }: any) => {
 
         <Text style={[styles.subSectionTitle, { color: theme.colors.textSecondary }]}>Greeting Section Theme</Text>
         <View style={styles.patternGrid}>
-          {(['RANDOM', 'FLUID', 'AURORA', 'COSMIC', 'GEOMETRIC'] as const).map((pat) => (
+          {(['FLUID', 'AURORA'] as const).map((pat) => (
             <GlassButton
               key={pat}
               variant={greetingPattern === pat ? 'primary' : 'glass'}
@@ -90,6 +95,12 @@ const ProfileScreen = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scrollContent: {
+    // Keep last row (Settings / Log Out) clear of the floating MiniPlayer (~72px
+    // at bottom:60) + tab bar (68px). Matches SettingsScreen paddingBottom:140;
+    // safe-area inset is added inline so the notch/home indicator also clears.
+    paddingBottom: 140,
+  },
   header: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 24 },
   avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 2, marginBottom: 16 },
   name: { fontSize: 24, fontWeight: '700' },

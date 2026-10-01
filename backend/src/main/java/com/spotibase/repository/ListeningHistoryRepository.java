@@ -3,6 +3,7 @@ package com.spotibase.repository;
 import com.spotibase.entity.ListeningHistory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -42,6 +43,15 @@ public interface ListeningHistoryRepository extends JpaRepository<ListeningHisto
     long totalListeningTimeSince(@Param("since") LocalDateTime since);
 
     Page<ListeningHistory> findByUserId(String userId, Pageable pageable);
+
+    /**
+     * COUNT-free slice for history pages: Page#findByUserId issues a
+     * SELECT COUNT(*) per page (full scan on large histories). Paged list
+     * endpoints use this Slice (LIMIT + 1 probe, no COUNT) and derive
+     * first/last from hasNext; totals are best-effort (exact on last page).
+     */
+    @Query("SELECT lh FROM ListeningHistory lh WHERE lh.user.id = :userId ORDER BY lh.playedAt DESC")
+    Slice<ListeningHistory> findSliceByUserId(@Param("userId") String userId, Pageable pageable);
 
     @Query("SELECT COUNT(DISTINCT lh.user.id) FROM ListeningHistory lh " +
            "WHERE lh.playedAt >= :since")

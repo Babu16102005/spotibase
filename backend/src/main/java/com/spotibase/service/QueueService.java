@@ -8,6 +8,7 @@ import com.spotibase.entity.User;
 import com.spotibase.exception.BadRequestException;
 import com.spotibase.exception.ResourceNotFoundException;
 import com.spotibase.exception.UnauthorizedException;
+import com.spotibase.repository.LikeRepository;
 import com.spotibase.repository.QueueRepository;
 import com.spotibase.repository.SongRepository;
 import com.spotibase.repository.UserRepository;
@@ -16,9 +17,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -30,6 +33,7 @@ public class QueueService {
 
     private final QueueRepository queueRepository;
     private final SongRepository songRepository;
+    private final LikeRepository likeRepository;
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
@@ -177,29 +181,39 @@ public class QueueService {
                 .map(Queue::getSongId)
                 .collect(Collectors.toList());
 
-        List<Song> songs = songRepository.findByIds(allSongIds);
+        // Single batch fetch with core relations + one liked IN query instead
+        // of N lazy loads + N per-song EXISTS (plus a duplicate EXISTS for
+        // the current song, now reused from the same batch).
+        List<Song> songs = allSongIds.isEmpty() ? List.of()
+                : songRepository.findByIdsWithCoreRelations(allSongIds);
         Map<String, Song> songMap = songs.stream()
-                .collect(Collectors.toMap(Song::getId, Function.identity()));
+                .collect(Collectors.toMap(Song::getId, Function.identity(), (a, b) -> a));
+        final Set<String> likedIds;
+        if (userId != null && !allSongIds.isEmpty()) {
+            likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, allSongIds));
+        } else {
+            likedIds = Set.of();
+        }
 
         Song currentSong = songMap.get(current.getSongId());
         List<SongResponse> songResponses = unplayed.stream()
                 .map(q -> songMap.get(q.getSongId()))
                 .filter(Objects::nonNull)
-                .map(song -> toSongResponse(song, userId))
+                .map(song -> toSongResponse(song, likedIds.contains(song.getId())))
                 .collect(Collectors.toList());
 
         long totalDurationMs = songs.stream().mapToLong(Song::getDurationMs).sum();
 
         return QueueResponse.builder()
                 .songs(songResponses)
-                .currentSong(currentSong != null ? toSongResponse(currentSong, userId) : null)
+                .currentSong(currentSong != null ? toSongResponse(currentSong, likedIds.contains(currentSong.getId())) : null)
                 .currentPosition(0)
                 .totalSongs(unplayed.size())
                 .totalDurationMs(totalDurationMs)
                 .build();
     }
 
-    private SongResponse toSongResponse(Song song, String userId) {
+    private SongResponse toSongResponse(Song song, boolean liked) {
         SongResponse.SongResponseBuilder builder = SongResponse.builder()
                 .id(song.getId())
                 .title(song.getName())
@@ -234,9 +248,7 @@ public class QueueService {
             builder.genreId(song.getGenre().getId());
             builder.genreName(song.getGenre().getName());
         }
-        if (userId != null) {
-            builder.liked(songRepository.existsByUserIdAndSongId(userId, song.getId()));
-        }
+        builder.liked(liked);
 
         return builder.build();
     }

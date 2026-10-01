@@ -32,9 +32,11 @@ public class ArtistController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @CurrentUser CustomUserDetails user) {
-        log.info("Get all artists, page: {}, size: {}", page, size);
+        int safePage = Math.max(0, page);
+        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
+        log.info("Get all artists, page: {}, size: {} (requested page={}, size={})", safePage, safeSize, page, size);
         String userId = user != null ? user.getId() : null;
-        return ResponseEntity.ok(artistService.getAllArtists(page, size, userId));
+        return ResponseEntity.ok(artistService.getAllArtists(safePage, safeSize, userId));
     }
 
     @GetMapping("/{id}")

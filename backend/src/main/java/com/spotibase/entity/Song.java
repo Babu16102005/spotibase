@@ -2,6 +2,7 @@ package com.spotibase.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -183,6 +184,7 @@ public class Song {
 
     // Relationships
     @ManyToMany(mappedBy = "songs")
+    @BatchSize(size = 20)
     @Builder.Default
     private Set<Playlist> playlists = new HashSet<>();
 
@@ -190,11 +192,16 @@ public class Song {
     @JoinTable(name = "liked_songs",
             joinColumns = @JoinColumn(name = "song_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id"))
+    @BatchSize(size = 20)
     @Builder.Default
     private Set<User> likedBy = new HashSet<>();
 
     // NEW: Contributing artists (featuring, remixers, producers, etc.)
+    // Batch-fetched 20 at a time: list endpoints that miss the core-relations
+    // fetch (trending / new-releases / featured / cursor tails) pay ~N/20
+    // queries instead of N when rendering contributors.
     @OneToMany(mappedBy = "song", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 20)
     @Builder.Default
     private List<SongContributingArtist> contributingArtists = new ArrayList<>();
 

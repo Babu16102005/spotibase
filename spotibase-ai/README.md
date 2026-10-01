@@ -50,7 +50,7 @@ curl -X POST http://localhost:7860/speech/voice \
 
 ## Prompt / response contract
 
-System prompt: `app/prompts/assistant_system.txt` (30-action allow-list, mood/genre/language vocab).
+System prompt: `app/prompts/assistant_system.txt` (32-action allow-list, mood/genre/language vocab).
 
 Request (`POST /assistant/understand`):
 
@@ -101,7 +101,7 @@ Mock keyword rules (`app/services/llm_service.py::_mock_understand`):
 - Patterns: `play X by Y` → `SEARCH_SONG{song:X, artist:Y}`; `<artist> hits/songs/mix`
   → `SEARCH_ARTIST`; `mood + language` (e.g. `happy tamil songs`) → `PLAY_BY_MOOD`;
   bare `play <keywords>` → `SEARCH_SONG{query}`; controls (`next/pause/like/…`) bypass the LLM.
-- Safety: only the 30-action allow-list is ever emitted (`llm_service.ALLOWED_ACTIONS`);
+- Safety: only the 32-action allow-list is ever emitted (`llm_service.ALLOWED_ACTIONS`);
   anything else → clarification. No SQL/DB access, no invented IDs, secrets via env only
   (`HF_TOKEN`, `CF_ACCOUNT_ID`/`CF_AI_TOKEN`, `REDIS_URL` — never hardcoded, CF token never logged).
   `hf_api` retries once then falls back to mock; `cf_workers` tries twice

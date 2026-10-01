@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { useAuthStore, useThemeStore } from '../store';
 import { usePlayerStore } from '../store';
+import { useYouTubePlayerStore } from '../store/youtubePlayerStore';
 
 // Import screens (will be created separately)
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -21,13 +22,16 @@ import AlbumScreen from '../screens/album/AlbumScreen';
 import ArtistScreen from '../screens/artist/ArtistScreen';
 import PlaylistScreen from '../screens/playlist/PlaylistScreen';
 import YouTubeSongsScreen from '../screens/youtube/YouTubeSongsScreen';
+import YouTubeWatchScreen from '../screens/youtube/YouTubeWatchScreen';
 import MiniPlayer from '../components/MiniPlayer';
+import MiniYouTubeOverlay from '../components/youtube/MiniYouTubeOverlay';
 import Sidebar, { TabKey } from '../components/Sidebar';
 import PlayBar from '../components/PlayBar';
 import Icon from '../components/Icon';
 import CenterNotchTabBar from '../components/CenterNotchTabBar';
 import GlobalBulkSelectionBar from '../components/GlobalBulkSelectionBar';
 import AiOrb from '../components/AiOrb';
+import AppSplashScreen from '../components/AppSplashScreen';
 
 export type RootStackParamList = {
   Auth: undefined;
@@ -36,6 +40,9 @@ export type RootStackParamList = {
   Artist: { id: string };
   Playlist: { id: string };
   YouTubeSongs: undefined;
+  YouTubeWatch:
+    | { videoId: string; title?: string; channelTitle?: string; thumbnailUrl?: string }
+    | undefined;
   Profile: undefined;
   Settings: undefined;
   Admin: undefined;
@@ -180,10 +187,15 @@ const MainTabs = () => {
 const RootNavigator = () => {
   const { isAuthenticated, isLoading, user } = useAuthStore();
   const { theme } = useThemeStore();
+  const ytCurrentVideo = useYouTubePlayerStore((s) => s.currentVideo);
   const isAdmin = user?.role === 'ADMIN';
 
   if (isLoading) {
-    return <View style={[styles.loading, { backgroundColor: theme.colors.background }]} />;
+    return (
+      <View style={[styles.loading, { backgroundColor: theme.colors.background }]}>
+        <AppSplashScreen isReady={false} />
+      </View>
+    );
   }
 
   return (
@@ -212,6 +224,7 @@ const RootNavigator = () => {
           <>
             <RootStack.Screen name="Main" component={MainTabs} />
             <RootStack.Screen name="YouTubeSongs" component={YouTubeSongsScreen} />
+            <RootStack.Screen name="YouTubeWatch" component={YouTubeWatchScreen} />
             <RootStack.Screen name="Album" component={AlbumScreen} />
             <RootStack.Screen name="Artist" component={ArtistScreen} />
             <RootStack.Screen name="Playlist" component={PlaylistScreen} />
@@ -223,6 +236,10 @@ const RootNavigator = () => {
           <RootStack.Screen name="Auth" component={AuthNavigator} />
         )}
       </RootStack.Navigator>
+      {/* Global floating YouTube player: single instance, outside the stack so
+          it persists across screens. z 50 floats above content/tab bar; the
+          AiOrb voice sheet is a native Modal and stays on top. */}
+      {isAuthenticated && ytCurrentVideo ? <MiniYouTubeOverlay /> : null}
       {isAuthenticated && <GlobalBulkSelectionBar />}
     </NavigationContainer>
   );

@@ -22,6 +22,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -113,22 +114,30 @@ public class SongService {
     }
 
     public PagedResponse<SongResponse> getAllSongs(int page, int size, String userId) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Song> songPage = songRepository.findAllActive(pageable);
-        List<String> ids = songPage.getContent().stream()
-                .map(Song::getId)
-                .collect(Collectors.toList());
-        // Cached base (no user data) + per-request liked overlay (1 fast query).
-        // Deep-copy each element: new ArrayList<>(cached) alone still shares the
-        // mutable SongResponse instances with the cache.
-        List<SongResponse> songs = (self != null ? self : this).getSongsBase(ids).stream()
-                .map(this::copySongResponse)
-                .collect(Collectors.toCollection(ArrayList::new));
-        if (userId != null && !songs.isEmpty()) {
-            Set<String> likedIds = new HashSet<>(likeRepository.findLikedSongIds(userId, ids));
-            songs.forEach(s -> s.setLiked(likedIds.contains(s.getId())));
-        }
-        return toPagedResponse(songPage, songs);
+        int safePage = Math.max(0, page);
+        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // COUNT-free page: index-only id scan (no SELECT COUNT per page, no
+        // full-entity page fetch) + single batched details fetch + 1 liked IN.
+        Slice<String> idSlice = songRepository.findActiveIds(pageable);
+        List<String> ids = idSlice.getContent();
+        List<SongResponse> songs = getSongsByIds(ids, userId);
+        // Totals are best-effort without COUNT: exact when last page (or
+        // empty), otherwise offset + size signals "more available". The
+        // `last` flag (from hasNext) drives infinite scroll, not totals.
+        long totalElements = idSlice.isLast()
+                ? (long) idSlice.getNumber() * idSlice.getSize() + songs.size()
+                : (long) (idSlice.getNumber() + 1) * idSlice.getSize() + 1;
+        int totalPages = idSlice.isLast() ? idSlice.getNumber() + 1 : idSlice.getNumber() + 2;
+        return PagedResponse.<SongResponse>builder()
+                .content(songs)
+                .page(idSlice.getNumber())
+                .size(idSlice.getSize())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .first(idSlice.isFirst())
+                .last(idSlice.isLast())
+                .build();
     }
 
     /**
@@ -841,15 +850,16 @@ public class SongService {
     }
 
     public List<SongResponse> getSongsByArtist(String artistId, String userId, Pageable pageable) {
-        return songRepository.findByArtistIdAndArchivedFalseOrderByReleaseDateDesc(artistId, pageable).stream()
-                .map(song -> toSongResponse(song, userId))
-                .collect(Collectors.toList());
+        // Batched liked overlay: 1 IN query instead of N per-song EXISTS.
+        List<Song> songs = songRepository.findByArtistIdAndArchivedFalseOrderByReleaseDateDesc(artistId, pageable)
+                .getContent();
+        return toSongResponses(songs, userId);
     }
 
     public List<SongResponse> getSongsByAlbum(String albumId, String userId) {
-        return songRepository.findByAlbumIdAndArchivedFalseOrderByDiscNumberAscTrackNumberAsc(albumId).stream()
-                .map(song -> toSongResponse(song, userId))
-                .collect(Collectors.toList());
+        // Same batching: album pages can hold dozens of tracks.
+        List<Song> songs = songRepository.findByAlbumIdAndArchivedFalseOrderByDiscNumberAscTrackNumberAsc(albumId);
+        return toSongResponses(songs, userId);
     }
 
     public List<SongResponse> getSongsByIds(List<String> ids, String userId) {
@@ -917,19 +927,22 @@ public class SongService {
 
     // NEW: Optimized home feed query
     public PagedResponse<SongResponse> getHomeFeed(String userId, Pageable pageable) {
-        Page<Song> songPage = songRepository.findHomeFeed(pageable);
-        List<SongResponse> songs = songPage.getContent().stream()
-                .map(song -> toSongResponse(song, userId))
-                .collect(Collectors.toList());
+        // Clamp page size (controllers already clamp; service is the backstop).
+        Pageable safe = PageRequest.of(Math.max(0, pageable.getPageNumber()),
+                Math.max(1, Math.min(pageable.getPageSize(), 50)), Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Song> songPage = songRepository.findHomeFeed(safe);
+        // Batched liked overlay (was N per-song EXISTS queries).
+        List<SongResponse> songs = toSongResponses(songPage.getContent(), userId);
         return toPagedResponse(songPage, songs);
     }
 
     // NEW: Fast search using trigram similarity
     public PagedResponse<SongResponse> searchSongs(String query, String userId, Pageable pageable) {
-        Page<Song> songPage = songRepository.searchSongs(query, pageable);
-        List<SongResponse> songs = songPage.getContent().stream()
-                .map(song -> toSongResponse(song, userId))
-                .collect(Collectors.toList());
+        Pageable safe = PageRequest.of(Math.max(0, pageable.getPageNumber()),
+                Math.max(1, Math.min(pageable.getPageSize(), 50)));
+        Page<Song> songPage = songRepository.searchSongs(query, safe);
+        // Batched liked overlay (was N per-song EXISTS queries).
+        List<SongResponse> songs = toSongResponses(songPage.getContent(), userId);
         return toPagedResponse(songPage, songs);
     }
 
@@ -1133,11 +1146,19 @@ public class SongService {
 
     public List<SongResponse> getLikedSongs(String userId) {
         List<String> songIds = likeRepository.findAllLikedSongIds(userId);
-        return getSongsByIds(songIds, userId);
+        if (songIds == null || songIds.isEmpty()) {
+            return List.of();
+        }
+        // Cap IN-clause size: huge libraries would build a giant IN list.
+        List<String> capped = songIds.size() > 200 ? songIds.subList(0, 200) : songIds;
+        return getSongsByIds(capped, userId);
     }
 
     public List<SongResponse> getRecentlyPlayed(String userId) {
-        List<RecentlyPlayed> recentItems = recentlyPlayedRepository.findByUserIdOrderByPlayedAtDesc(userId);
+        // Bounded: DB-side LIMIT 50 instead of pulling the full history and
+        // truncating in memory (was findByUserIdOrderByPlayedAtDesc unbounded).
+        List<RecentlyPlayed> recentItems = recentlyPlayedRepository
+                .findByUserIdOrderByPlayedAtDesc(userId, PageRequest.of(0, 50));
         List<String> songIds = recentItems.stream()
                 .filter(r -> "SONG".equals(r.getItemType()))
                 .map(RecentlyPlayed::getItemId)
@@ -1148,28 +1169,51 @@ public class SongService {
     }
 
     public PagedResponse<SongResponse> getListeningHistory(String userId, Pageable pageable) {
-        Page<ListeningHistory> historyPage = listeningHistoryRepository.findByUserId(userId, pageable);
-        List<String> songIds = historyPage.getContent().stream()
+        // COUNT-free page (see findSliceByUserId): no SELECT COUNT per page.
+        // Size clamped: history pages are capped at 50 rows.
+        Pageable safe = PageRequest.of(Math.max(0, pageable.getPageNumber()),
+                Math.max(1, Math.min(pageable.getPageSize(), 50)),
+                Sort.by(Sort.Direction.DESC, "playedAt"));
+        Slice<ListeningHistory> historySlice = listeningHistoryRepository.findSliceByUserId(userId, safe);
+        List<String> songIds = historySlice.getContent().stream()
                 .map(ListeningHistory::getSongId)
                 .collect(Collectors.toList());
-        Map<String, SongResponse> songMap = songRepository.findByIdInWithDetails(songIds).stream()
-                .map(s -> toSongResponse(s, userId))
-                .collect(Collectors.toMap(SongResponse::getId, s -> s));
+        if (songIds.isEmpty()) {
+            return PagedResponse.<SongResponse>builder()
+                    .content(List.of())
+                    .page(historySlice.getNumber())
+                    .size(historySlice.getSize())
+                    .totalElements((long) historySlice.getNumber() * historySlice.getSize())
+                    .totalPages(historySlice.getNumber() + 1)
+                    .first(historySlice.isFirst())
+                    .last(historySlice.isLast())
+                    .build();
+        }
+        Map<String, Song> byId = songRepository.findByIdInWithDetails(songIds).stream()
+                .collect(Collectors.toMap(Song::getId, s -> s, (a, b) -> a));
+        // Batched liked overlay (was N per-song EXISTS inside toSongResponse loop).
+        Set<String> likedIds = userId != null
+                ? new HashSet<>(likeRepository.findLikedSongIds(userId, songIds))
+                : Set.of();
 
         List<SongResponse> songs = new ArrayList<>();
         for (String songId : songIds) {
-            SongResponse song = songMap.get(songId);
-            if (song != null) songs.add(song);
+            Song song = byId.get(songId);
+            if (song != null) songs.add(toSongResponse(song, likedIds.contains(songId)));
         }
 
+        long totalElements = historySlice.isLast()
+                ? (long) historySlice.getNumber() * historySlice.getSize() + songs.size()
+                : (long) (historySlice.getNumber() + 1) * historySlice.getSize() + 1;
+        int totalPages = historySlice.isLast() ? historySlice.getNumber() + 1 : historySlice.getNumber() + 2;
         return PagedResponse.<SongResponse>builder()
                 .content(songs)
-                .page(historyPage.getNumber())
-                .size(historyPage.getSize())
-                .totalElements(historyPage.getTotalElements())
-                .totalPages(historyPage.getTotalPages())
-                .first(historyPage.isFirst())
-                .last(historyPage.isLast())
+                .page(historySlice.getNumber())
+                .size(historySlice.getSize())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .first(historySlice.isFirst())
+                .last(historySlice.isLast())
                 .build();
     }
 

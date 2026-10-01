@@ -1,10 +1,11 @@
 import React, { useCallback, useState, useRef } from 'react';
-import { View, Text, FlatList, ActivityIndicator, StyleSheet, RefreshControl, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, RefreshControl, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { songApi, searchApi, adminApi } from '../../api/client';
 import { usePlayerStore, useThemeStore, useAuthStore } from '../../store';
 import { SongResponse } from '../../types';
 import SongRow from '../../components/SongRow';
+import AppList from '../../components/AppList';
 import Icon from '../../components/Icon';
 import GlassButton from '../../components/GlassButton';
 import BulkAddToPlaylistModal from '../../components/BulkAddToPlaylistModal';
@@ -49,8 +50,10 @@ const AllSongsScreen = ({ navigation }: any) => {
   const isAdmin = user?.role === 'ADMIN';
   const selectionMode = selectedIds.size > 0;
 
-  // Guard against duplicate in-flight page fetches (double onEndReached, focus+prefetch races).
-  const inFlightRef = useRef<Set<number>>(new Set());
+  // Duplicate in-flight page fetches (double onEndReached, focus+prefetch
+  // races) are coalesced by the api client's GET dedup map, which supersedes
+  // the old local inFlightRef guard — and by React Query dedup on the
+  // useSongs infinite-query path (see src/query/useSongs.ts).
   // Latest list snapshot for cache writes OUTSIDE the setSongs updater (updaters
   // must stay pure: StrictMode double-invokes them, so side-effects inside
   // would duplicate cache writes). Kept in sync on every render + write.
@@ -58,8 +61,8 @@ const AllSongsScreen = ({ navigation }: any) => {
   songsRef.current = songs;
 
   const fetchPage = useCallback(async (pageNum: number, replace: boolean) => {
-    if (inFlightRef.current.has(pageNum)) return;
-    inFlightRef.current.add(pageNum);
+    // No local in-flight guard: songApi.getAll routes through the client's
+    // dedupedGet, so identical concurrent page fetches share one promise.
     setFetchError(null);
     try {
       const res = await songApi.getAll(pageNum, PAGE_SIZE);
@@ -92,7 +95,6 @@ const AllSongsScreen = ({ navigation }: any) => {
         setFetchError(err?.response?.data?.message || err?.message || 'Failed to connect to song library server');
       }
     } finally {
-      inFlightRef.current.delete(pageNum);
       setLoading(false);
       setRefreshing(false);
       setLoadingMore(false);
@@ -142,22 +144,13 @@ const AllSongsScreen = ({ navigation }: any) => {
     }
   }, [searchQuery, handleSearchQueryChange, fetchPage]);
 
+  // Single prefetch path: onEndReached only (the viewability early-prefetch
+  // was removed — two triggers raced fetchPage(page+1) for the same page).
   const onEndReached = useCallback(() => {
     if (searchQuery.trim() || !hasMore || loadingMore || loading) return;
     setLoadingMore(true);
     fetchPage(page + 1, false);
   }, [searchQuery, hasMore, loadingMore, loading, fetchPage, page]);
-
-  // Prefetch the next page when the user scrolls near the end (before hitting it).
-  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
-  const handleViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: Array<{ index?: number | null }> }) => {
-    if (searchQuery.trim() || !hasMore || loadingMore || loading || songs.length === 0) return;
-    const maxIndex = viewableItems.reduce((m, v) => Math.max(m, v.index ?? 0), 0);
-    if (maxIndex >= songs.length - 8) {
-      setLoadingMore(true);
-      fetchPage(page + 1, false);
-    }
-  }, [searchQuery, hasMore, loadingMore, loading, songs.length, fetchPage, page]);
 
   const handleToggleLike = useCallback(async (song: SongResponse) => {
     const nextLiked = !song.liked;
@@ -216,12 +209,10 @@ const AllSongsScreen = ({ navigation }: any) => {
   const handlePlay = React.useCallback((index: number) => {
     const list = searchQuery.trim() ? activeSongs : songs;
     if (list.length === 0) return;
-    // FIX: Play single track only - don't auto-queue all songs
-    const track = list[index];
-    if (track) {
-      const { play } = usePlayerStore.getState();
-      play(track);
-    }
+    // Consistent with Search/Home/Library: queue the visible list via
+    // playMultiple so next/prev work across the same list.
+    const { playMultiple: playAll } = usePlayerStore.getState();
+    playAll(list, index);
   }, [searchQuery, activeSongs, songs]);
 
   const isPlaying = playbackState === 'playing' || playbackState === 'loading';
@@ -345,6 +336,7 @@ const AllSongsScreen = ({ navigation }: any) => {
           {searchQuery ? (
             <TouchableOpacity
               onPress={() => {
+                if (debounceRef.current) clearTimeout(debounceRef.current);
                 setSearchQuery('');
                 setSearchResults([]);
                 setSearching(false);
@@ -369,7 +361,16 @@ const AllSongsScreen = ({ navigation }: any) => {
               size="sm"
               icon="music"
               title="YouTube"
-              onPress={() => navigation?.navigate('YouTubeSongs')}
+              onPress={() => {
+                try {
+                  const parent = navigation?.getParent?.();
+                  if (parent?.navigate) {
+                    parent.navigate('YouTubeSongs');
+                    return;
+                  }
+                } catch {}
+                navigation?.navigate('YouTubeSongs');
+              }}
               accessibilityLabel="Open YouTube songs"
             />
             <GlassButton
@@ -391,16 +392,19 @@ const AllSongsScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      <FlatList
+      {/* Virtualized list (FlashList fast path when installed, tuned FlatList
+          fallback): recycling rows, stable keys, fixed layout, clipped
+          offscreen views. estimatedItemSize matches getItemLayout (60). */}
+      <AppList
         data={activeSongs}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         extraData={listExtraData}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.7}
-        onViewableItemsChanged={handleViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({ length: 60, offset: 60 * index, index })}
+        estimatedItemSize={60}
+        drawDistance={500}
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         windowSize={5}

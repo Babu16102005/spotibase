@@ -226,4 +226,11 @@ public interface SongRepository extends JpaRepository<Song, String> {
         ORDER BY s.id ASC
     """)
     List<Song> findByArtistAfterCursor(@Param("artistId") String artistId, @Param("cursorId") String cursorId, Pageable pageable);
+
+    /**
+     * Random catalog pick for AI PLAY_RANDOM: one non-archived song,
+     * database-ordered RANDOM() so every request can hit a different row.
+     */
+    @Query(value = "SELECT * FROM songs WHERE archived = false ORDER BY RANDOM() LIMIT 1", nativeQuery = true)
+    java.util.Optional<Song> findRandomActive();
 }

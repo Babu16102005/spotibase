@@ -11,6 +11,10 @@ type Props = {
  * Minimal AI Mic - push-to-talk.
  * States: 🎤 Idle | 🔴 Listening | ⏳ Thinking | ▶️ Executing | ✓ Done | ⚠️ Failed
  * For now uses transcript_fallback (typed) until expo-audio recording is wired.
+ *
+ * @deprecated Legacy demo — AiOrb is the single voice entry point (orb +
+ * VoiceLiveResults + voiceOrchestrator). Kept for docs/history only; do not
+ * mount alongside AiOrb (duplicate mic sessions race for the mic).
  */
 export const AiMicButton: React.FC<Props> = ({ currentSongId }) => {
   const [state, setState] = useState<"idle"|"thinking"|"done"|"failed">("idle");

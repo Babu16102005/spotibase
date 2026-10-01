@@ -89,12 +89,31 @@ def understand_key(text: str, ai_mode: str, context) -> str:
 
 
 def get_understand(text: str, ai_mode: str, context):
-    return _load(understand_key(text, ai_mode, context))
+    hit = _load(understand_key(text, ai_mode, context))
+    # Self-heal poisoned entries: empty-action results must never be served
+    # from cache (one CF empty response poisoned retries for 300s). Treat as miss.
+    if isinstance(hit, dict):
+        actions = hit.get("actions")
+        if not isinstance(actions, list) or len(actions) == 0:
+            logger.debug("[CACHE] ignore empty-action hit (poison guard)")
+            return None
+        return hit
+    return hit
 
 
 def put_understand(text: str, ai_mode: str, context, result: dict):
-    if isinstance(result, dict):
-        _save(understand_key(text, ai_mode, context), result, UNDERSTAND_TTL)
+    if not isinstance(result, dict):
+        return
+    # NEVER cache empty-action results (actions:[]) — only cache when >=1 action.
+    # Good results keep 300s TTL (UNDERSTAND_TTL). Empty/clarification results
+    # depend on transient failures and would poison identical retries for 5 min.
+    actions = result.get("actions")
+    if not isinstance(actions, list) or len(actions) == 0:
+        logger.debug("[CACHE] skip empty-action result, not caching")
+        return
+    if result.get("clarificationNeeded"):
+        return
+    _save(understand_key(text, ai_mode, context), result, UNDERSTAND_TTL)
 
 
 def stt_key(audio_bytes: bytes, model: str) -> str:

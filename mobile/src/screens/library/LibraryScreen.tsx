@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { getStorage } from '../../utils';
+import { TTL_MS, isFresh } from '../../cache/ttl';
 import { libraryApi, playlistApi, songApi, adminApi } from '../../api/client';
 import { useThemeStore, usePlayerStore, useAuthStore } from '../../store';
 import { LibraryResponse } from '../../types';
@@ -27,7 +28,8 @@ import SongBulkActionBar from '../../components/SongBulkActionBar';
 import { CardSkeleton } from '../../components/SkeletonLoader';
 
 const libraryCache = getStorage('spotibase-cache');
-const LIBRARY_FRESH_MS = 30_000;
+// Library freshness window — single source of truth lives in cache/ttl.
+const LIBRARY_FRESH_MS = TTL_MS.LIBRARY;
 // V2 cache holds LibraryResponse with optional featuredPlaylists.
 // V1 (libraryData) is read as fallback for back-compat with old installs.
 const LIBRARY_CACHE_KEY = 'libraryDataV2';
@@ -77,14 +79,14 @@ const LibraryScreen = ({ navigation }: any) => {
   const [playlistDesc, setPlaylistDesc] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const fetchLibrary = useCallback(async (force = false) => {
+  const fetchLibrary = useCallback(async (force = false, signal?: AbortSignal) => {
     if (!force) {
       try {
         const cachedAt =
           (libraryCache.getNumber?.(LIBRARY_CACHE_AT_KEY) as number | null | undefined) ??
           (libraryCache.getNumber?.(LEGACY_LIBRARY_CACHE_AT_KEY) as number | null | undefined) ??
           0;
-        if (cachedAt > 0 && Date.now() - cachedAt < LIBRARY_FRESH_MS) {
+        if (isFresh(cachedAt, LIBRARY_FRESH_MS)) {
           setLoading(false);
           return;
         }
@@ -92,45 +94,55 @@ const LibraryScreen = ({ navigation }: any) => {
     }
     setError(null);
     try {
-      const r = await libraryApi.getLibrary();
-      let merged: LibraryResponse = r.data;
+      // Parallel, not waterfall: /library and /playlists/featured fire
+      // together so latency is max(parts) instead of sum(parts). The
+      // featured call is the back-compat fallback for payloads that omit
+      // featuredPlaylists; its failure never fails the library.
+      const [libSettled, featuredSettled] = await Promise.allSettled([
+        libraryApi.getLibrary(signal),
+        playlistApi.getFeatured(20, signal),
+      ]);
+      if (signal?.aborted) return;
+      if (libSettled.status === 'rejected') throw libSettled.reason;
+      const libData = libSettled.value.data as LibraryResponse;
+      let merged: LibraryResponse = libData;
       // Back-compat: old payloads / old cache JSON may omit featuredPlaylists.
-      const hasFeatured = Array.isArray((r.data as LibraryResponse)?.featuredPlaylists);
+      const hasFeatured = Array.isArray(libData?.featuredPlaylists);
       if (!hasFeatured) {
-        try {
-          const f = await playlistApi.getFeatured(20);
-          const fallbackFeatured = Array.isArray(f.data) ? f.data : [];
-          merged = {
-            ...r.data,
-            featuredPlaylists: fallbackFeatured,
-            totalFeaturedPlaylists:
-              (r.data as LibraryResponse)?.totalFeaturedPlaylists ?? fallbackFeatured.length,
-          };
-        } catch {
-          merged = {
-            ...r.data,
-            featuredPlaylists: [],
-            totalFeaturedPlaylists: (r.data as LibraryResponse)?.totalFeaturedPlaylists ?? 0,
-          };
-        }
+        const fallbackFeatured =
+          featuredSettled.status === 'fulfilled' && Array.isArray(featuredSettled.value.data)
+            ? featuredSettled.value.data
+            : [];
+        merged = {
+          ...libData,
+          featuredPlaylists: fallbackFeatured,
+          totalFeaturedPlaylists: libData?.totalFeaturedPlaylists ?? fallbackFeatured.length,
+        };
       }
       setData(merged);
       writeLibraryCache(merged);
     } catch (err: any) {
+      if (signal?.aborted || err?.code === 'ERR_CANCELED' || err?.name === 'AbortError' || err?.name === 'CanceledError') {
+        return;
+      }
       console.error('Failed to fetch library:', err);
       setError(err?.message || 'Failed to fetch library from server');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
-  // Fetch on mount and gently refresh in the background whenever the tab regains
-  // focus. Cached library data stays visible while refetching; the error state
-  // still only surfaces when there is no data to show.
+  // Focus is prefetch-only: MMKV paints synchronously on mount, and the
+  // network only fires when the snapshot is stale (freshness gate inside
+  // fetchLibrary). In-flight refetches are cancelled on blur/unmount.
   useFocusEffect(
     useCallback(() => {
-      fetchLibrary(false);
+      const controller = new AbortController();
+      fetchLibrary(false, controller.signal);
+      return () => controller.abort();
     }, [fetchLibrary])
   );
 

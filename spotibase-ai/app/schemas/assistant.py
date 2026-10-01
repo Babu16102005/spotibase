@@ -30,7 +30,7 @@ class ParsedKeywords(BaseModel):
 class UnderstandResponse(BaseModel):
     """Prompt/response contract for /assistant/understand and /speech/voice.
 
-    - actions: 0..N allow-listed actions (max 30-action vocabulary, see llm_service.ALLOWED_ACTIONS)
+    - actions: 0..N allow-listed actions (max 32-action vocabulary, see llm_service.ALLOWED_ACTIONS)
     - response: human-readable assistant reply (legacy field, == displayText in most cases)
     - parsedKeywords: YouTube-like keyword extraction {song, artist, mood, genre, language, verbs}
     - searchQuery: cleaned query for catalog search (stopwords stripped, aliases normalized)

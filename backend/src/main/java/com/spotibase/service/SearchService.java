@@ -4,6 +4,7 @@ import com.spotibase.dto.response.*;
 import com.spotibase.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -60,23 +61,41 @@ public class SearchService {
         return builder.build();
     }
 
+    /**
+     * Typeahead suggestions, cached 60s in {@code search} (see
+     * {@code RedisCacheConfig} + L1 {@code CacheConfig}): identical prefixes
+     * re-hit without touching the trigram scan on every keystroke.
+     */
+    @Cacheable(value = "search", key = "'sug:' + #query + ':' + #limit")
     public List<String> getSuggestions(String query, int limit) {
         int safeLimit = Math.min(Math.max(1, limit), MAX_PAGE_SIZE);
         if (query == null || query.isBlank()) return List.of();
-        String escaped = escapeLike(query.trim());
-        // Use ILIKE for portability (pg_trgm % requires extension). Falls back gracefully if pg_trgm not enabled.
+        String trimmed = query.trim();
+        if (trimmed.length() > 100) trimmed = trimmed.substring(0, 100);
+        String escaped = escapeLike(trimmed);
+        // Prefix-first (no leading wildcard): lower(col) LIKE lower(:prefix)
+        // hits the V24 btree prefix indexes; the trigram similarity fallback
+        // (lower(col) % lower(:query)) uses the GIN trigram indexes for fuzzy
+        // voice typos. The old "%pattern%" ILIKE scanned all rows and could
+        // not use any index. Small LIMIT keeps suggestion latency <150ms.
         String sql = """
             SELECT name, type FROM (
-                SELECT s.name, 'song' as type, s.play_count as rank FROM songs s WHERE s.name ILIKE :pattern ESCAPE '\\' AND s.archived = false
+                SELECT s.name, 'song' as type, s.play_count as rank FROM songs s
+                WHERE s.archived = false
+                AND (lower(s.name) LIKE lower(:prefix) ESCAPE '\\' OR lower(s.name) % lower(:query))
                 UNION ALL
-                SELECT a.name, 'artist' as type, a.monthly_listeners as rank FROM artists a WHERE a.name ILIKE :pattern ESCAPE '\\'
+                SELECT a.name, 'artist' as type, a.monthly_listeners as rank FROM artists a
+                WHERE (lower(a.name) LIKE lower(:prefix) ESCAPE '\\' OR lower(a.name) % lower(:query))
                 UNION ALL
-                SELECT al.name, 'album' as type, al.song_count as rank FROM albums al WHERE al.name ILIKE :pattern ESCAPE '\\' AND al.archived = false
+                SELECT al.name, 'album' as type, al.song_count as rank FROM albums al
+                WHERE al.archived = false
+                AND (lower(al.name) LIKE lower(:prefix) ESCAPE '\\' OR lower(al.name) % lower(:query))
             ) combined ORDER BY rank DESC LIMIT :limit
         """;
 
         Query q = entityManager.createNativeQuery(sql);
-        q.setParameter("pattern", "%" + escaped + "%");
+        q.setParameter("prefix", escaped + "%");
+        q.setParameter("query", trimmed);
         q.setParameter("limit", safeLimit);
 
         List<String> results = new ArrayList<>();
@@ -190,6 +209,67 @@ public class SearchService {
     }
 
     /**
+     * Human-like lyric identification (a): local {@code songs.lyrics} match
+     * for a full lyric line. Tries the pg_trgm similarity union first
+     * (V22 enables {@code pg_trgm}); any failure (extension missing, NULL
+     * lyrics, slow seq-scan) falls open to a plain {@code ILIKE %line%}
+     * lookup. Limit 5, read-only, blank-safe. Most catalogs have sparse
+     * lyrics (audio-tag parsed), so empty here is normal — callers continue
+     * the chain (title match -&gt; YouTube identify -&gt; rematch).
+     */
+    public List<SongResponse> searchSongsByLyrics(String line, String userId) {
+        if (line == null || line.isBlank()) return List.of();
+        String trimmed = line.trim();
+        if (trimmed.length() > 500) trimmed = trimmed.substring(0, 500);
+        String escaped = escapeLike(trimmed);
+        // (a1) trigram similarity + ILIKE union, best match first.
+        try {
+            String sql = """
+                SELECT s.id FROM songs s
+                WHERE s.archived = false
+                AND s.lyrics IS NOT NULL
+                AND (s.lyrics ILIKE :pattern ESCAPE '\\'
+                     OR lower(s.lyrics) % lower(:query))
+                ORDER BY GREATEST(
+                             COALESCE(similarity(lower(s.lyrics), lower(:query)), 0),
+                             CASE WHEN s.lyrics ILIKE :pattern ESCAPE '\\' THEN 0.5 ELSE 0 END
+                         ) DESC,
+                         s.play_count DESC
+                LIMIT 5
+            """;
+            Query q = entityManager.createNativeQuery(sql);
+            q.setParameter("pattern", "%" + escaped + "%");
+            q.setParameter("query", trimmed);
+            List<String> ids = q.getResultList();
+            if (ids != null && !ids.isEmpty()) {
+                return songService.getSongsByIds(ids, userId);
+            }
+            return List.of();
+        } catch (Exception e) {
+            log.warn("Lyrics trigram search failed for '{}...', falling back to ILIKE: {}",
+                    trimmed.length() > 30 ? trimmed.substring(0, 30) : trimmed, e.getMessage());
+        }
+        // (a2) pure ILIKE fallback (no pg_trgm dependency).
+        try {
+            String sql = """
+                SELECT s.id FROM songs s
+                WHERE s.archived = false
+                AND s.lyrics ILIKE :pattern ESCAPE '\\'
+                ORDER BY s.play_count DESC
+                LIMIT 5
+            """;
+            Query q = entityManager.createNativeQuery(sql);
+            q.setParameter("pattern", "%" + escapeLike(trimmed) + "%");
+            List<String> ids = q.getResultList();
+            if (ids == null || ids.isEmpty()) return List.of();
+            return songService.getSongsByIds(ids, userId);
+        } catch (Exception e) {
+            log.warn("Lyrics ILIKE search failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
      * Fast suggestions for the realtime voice-partial preview: top-5 prefix /
      * substring hints served by the V24 trigram + prefix indexes. Blank
      * queries return empty (no full scan). Small LIMIT keeps it &lt;150ms.
@@ -200,7 +280,8 @@ public class SearchService {
     }
 
     private List<AlbumResponse> searchAlbums(String query, int page, int size, String userId) {
-        String escaped = escapeLike(query == null ? "" : query);
+        if (query == null || query.isBlank()) return List.of();
+        String escaped = escapeLike(query.trim());
         String sql = """
             SELECT a.id FROM albums a
             WHERE a.archived = false
@@ -215,18 +296,21 @@ public class SearchService {
         q.setMaxResults(size);
 
         List<String> ids = q.getResultList();
-        return ids.stream().map(id -> {
-            try {
-                return albumService.getAlbumById(id, userId);
-            } catch (Exception e) {
-                log.warn("Album not found or error fetching: {}", id, e);
-                return null;
-            }
-        }).filter(a -> a != null).collect(Collectors.toList());
+        if (ids == null || ids.isEmpty()) return List.of();
+        // Batched hydration: one album fetch + 1 liked IN query (summary
+        // shape, no per-album song loads) instead of N getAlbumById calls
+        // each fanning out to song + liked queries.
+        try {
+            return albumService.getAlbumsByIds(ids, userId);
+        } catch (Exception e) {
+            log.warn("Batch album hydration failed for {} ids", ids.size(), e);
+            return List.of();
+        }
     }
 
     private List<ArtistResponse> searchArtists(String query, int page, int size, String userId) {
-        String escaped = escapeLike(query == null ? "" : query);
+        if (query == null || query.isBlank()) return List.of();
+        String escaped = escapeLike(query.trim());
         String sql = """
             SELECT a.id FROM artists a
             WHERE (a.name ILIKE :pattern ESCAPE '\\' OR lower(a.name) LIKE lower(:prefix) ESCAPE '\\')
@@ -240,14 +324,15 @@ public class SearchService {
         q.setMaxResults(size);
 
         List<String> ids = q.getResultList();
-        return ids.stream().map(id -> {
-            try {
-                return artistService.getArtistById(id, userId);
-            } catch (Exception e) {
-                log.warn("Artist not found or error fetching: {}", id, e);
-                return null;
-            }
-        }).filter(a -> a != null).collect(Collectors.toList());
+        if (ids == null || ids.isEmpty()) return List.of();
+        // Batched hydration: 2 GROUP BY counts + 1 liked IN query instead of
+        // N getArtistById calls (3 queries each).
+        try {
+            return artistService.getArtistsByIds(ids, userId);
+        } catch (Exception e) {
+            log.warn("Batch artist hydration failed for {} ids", ids.size(), e);
+            return List.of();
+        }
     }
 
     private List<PlaylistResponse> searchPlaylists(String query, int page, int size) {

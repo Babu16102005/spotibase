@@ -3,7 +3,8 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Platform } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './src/query/queryClient';
 // Import each font weight from its own submodule instead of the package
 // root. Importing from '@expo-google-fonts/montserrat' pulls ALL 18 weight
 // files (~6MB) into the bundle via index.js require() calls. Direct submodule
@@ -24,16 +25,6 @@ import { useAuthStore, useThemeStore, setupTrackPlayer, cleanupTrackPlayerWebSyn
 import { setupRealtime } from './src/realtime/client';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 5 * 60 * 1000,
-      gcTime: 30 * 60 * 1000,
-    },
-  },
-});
 
 function injectGlobalWebStyles() {
   if (Platform.OS !== 'web' || typeof document === 'undefined') return;

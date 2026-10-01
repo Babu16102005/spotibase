@@ -60,15 +60,18 @@ class TestCarryMarriageNoHijack:
 
 class TestPlaySongBare:
     def test_play_song_current_behavior_pinned(self):
-        """Pins CURRENT behavior: bare 'play song' -> SEARCH_SONG query 'Song'.
+        """Vague play-intent fix: bare 'play song' -> PLAY_RANDOM (generic play).
 
-        Product gap: ideally this should clarify ("What should I play?")
-        instead of searching for the literal word 'Song'. If NLU is fixed to
-        clarify, update this test to assert clarificationNeeded is True.
+        Previously pinned as SEARCH_SONG query 'Song' (junk literal search).
+        Vague play requests now always yield a play-family action realtime and
+        never clarify: pure-filler remainder ('song') means generic PLAY_RANDOM
+        so the backend best-effort chain plays a real song.
         """
         r = mock_of("play song")
-        assert r["actions"][0]["action"] == "SEARCH_SONG"
-        # documents gap — not clarification today
+        assert r["actions"][0]["action"] == "PLAY_RANDOM"
+        assert r["actions"][0]["parameters"] == {}
+        assert r["searchQuery"] == ""
+        # never clarification for play-intent
         assert r["clarificationNeeded"] is False
 
 

@@ -1,9 +1,10 @@
 import { songApi } from '../api/client';
 import { getStorage } from '../utils';
 import { SongResponse } from '../types';
+import { TTL_MS, isFresh } from './ttl';
 
-/** Songs list is considered fresh for 60s — focus returns within this window hydrate from MMKV only. */
-export const SONGS_FRESH_MS = 60_000;
+/** Songs list freshness window — single source of truth lives in cache/ttl. */
+export const SONGS_FRESH_MS = TTL_MS.SONGS;
 /** Page size shared by the songs list + prefetch so cache and UI stay in sync. */
 export const SONGS_PAGE_SIZE = 30;
 
@@ -28,8 +29,7 @@ export const getSongsAt = (): number => {
 
 export const isSongsFresh = (freshMs: number = SONGS_FRESH_MS): boolean => {
   try {
-    const cachedAt = getSongsAt();
-    return cachedAt > 0 && Date.now() - cachedAt < freshMs;
+    return isFresh(getSongsAt(), freshMs);
   } catch {
     return false;
   }

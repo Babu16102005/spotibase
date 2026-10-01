@@ -39,7 +39,9 @@ export type IconName =
   | 'trash'
   | 'sync'
   | 'refresh'
-  | 'folder';
+  | 'folder'
+  | 'expand'
+  | 'compress';
 
 interface IconProps {
   name: IconName;
@@ -290,6 +292,22 @@ const Icon: React.FC<IconProps> = ({ name, size = 24, color = '#FFFFFF', style, 
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+      </G>
+    ),
+    expand: (
+      <G>
+        <Path d="M4 9V4h5" stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M20 9V4h-5" stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M4 15v5h5" stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M20 15v5h-5" stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      </G>
+    ),
+    compress: (
+      <G>
+        <Path d="M9 4v5H4" stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M15 4v5h5" stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M9 20v-5H4" stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M15 20v-5h5" stroke={stroke} strokeWidth={sw} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       </G>
     ),
   };

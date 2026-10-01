@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Switch, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
-import { useThemeStore, usePlayerStore } from '../../store';
+import { useThemeStore, usePlayerStore, useAuthStore } from '../../store';
 import { useAiOrbStore, AI_ORB_VARIANTS } from '../../store/aiOrbStore';
 import { SiriOrb } from '../../components/SiriOrb';
 import { StarOrb } from '../../components/StarOrb';
@@ -13,9 +13,24 @@ const SettingsScreen = ({ navigation }: any) => {
   const repeat = usePlayerStore((s) => s.repeat);
   const setShuffle = usePlayerStore((s) => s.setShuffle);
   const setRepeat = usePlayerStore((s) => s.setRepeat);
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+
+  const handleLogoutPress = () => {
+    // logout() is fully offline-safe (clears local storage + in-memory queue,
+    // flips isAuthenticated=false; RootNavigator then swaps to Auth stack).
+    // No manual navigation here.
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log Out', style: 'destructive', onPress: () => logout() },
+    ]);
+  };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      contentContainerStyle={styles.scrollContent}
+    >
       <View style={styles.headerRow}>
         {navigation?.canGoBack?.() && (
           <GlassButton
@@ -49,7 +64,7 @@ const SettingsScreen = ({ navigation }: any) => {
       <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Greeting Section Theme</Text>
         <View style={styles.patternGrid}>
-          {(['RANDOM', 'FLUID', 'AURORA', 'COSMIC', 'GEOMETRIC'] as const).map((pat) => (
+          {(['FLUID', 'AURORA'] as const).map((pat) => (
             <GlassButton
               key={pat}
               variant={greetingPattern === pat ? 'primary' : 'glass'}
@@ -213,6 +228,27 @@ const SettingsScreen = ({ navigation }: any) => {
       </View>
 
       <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Account / Session</Text>
+        {user?.email ? (
+          <Text
+            style={[styles.accountEmail, { color: theme.colors.textSecondary }]}
+            numberOfLines={1}
+            ellipsizeMode="middle"
+          >
+            {user.email}
+          </Text>
+        ) : null}
+        <GlassButton
+          variant="destructive"
+          fullWidth
+          title="Log Out"
+          onPress={handleLogoutPress}
+          testID="settings-logout-button"
+          accessibilityLabel="Log out"
+        />
+      </View>
+
+      <View style={styles.section}>
         <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>About</Text>
         <Text style={[styles.aboutText, { color: theme.colors.textTertiary }]}>SpotiBase v1.0.0</Text>
         <Text style={[styles.aboutText, { color: theme.colors.textTertiary }]}>A premium music streaming experience</Text>
@@ -223,6 +259,10 @@ const SettingsScreen = ({ navigation }: any) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  scrollContent: {
+    // Keep last section (Log Out) clear of the floating MiniPlayer + tab bar.
+    paddingBottom: 140,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -239,6 +279,7 @@ const styles = StyleSheet.create({
   settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 0.5 },
   settingLabel: { fontSize: 16 },
   aboutText: { fontSize: 14, marginTop: 4 },
+  accountEmail: { fontSize: 14, marginBottom: 12 },
   orbGrid: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   orbCard: { width: 105, alignItems: 'center', padding: 12, borderRadius: 16, gap: 6 },
   orbLabel: { fontSize: 12, fontWeight: '700', marginTop: 4 },

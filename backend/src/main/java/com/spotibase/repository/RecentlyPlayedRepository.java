@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface RecentlyPlayedRepository extends JpaRepository<RecentlyPlayed, String> {
@@ -16,6 +17,16 @@ public interface RecentlyPlayedRepository extends JpaRepository<RecentlyPlayed, 
     List<RecentlyPlayed> findByUserIdOrderByPlayedAtDesc(String userId);
 
     List<RecentlyPlayed> findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(String userId, java.time.LocalDateTime cutoff);
+
+    /**
+     * Bounded variants for hot paths: the unbounded overloads above pull the
+     * full per-user history (unbounded result set). List endpoints must use
+     * these with PageRequest.of(0, N) so the DB applies LIMIT/OFFSET.
+     */
+    List<RecentlyPlayed> findByUserIdOrderByPlayedAtDesc(String userId, Pageable pageable);
+
+    List<RecentlyPlayed> findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(String userId,
+            java.time.LocalDateTime cutoff, Pageable pageable);
 
     Optional<RecentlyPlayed> findByUserIdAndItemTypeAndItemId(String userId, String itemType, String itemId);
 

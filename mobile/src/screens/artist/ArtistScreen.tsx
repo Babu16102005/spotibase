@@ -36,7 +36,7 @@ const ArtistScreen = ({ route, navigation }: any) => {
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.header}>
-        <Image source={coverSource(artist.imageUrl)} style={[styles.image, { borderColor: theme.colors.border }]} />
+        <Image source={coverSource(artist.imageUrl, 800)} style={[styles.image, { borderColor: theme.colors.border }]} />
         <Text style={[styles.name, { color: theme.colors.text }]}>{artist.name}</Text>
         <Text style={[styles.listeners, { color: theme.colors.textSecondary }]}>
           {formatCount(artist.monthlyListeners)} monthly listeners

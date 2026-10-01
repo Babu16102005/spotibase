@@ -17,6 +17,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,6 +46,71 @@ public class RecommendationService {
     private final ArtistService artistService;
     private final PlaylistService playlistService;
 
+    /**
+     * Bounded pool for parallel home-section assembly. Daemon threads +
+     * CallerRunsPolicy so saturation degrades to inline execution, never a
+     * rejection that fails the feed.
+     */
+    private static final long SECTION_TIMEOUT_MS = 3000;
+    private static final long CRITICAL_TIMEOUT_MS = 3000;
+    private static final long SECONDARY_TIMEOUT_MS = 4500;
+    private static final long HEAVY_TIMEOUT_MS = 6000;
+
+    /**
+     * Required section ids per tier for completeness-aware caching. A feed
+     * missing any required id is partial (a section timed out/failed
+     * fail-open): it still returns HTTP 200 but is never cached, so a
+     * frontend retry 500ms later re-assembles instead of reading the hole
+     * from cache for 45s. {@code your-playlists} is optional by design
+     * (users without playlists) and never gates caching; guest feeds only
+     * require the sections guests actually build.
+     */
+    private static final Set<String> CRITICAL_REQUIRED_AUTHED =
+            Set.of("recently-played", "trending");
+    private static final Set<String> CRITICAL_REQUIRED_GUEST = Set.of("trending");
+    private static final Set<String> SECONDARY_REQUIRED = Set.of(
+            "new-releases", "featured-albums", "featured-artists",
+            "featured-playlists", "popular-genres");
+    private static final Set<String> HEAVY_REQUIRED =
+            Set.of("made-for-you", "daily-mixes");
+    private static final Set<String> ALL_REQUIRED_AUTHED = Set.of(
+            "recently-played", "trending", "new-releases", "featured-albums",
+            "featured-artists", "featured-playlists", "made-for-you",
+            "daily-mixes", "popular-genres");
+    private static final Set<String> ALL_REQUIRED_GUEST = Set.of(
+            "trending", "new-releases", "featured-albums", "featured-artists",
+            "featured-playlists", "popular-genres");
+
+    /**
+     * True when every required section id is present in the assembled
+     * sections. Presence (not item count) gates: a present-but-empty section
+     * (e.g. no recently-played history) is complete; a missing id means the
+     * section timed out/failed and the feed is partial.
+     */
+    private static boolean isComplete(List<HomeResponse.Section> sections, Set<String> requiredIds) {
+        if (sections == null) {
+            return false;
+        }
+        Set<String> present = sections.stream()
+                .filter(Objects::nonNull)
+                .map(HomeResponse.Section::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return present.containsAll(requiredIds);
+    }
+
+    private static final AtomicLong HOME_THREAD_SEQ = new AtomicLong();
+
+    private static final Executor HOME_EXECUTOR = new ThreadPoolExecutor(
+            8, 16, 60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(200),
+            r -> {
+                Thread t = new Thread(r, "home-" + HOME_THREAD_SEQ.incrementAndGet());
+                t.setDaemon(true);
+                return t;
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy());
+
     public Map<String, List<SongResponse>> getDailyMix(String userId) {
         if (userId == null) return Collections.emptyMap();
 
@@ -56,8 +128,9 @@ public class RecommendationService {
         genreQuery.setParameter("userId", userId);
         List<Object[]> genreRows = genreQuery.getResultList();
 
-        Map<String, List<SongResponse>> dailyMix = new LinkedHashMap<>();
-
+        // Lightened: cap per-genre 10 (was 30) and resolve songs with a single
+        // batched getSongsByIds instead of one call per genre.
+        Map<String, List<String>> idsPerGenre = new LinkedHashMap<>();
         for (Object[] row : genreRows) {
             String genreId = (String) row[0];
             String genreName = (String) row[1];
@@ -70,7 +143,7 @@ public class RecommendationService {
                     SELECT lh.song_id FROM listening_history lh WHERE lh.user_id = :userId
                 )
                 ORDER BY s.play_count DESC
-                LIMIT 30
+                LIMIT 10
             """;
 
             Query songQuery = entityManager.createNativeQuery(songSql);
@@ -79,8 +152,31 @@ public class RecommendationService {
             List<String> songIds = songQuery.getResultList();
 
             if (!songIds.isEmpty()) {
-                List<SongResponse> songs = songService.getSongsByIds(songIds, userId);
-                dailyMix.put(genreName, songs);
+                idsPerGenre.put(genreName, songIds.stream().limit(10).collect(Collectors.toList()));
+            }
+        }
+
+        if (idsPerGenre.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<String> allIds = idsPerGenre.values().stream()
+                .flatMap(List::stream)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<String, SongResponse> songMap = songService.getSongsByIds(allIds, userId).stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(SongResponse::getId, s -> s, (a, b) -> a, LinkedHashMap::new));
+
+        Map<String, List<SongResponse>> dailyMix = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : idsPerGenre.entrySet()) {
+            List<SongResponse> songs = entry.getValue().stream()
+                    .map(songMap::get)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            if (!songs.isEmpty()) {
+                dailyMix.put(entry.getKey(), songs);
             }
         }
 
@@ -347,91 +443,191 @@ public class RecommendationService {
      * back"). Each section is already try/caught so one failure never fails
      * the whole feed.
      */
-    @Cacheable(value = "home", key = "#userId != null ? #userId : 'guest'")
+    @Cacheable(value = "home", key = "#userId != null ? #userId : 'guest'", unless = "#result == null || #result.sections == null || #result.sections.isEmpty() || !#result.complete")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public HomeResponse getHomeSections(String userId) {
+        return getHomeSections(userId, HomeTier.ALL);
+    }
+
+    /**
+     * Tiered home feed for ordered loading (critical first, then secondary,
+     * then heavy). {@code ALL} preserves the legacy single-shot shape.
+     * Dispatch itself is uncached; each tier method carries its own
+     * {@code @Cacheable} with tier TTL.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public HomeResponse getHomeSections(String userId, HomeTier tier) {
+        HomeTier effective = tier != null ? tier : HomeTier.ALL;
+        return switch (effective) {
+            case CRITICAL -> getHomeCritical(userId);
+            case SECONDARY -> getHomeSecondary(userId);
+            case HEAVY -> getHomeHeavy(userId);
+            case ALL -> assembleAllSections(userId);
+        };
+    }
+
+    /**
+     * CRITICAL tier: recently-played + trending. 3000ms budget so first
+     * paint never waits on personalization/heavy mixes, with headroom for
+     * Supabase pooler cold p99 (~3s JVM/Hikari/pool cold). Client critical
+     * timeout (5000ms) stays above this — no frontend change needed.
+     */
+    @Cacheable(value = "home-critical", key = "#userId != null ? #userId : 'guest'", unless = "#result == null || #result.sections == null || #result.sections.isEmpty() || !#result.complete")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public HomeResponse getHomeCritical(String userId) {
         long started = System.nanoTime();
-        List<HomeResponse.Section> sections = new ArrayList<>();
-        List<RecentlyPlayed> recentItems = List.of();
+        final List<RecentlyPlayed> recent = loadRecentItems(userId);
 
+        List<CompletableFuture<HomeResponse.Section>> futures = new ArrayList<>();
         if (userId != null) {
-            try {
-                LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
-                recentItems = recentlyPlayedRepository
-                        .findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(userId, sevenDaysAgo);
-            } catch (Exception e) {
-                log.error("Failed to load recently played: {}", e.getMessage());
-            }
-            try {
-                sections.add(buildContinueListeningSection(userId, recentItems));
-            } catch (Exception e) {
-                log.error("Failed to build continue listening section: {}", e.getMessage());
-            }
-            try {
-                sections.add(buildRecentlyPlayedSection(userId, recentItems));
-            } catch (Exception e) {
-                log.error("Failed to build recently played section: {}", e.getMessage());
-            }
-            try {
-                sections.add(buildUserPlaylistsSection(userId));
-            } catch (Exception e) {
-                log.error("Failed to build user playlists section: {}", e.getMessage());
-            }
+            futures.add(runSection("recently-played",
+                    () -> buildRecentlyPlayedSection(userId, recent), CRITICAL_TIMEOUT_MS));
+        }
+        futures.add(runSection("trending", this::buildTrendingSection, CRITICAL_TIMEOUT_MS));
+
+        List<HomeResponse.Section> sections = futures.stream()
+                .map(CompletableFuture::join)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        log.debug("Home critical assembled in {}ms for {}",
+                (System.nanoTime() - started) / 1_000_000,
+                userId != null ? userId : "guest");
+
+        Set<String> required = userId != null ? CRITICAL_REQUIRED_AUTHED : CRITICAL_REQUIRED_GUEST;
+        boolean complete = isComplete(sections, required);
+        if (!complete) {
+            log.warn("Home critical partial for {}: required {} but got {}", userId != null ? userId : "guest",
+                    required,
+                    sections.stream().map(HomeResponse.Section::getId).collect(Collectors.toSet()));
         }
 
-        try {
-            sections.add(buildTrendingSection());
-        } catch (Exception e) {
-            log.error("Failed to build trending section: {}", e.getMessage());
+        return HomeResponse.builder()
+                .greeting(getGreeting())
+                .sections(sections)
+                .complete(complete)
+                .build();
+    }
+
+    /**
+     * SECONDARY tier: browse/catalog sections. 4500ms budget (Supabase
+     * pooler cold p99 headroom). Client secondary timeout (8000ms) stays
+     * above this — no frontend change needed.
+     */
+    @Cacheable(value = "home-secondary", key = "#userId != null ? #userId : 'guest'", unless = "#result == null || #result.sections == null || #result.sections.isEmpty() || !#result.complete")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public HomeResponse getHomeSecondary(String userId) {
+        long started = System.nanoTime();
+
+        List<CompletableFuture<HomeResponse.Section>> futures = new ArrayList<>();
+        if (userId != null) {
+            futures.add(runSection("your-playlists",
+                    () -> buildUserPlaylistsSection(userId), SECONDARY_TIMEOUT_MS));
+        }
+        futures.add(runSection("new-releases", () -> buildNewReleasesSection(userId), SECONDARY_TIMEOUT_MS));
+        futures.add(runSection("featured-albums", () -> buildFeaturedAlbumsSection(userId), SECONDARY_TIMEOUT_MS));
+        futures.add(runSection("featured-artists", this::buildFeaturedArtistsSection, SECONDARY_TIMEOUT_MS));
+        futures.add(runSection("featured-playlists", this::buildFeaturedPlaylistsSection, SECONDARY_TIMEOUT_MS));
+        futures.add(runSection("popular-genres", this::buildPopularGenresSection, SECONDARY_TIMEOUT_MS));
+
+        List<HomeResponse.Section> sections = futures.stream()
+                .map(CompletableFuture::join)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        log.debug("Home secondary assembled in {}ms for {}",
+                (System.nanoTime() - started) / 1_000_000,
+                userId != null ? userId : "guest");
+
+        boolean secondaryComplete = isComplete(sections, SECONDARY_REQUIRED);
+        if (!secondaryComplete) {
+            log.warn("Home secondary partial for {}: required {} but got {}", userId != null ? userId : "guest",
+                    SECONDARY_REQUIRED,
+                    sections.stream().map(HomeResponse.Section::getId).collect(Collectors.toSet()));
         }
 
-        try {
-            sections.add(buildNewReleasesSection(userId));
-        } catch (Exception e) {
-            log.error("Failed to build new releases section: {}", e.getMessage());
+        return HomeResponse.builder()
+                .greeting(getGreeting())
+                .sections(sections)
+                .complete(secondaryComplete)
+                .build();
+    }
+
+    /**
+     * HEAVY tier: personalized mixes. 6000ms budget; guests get an empty
+     * (but shaped) feed since both sections require a userId. Client heavy
+     * timeout (12000ms) stays above this — no frontend change needed.
+     */
+    @Cacheable(value = "home-heavy", key = "#userId != null ? #userId : 'guest'", unless = "#result == null || #result.sections == null || #result.sections.isEmpty() || !#result.complete")
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public HomeResponse getHomeHeavy(String userId) {
+        long started = System.nanoTime();
+
+        List<CompletableFuture<HomeResponse.Section>> futures = new ArrayList<>();
+        if (userId != null) {
+            futures.add(runSection("made-for-you", () -> buildMadeForYouSection(userId), HEAVY_TIMEOUT_MS));
+            futures.add(runSection("daily-mixes", () -> buildDailyMixesSection(userId), HEAVY_TIMEOUT_MS));
         }
 
-        try {
-            sections.add(buildFeaturedAlbumsSection(userId));
-        } catch (Exception e) {
-            log.error("Failed to build featured albums section: {}", e.getMessage());
+        List<HomeResponse.Section> sections = futures.stream()
+                .map(CompletableFuture::join)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        log.debug("Home heavy assembled in {}ms for {}",
+                (System.nanoTime() - started) / 1_000_000,
+                userId != null ? userId : "guest");
+
+        // Guests never build heavy sections (both require userId): mark
+        // incomplete so the empty shaped feed is never cached either.
+        boolean heavyComplete = userId != null && isComplete(sections, HEAVY_REQUIRED);
+        if (!heavyComplete && userId != null) {
+            log.warn("Home heavy partial for {}: required {} but got {}", userId,
+                    HEAVY_REQUIRED,
+                    sections.stream().map(HomeResponse.Section::getId).collect(Collectors.toSet()));
         }
 
-        try {
-            sections.add(buildFeaturedArtistsSection());
-        } catch (Exception e) {
-            log.error("Failed to build featured artists section: {}", e.getMessage());
-        }
+        return HomeResponse.builder()
+                .greeting(getGreeting())
+                .sections(sections)
+                .complete(heavyComplete)
+                .build();
+    }
 
-        try {
-            sections.add(buildFeaturedPlaylistsSection());
-        } catch (Exception e) {
-            log.error("Failed to build featured playlists section: {}", e.getMessage());
-        }
+    /**
+     * Legacy ALL assembly: identical section set/order to the pre-tier feed
+     * so {@code tier=all} is byte-shape compatible.
+     */
+    private HomeResponse assembleAllSections(String userId) {
+        long started = System.nanoTime();
 
-        try {
-            if (userId != null) {
-                sections.add(buildMadeForYouSection(userId));
-            }
-        } catch (Exception e) {
-            log.error("Failed to build made for you section: {}", e.getMessage());
-        }
+        // Recently-played ids load first on the request thread (bounded,
+        // DB-side LIMIT); the section builders below only read them.
+        final List<RecentlyPlayed> recent = loadRecentItems(userId);
 
-        try {
-            if (userId != null) {
-                sections.add(buildDailyMixesSection(userId));
-            }
-        } catch (Exception e) {
-            log.error("Failed to build daily mixes section: {}", e.getMessage());
+        // Independent section builders fan out in parallel (fail-open, 3000ms
+        // each): feed latency ~= slowest section, not the sum. Futures are
+        // joined in declaration order so section ordering stays deterministic.
+        List<CompletableFuture<HomeResponse.Section>> futures = new ArrayList<>();
+        if (userId != null) {
+            futures.add(runSection("recently-played",
+                    () -> buildRecentlyPlayedSection(userId, recent)));
+            futures.add(runSection("your-playlists",
+                    () -> buildUserPlaylistsSection(userId)));
         }
-
-        try {
-            sections.add(buildPopularGenresSection());
-        } catch (Exception e) {
-            log.error("Failed to build popular genres section: {}", e.getMessage());
+        futures.add(runSection("trending", this::buildTrendingSection));
+        futures.add(runSection("new-releases", () -> buildNewReleasesSection(userId)));
+        futures.add(runSection("featured-albums", () -> buildFeaturedAlbumsSection(userId)));
+        futures.add(runSection("featured-artists", this::buildFeaturedArtistsSection));
+        futures.add(runSection("featured-playlists", this::buildFeaturedPlaylistsSection));
+        if (userId != null) {
+            futures.add(runSection("made-for-you", () -> buildMadeForYouSection(userId)));
+            futures.add(runSection("daily-mixes", () -> buildDailyMixesSection(userId)));
         }
+        futures.add(runSection("popular-genres", this::buildPopularGenresSection));
 
-        List<HomeResponse.Section> filteredSections = sections.stream()
+        List<HomeResponse.Section> sections = futures.stream()
+                .map(CompletableFuture::join)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
@@ -439,10 +635,68 @@ public class RecommendationService {
                 (System.nanoTime() - started) / 1_000_000,
                 userId != null ? userId : "guest");
 
+        Set<String> allRequired = userId != null ? ALL_REQUIRED_AUTHED : ALL_REQUIRED_GUEST;
+        boolean allComplete = isComplete(sections, allRequired);
+        if (!allComplete) {
+            log.warn("Home all partial for {}: required {} but got {}", userId != null ? userId : "guest",
+                    allRequired,
+                    sections.stream().map(HomeResponse.Section::getId).collect(Collectors.toSet()));
+        }
+
         return HomeResponse.builder()
                 .greeting(getGreeting())
-                .sections(filteredSections)
+                .sections(sections)
+                .complete(allComplete)
                 .build();
+    }
+
+    private List<RecentlyPlayed> loadRecentItems(String userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        try {
+            LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
+            // Bounded: home needs at most ~10 recent items; DB-side LIMIT
+            // instead of pulling the full 7-day history unbounded.
+            return recentlyPlayedRepository
+                    .findByUserIdAndPlayedAtAfterOrderByPlayedAtDesc(userId, sevenDaysAgo,
+                            PageRequest.of(0, 20));
+        } catch (Exception e) {
+            log.error("Failed to load recently played: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Runs one section builder off-thread with a 3000ms fail-open timeout: a
+     * slow/failing section logs and resolves to {@code null} (filtered out by
+     * the caller) instead of failing the whole feed. Worker threads open their
+     * own short read-only transactions via the nested service calls.
+     */
+    private CompletableFuture<HomeResponse.Section> runSection(
+            String name, Supplier<HomeResponse.Section> builder) {
+        return runSection(name, builder, SECTION_TIMEOUT_MS);
+    }
+
+    /**
+     * Timeout overload for tiered feeds: critical 3000ms, secondary 4500ms,
+     * heavy 6000ms. Same fail-open contract as the default overload.
+     */
+    private CompletableFuture<HomeResponse.Section> runSection(
+            String name, Supplier<HomeResponse.Section> builder, long timeoutMs) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return builder.get();
+            } catch (Exception e) {
+                log.error("Failed to build {} section: {}", name, e.getMessage());
+                return null;
+            }
+        }, HOME_EXECUTOR)
+                .orTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+                .exceptionally(e -> {
+                    log.warn("Home section '{}' timed out, omitting: {}", name, e.getMessage());
+                    return null;
+                });
     }
 
     public String currentGreeting() {
@@ -454,26 +708,6 @@ public class RecommendationService {
         if (hour < 12) return "Good Morning";
         if (hour < 17) return "Good Afternoon";
         return "Good Evening";
-    }
-
-    private HomeResponse.Section buildContinueListeningSection(String userId, List<RecentlyPlayed> recentItems) {
-        List<String> songIds = recentItems.stream()
-                .filter(rp -> "SONG".equals(rp.getItemType()))
-                .limit(10)
-                .map(RecentlyPlayed::getItemId)
-                .collect(Collectors.toList());
-
-        List<SongResponse> songs = songIds.isEmpty()
-                ? Collections.emptyList()
-                : songService.getSongsByIds(songIds, userId);
-
-        return HomeResponse.Section.builder()
-                .id("continue-listening")
-                .title("Continue Listening")
-                .type("SONG")
-                .subtitle("Pick up where you left off")
-                .items(songs)
-                .build();
     }
 
     private HomeResponse.Section buildRecentlyPlayedSection(String userId, List<RecentlyPlayed> recentItems) {

@@ -31,4 +31,15 @@ public interface LikeRepository extends JpaRepository<Song, String> {
 
     @Query(value = "SELECT artist_id FROM liked_artists WHERE user_id = :userId ORDER BY liked_at DESC", nativeQuery = true)
     List<String> findAllLikedArtistIds(@Param("userId") String userId);
+
+    /**
+     * Batched liked overlays for list responses: single IN query per page
+     * instead of N per-row EXISTS queries. Callers must guard empty lists
+     * (IN () is invalid on Postgres).
+     */
+    @Query(value = "SELECT album_id FROM liked_albums WHERE user_id = :userId AND album_id IN :albumIds", nativeQuery = true)
+    List<String> findLikedAlbumIds(@Param("userId") String userId, @Param("albumIds") List<String> albumIds);
+
+    @Query(value = "SELECT artist_id FROM liked_artists WHERE user_id = :userId AND artist_id IN :artistIds", nativeQuery = true)
+    List<String> findLikedArtistIds(@Param("userId") String userId, @Param("artistIds") List<String> artistIds);
 }

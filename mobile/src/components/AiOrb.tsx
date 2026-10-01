@@ -23,6 +23,8 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import { usePlayerStore, useThemeStore } from '../store';
+import { useYouTubePlayerStore } from '../store/youtubePlayerStore';
+import type { YouTubeVideo } from '../types/youtube';
 import { useShallow } from 'zustand/react/shallow';
 import { useAiOrbStore, AI_ORB_VARIANTS, AI_ORB_GLOW_COLORS } from '../store/aiOrbStore';
 import apiClient, { aiApi, songApi, searchApi, multipartHeaders } from '../api/client';
@@ -412,8 +414,11 @@ export const AiOrb: React.FC = () => {
     resultDisplayText?: string,
     fallbackQuery?: string,
     playLabel?: string,
+    // Default 5-cap preserves every existing caller; PLAY_LIKED passes 20 so
+    // the full backend-served liked queue (<=20 ids) plays instead of 5.
+    maxCount: number = 5,
   ): Promise<boolean> => {
-    const uniqueIds = [...new Set((songIds || []).filter(Boolean))].slice(0, 5);
+    const uniqueIds = [...new Set((songIds || []).filter(Boolean))].slice(0, maxCount);
     if (uniqueIds.length > 0) {
       const songs: any[] = [];
       for (const sid of uniqueIds) {
@@ -528,6 +533,24 @@ export const AiOrb: React.FC = () => {
             await playBackendSongIds(songIds, result.displayText, fallbackQuery, label);
             break;
           }
+          case 'PLAY_RANDOM': {
+            // Backend live-serves one random id in result.songs with
+            // displayText "Playing <title>". Backend-first like PLAY, but
+            // with no fallback query — empty/unresolvable ids keeps the
+            // backend displayText (or "No results").
+            const songIds: string[] = result.songs || [];
+            await playBackendSongIds(songIds, result.displayText);
+            break;
+          }
+          case 'PLAY_LIKED': {
+            // Backend live-serves up to 20 liked ids (most-recent-first)
+            // with displayText "Playing your liked songs (N songs)". Same
+            // backend-first path, widened to 20 so the full liked queue
+            // plays; success refines to "Playing liked songs - <title>".
+            const songIds: string[] = result.songs || [];
+            await playBackendSongIds(songIds, result.displayText, '', 'liked songs', 20);
+            break;
+          }
           case 'PLAY_SIMILAR': {
             // Backend returns similar song ids in result.songs; play them without
             // restarting the current track when there is no similar context.
@@ -575,6 +598,32 @@ export const AiOrb: React.FC = () => {
                 }
               }
             } catch {}
+            break;
+          }
+          case 'PLAY_YOUTUBE': {
+            // Backend QUEUED_YOUTUBE: lyric-identified song not in the local
+            // catalog. Params carry { videoId, title, channelTitle }. Plays on
+            // the same global single player as YouTubeSongsScreen taps —
+            // playVideo() pauses audio + mutual-exclusion internally, so no
+            // explicit pause here (mirrors the tap handler).
+            const rawId = params.videoId ?? result.videoId;
+            const videoId = typeof rawId === 'string' ? rawId.trim() : '';
+            if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+              if (result.displayText) setResponse(result.displayText);
+              break;
+            }
+            const ytTitle =
+              params.title || result.title || 'Unknown title';
+            const ytChannel =
+              params.channelTitle || result.channelTitle || '';
+            const video: YouTubeVideo = {
+              videoId,
+              title: ytTitle,
+              channelTitle: ytChannel,
+              thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            };
+            useYouTubePlayerStore.getState().playVideo(video);
+            setResponse(`Playing ${ytTitle} on YouTube`);
             break;
           }
           default:
@@ -754,6 +803,10 @@ export const AiOrb: React.FC = () => {
     }
   };
 
+  // Stable waveform heights: random once per listening session (memo), not
+  // on every render, so bars don't jitter with each state update.
+  const waveHeights = React.useMemo(() => [...Array(12)].map(() => 8 + Math.random() * 28), [state === 'listening']);
+
   const stopWebMedia = async (): Promise<{ uri: string; transcript?: string }> => {
     const recorder: MediaRecorder | null = mediaRecorderRef.current;
     if (recorder && recorder.state !== 'inactive') {
@@ -762,19 +815,42 @@ export const AiOrb: React.FC = () => {
       try { recognitionRef.current?.stop(); } catch {}
       recognitionRef.current = null;
       return new Promise((resolve) => {
-        recorder.onstop = async () => {
-          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-          // Create object URL for upload
-          const uri = URL.createObjectURL(blob);
-          // Cleanup stream
+        let settled = false;
+        const finish = (uri: string) => {
+          if (settled) return;
+          settled = true;
+          // Always release mic tracks + refs, even on empty blobs.
           try { (recorder.stream as any)?.getTracks()?.forEach((t: any) => t.stop()); } catch {}
           mediaRecorderRef.current = null;
-          audioChunksRef.current = [];
           resolve({ uri, transcript: transcriptAtStop });
         };
-        recorder.stop();
+        recorder.onstop = async () => {
+          try {
+            const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+            // Create object URL for upload
+            const uri = URL.createObjectURL(blob);
+            audioChunksRef.current = [];
+            finish(uri);
+          } catch {
+            audioChunksRef.current = [];
+            finish('');
+          }
+        };
+        try {
+          recorder.stop();
+        } catch {
+          finish('');
+        }
+        // Safety: never hang the stop-tap if onstop never fires.
+        setTimeout(() => finish(''), 3000);
       });
     }
+    // No active recorder: still release any orphaned stream tracks.
+    try {
+      const rec: any = mediaRecorderRef.current;
+      rec?.stream?.getTracks?.()?.forEach?.((t: any) => { try { t.stop(); } catch {} });
+    } catch {}
+    mediaRecorderRef.current = null;
     return { uri: '', transcript: transcriptRef.current };
   };
 
@@ -1316,6 +1392,40 @@ export const AiOrb: React.FC = () => {
     setState('idle');
   };
 
+  // Backdrop close: abort any in-flight listening (timer/STT/recorder +
+  // live partials) before hiding, so closing mid-listen never leaves the
+  // mic running or a stale upload racing the next tap.
+  const closeSheet = () => {
+    clearAutoStop();
+    isListeningRef.current = false;
+    try { voice.cancel(); } catch {}
+    if (Platform.OS === 'web') {
+      try { recognitionRef.current?.stop(); } catch {}
+      recognitionRef.current = null;
+      try {
+        const rec: any = mediaRecorderRef.current;
+        if (rec && rec.state !== 'inactive') {
+          try { rec.stop(); } catch {}
+          try { rec.stream?.getTracks?.()?.forEach?.((t: any) => { try { t.stop(); } catch {} }); } catch {}
+        }
+      } catch {}
+      mediaRecorderRef.current = null;
+    } else {
+      try { ExpoSpeechRecognitionModule.abort(); } catch {}
+      try {
+        const rec = recorderRef.current;
+        recorderRef.current = null;
+        if (rec) {
+          try {
+            const maybeStop = (rec as any).stop();
+            if (maybeStop && typeof maybeStop.catch === 'function') maybeStop.catch(() => {});
+          } catch {}
+        }
+      } catch {}
+    }
+    setShowSheet(false);
+  };
+
   const glowColors = AI_ORB_GLOW_COLORS[variant] || AI_ORB_GLOW_COLORS.classic;
 
   return (
@@ -1391,9 +1501,9 @@ export const AiOrb: React.FC = () => {
       </View>
 
       {/* Full-screen sheet when active */}
-      <Modal visible={showSheet} transparent animationType="fade" onRequestClose={() => setShowSheet(false)}>
+      <Modal visible={showSheet} transparent animationType="fade" onRequestClose={closeSheet}>
         <View style={styles.sheetBackdrop}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => state === 'idle' && setShowSheet(false)} />
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeSheet} />
           <View style={[styles.sheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
             {/* Header illusion */}
             <View style={styles.sheetHeader}>
@@ -1419,7 +1529,7 @@ export const AiOrb: React.FC = () => {
               </Text>
             </TouchableOpacity>
 
-            {/* Waveform + LIVE countdown when listening */}
+            {/* Waveform + LIVE countdown when listening (heights memoized) */}
             {!isKeyboardMode && state === 'listening' && (
               <View
                 accessible
@@ -1430,12 +1540,12 @@ export const AiOrb: React.FC = () => {
               >
                 <Text style={[styles.liveBadge, { color: '#FF3B30' }]}>● LIVE · {listenSecsLeft}s</Text>
                 <View style={styles.waveWrap}>
-                {[...Array(12)].map((_, i) => (
+                {waveHeights.map((h, i) => (
                   <Animated.View
                     key={i}
                     style={[
                       styles.waveBar,
-                      { backgroundColor: theme.colors.primary, height: 8 + Math.random() * 28 },
+                      { backgroundColor: theme.colors.primary, height: h },
                       pulseStyle,
                     ]}
                   />
@@ -1546,7 +1656,7 @@ export const AiOrb: React.FC = () => {
               </View>
             )}
 
-            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.colors.background }]} onPress={() => setShowSheet(false)}>
+            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.colors.background }]} onPress={closeSheet}>
               <Text style={[styles.closeText, { color: theme.colors.textSecondary }]}>Close</Text>
             </TouchableOpacity>
           </View>

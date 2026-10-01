@@ -29,7 +29,9 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -181,8 +183,10 @@ public class AlbumService {
     @Cacheable(value = "albums", key = "'featured:' + #limit")
     public List<AlbumResponse> getFeaturedAlbumsBase(int limit) {
         Pageable pageable = PageRequest.of(0, Math.max(1, Math.min(limit, 50)));
+        // List shape is summary-only (no per-album song load): songs are
+        // lazy-loaded via getAlbumById on click. Avoids N song queries.
         return albumRepository.findFeaturedAlbums(pageable).stream()
-                .map(album -> toAlbumResponse(album, null))
+                .map(album -> toAlbumSummary(album, false))
                 .collect(Collectors.toList());
     }
 
@@ -204,8 +208,9 @@ public class AlbumService {
     public List<AlbumResponse> getNewReleasesBase(int limit) {
         Pageable pageable = PageRequest.of(0, Math.max(1, Math.min(limit, 50)));
         LocalDate since = LocalDate.now().minusMonths(1);
+        // Summary-only for lists (see getFeaturedAlbumsBase).
         return albumRepository.findNewReleases(since, pageable).stream()
-                .map(album -> toAlbumResponse(album, null))
+                .map(album -> toAlbumSummary(album, false))
                 .collect(Collectors.toList());
     }
 
@@ -289,8 +294,63 @@ public class AlbumService {
     }
 
     public List<AlbumResponse> getAlbumsByArtist(String artistId) {
+        // Summary-only list: full songs load per album (N song queries) is
+        // reserved for getAlbumById. Capped to avoid unbounded result sets.
         return albumRepository.findByArtistId(artistId).stream()
-                .map(album -> toAlbumResponse(album, null))
+                .limit(100)
+                .map(album -> toAlbumSummary(album, false))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Lightweight list shape: same contract (AlbumResponse) but without the
+     * per-album song fetch. List endpoints carry songCount/totalDurationMs
+     * from the Album row; songs are fetched on demand via getAlbumById.
+     * Songs is an empty list (never null) so JSON shape stays stable.
+     */
+    private AlbumResponse toAlbumSummary(Album album, boolean liked) {
+        AlbumResponse.AlbumResponseBuilder builder = AlbumResponse.builder()
+                .id(album.getId())
+                .name(album.getName())
+                .description(album.getDescription())
+                .artistId(album.getArtist().getId())
+                .artistName(album.getArtist().getName())
+                .coverUrl(album.getCoverUrl())
+                .releaseDate(album.getReleaseDate())
+                .songCount(album.getSongCount())
+                .totalDurationMs(album.getTotalDurationMs())
+                .type(album.getType())
+                .archived(album.isArchived())
+                .featured(album.isFeatured())
+                .liked(liked)
+                .songs(List.of())
+                .createdAt(album.getCreatedAt());
+
+        if (album.getGenre() != null) {
+            builder.genreId(album.getGenre().getId());
+            builder.genreName(album.getGenre().getName());
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Batched summary mapping for lists: one liked-albums IN query instead
+     * of N per-row EXISTS queries, no song loads.
+     */
+    private List<AlbumResponse> toAlbumSummaries(List<Album> albums, String userId) {
+        if (albums == null || albums.isEmpty()) {
+            return List.of();
+        }
+        final Set<String> likedIds;
+        if (userId != null) {
+            List<String> ids = albums.stream().map(Album::getId).collect(Collectors.toList());
+            likedIds = new HashSet<>(likeRepository.findLikedAlbumIds(userId, ids));
+        } else {
+            likedIds = Set.of();
+        }
+        return albums.stream()
+                .map(album -> toAlbumSummary(album, likedIds.contains(album.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -383,32 +443,45 @@ public class AlbumService {
 
     @Transactional(readOnly = true)
     public List<AlbumResponse> getAllAlbums(int page, int size, String userId) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return albumRepository.findAllActive(pageable).stream()
-                .map(album -> toAlbumResponse(album, userId))
-                .collect(Collectors.toList());
+        int safePage = Math.max(0, page);
+        int safeSize = size <= 0 ? 20 : Math.min(size, 50);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Summary-only + batched liked overlay: no per-album song queries.
+        List<Album> albums = albumRepository.findAllActive(pageable);
+        return toAlbumSummaries(albums, userId);
     }
 
     @Transactional(readOnly = true)
     public List<AlbumResponse> getLikedAlbums(String userId) {
         List<String> albumIds = likeRepository.findAllLikedAlbumIds(userId);
-        List<AlbumResponse> albums = new ArrayList<>();
-        for (String albumId : albumIds) {
-            try {
-                albums.add(getAlbumById(albumId, userId));
-            } catch (Exception e) {
-                log.warn("Could not load liked album: {}", albumId);
-            }
+        if (albumIds == null || albumIds.isEmpty()) {
+            return List.of();
         }
-        return albums;
+        // Bounded + batched: one album fetch (artist/genre fetch-joined) +
+        // summary mapping (no per-album song loads, no per-id getAlbumById
+        // loop). Order follows liked_at.
+        List<String> capped = albumIds.size() > 200 ? albumIds.subList(0, 200) : albumIds;
+        Map<String, Album> byId = albumRepository.findAllByIdsWithRelations(capped).stream()
+                .collect(Collectors.toMap(Album::getId, Function.identity(), (a, b) -> a));
+        return capped.stream()
+                .map(byId::get)
+                .filter(java.util.Objects::nonNull)
+                .map(album -> toAlbumSummary(album, true))
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<AlbumResponse> getAlbumsByIds(List<String> ids, String userId) {
         if (ids == null || ids.isEmpty()) return List.of();
-        List<Album> albums = albumRepository.findAllById(ids);
-        return albums.stream()
-                .map(album -> toAlbumResponse(album, userId))
+        // Cap IN-clause size; preserve caller order; summary-only + 1 liked IN query.
+        // Artist/genre fetch-joined batch (no N lazy loads).
+        List<String> capped = ids.size() > 100 ? ids.subList(0, 100) : ids;
+        Map<String, Album> byId = albumRepository.findAllByIdsWithRelations(capped).stream()
+                .collect(Collectors.toMap(Album::getId, Function.identity(), (a, b) -> a));
+        List<Album> ordered = capped.stream()
+                .map(byId::get)
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
+        return toAlbumSummaries(ordered, userId);
     }
 }

@@ -244,7 +244,7 @@ class TestUnderstandValidation:
         assert len(body["suggestions"]) == 3
 
     def test_all_actions_in_allowlist(self):
-        """Every action the mock can emit must be in the 30-action allow-list."""
+        """Every action the mock can emit must be in the 32-action allow-list."""
         samples = ["play calm songs", "play ani hits", "next", "pause",
                    "play something similar to this", "add this song to my queue",
                    "add this to my Chill playlist", "play rock songs", "tamil songs"]

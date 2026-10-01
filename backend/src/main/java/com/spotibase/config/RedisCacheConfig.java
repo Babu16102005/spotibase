@@ -68,7 +68,15 @@ public class RedisCacheConfig {
                 .prefixCacheNameWith(KEY_PREFIX);
 
         Map<String, RedisCacheConfiguration> perCache = new HashMap<>();
-        perCache.put("home", defaults.entryTtl(Duration.ofSeconds(45)));
+        // Unified fast-load TTLs: personalized assemblies refresh every 30s
+        // (home + library), catalog rows stay hot longer. L1 Caffeine mirrors
+        // these in CacheConfig and never outlives them.
+        perCache.put("home", defaults.entryTtl(Duration.ofSeconds(30)));
+        perCache.put("home-critical", defaults.entryTtl(Duration.ofSeconds(45)));
+        perCache.put("home-secondary", defaults.entryTtl(Duration.ofMinutes(5)));
+        perCache.put("home-heavy", defaults.entryTtl(Duration.ofMinutes(15)));
+        perCache.put("library", defaults.entryTtl(Duration.ofSeconds(30)));
+        perCache.put("search", defaults.entryTtl(Duration.ofSeconds(60)));
         perCache.put("songs", defaults.entryTtl(Duration.ofMinutes(5)));
         perCache.put("albums", defaults.entryTtl(Duration.ofMinutes(5)));
         perCache.put("artists", defaults.entryTtl(Duration.ofMinutes(10)));

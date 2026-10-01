@@ -7,7 +7,7 @@ const storage = getStorage('spotibase-theme');
 describe('themeStore', () => {
   beforeEach(() => {
     storage.clearAll();
-    useThemeStore.setState({ theme: DarkTheme, themeMode: 'DARK', greetingPattern: 'RANDOM' });
+    useThemeStore.setState({ theme: DarkTheme, themeMode: 'DARK', greetingPattern: 'FLUID' });
   });
 
   it('starts with the dark theme by default', () => {
@@ -61,9 +61,9 @@ describe('themeStore', () => {
     expect(theme).toBe(LightTheme);
   });
 
-  it('starts with RANDOM greeting pattern by default', () => {
+  it('starts with FLUID greeting pattern by default', () => {
     const { greetingPattern } = useThemeStore.getState();
-    expect(greetingPattern).toBe('RANDOM');
+    expect(greetingPattern).toBe('FLUID');
   });
 
   it('setGreetingPattern updates state and persists to storage', () => {
@@ -83,5 +83,13 @@ describe('themeStore', () => {
     storage.set('greetingPattern', 'RADIAL');
     useThemeStore.getState().loadTheme();
     expect(useThemeStore.getState().greetingPattern).toBe('AURORA');
+  });
+
+  it('loadTheme migrates legacy RANDOM/COSMIC/GEOMETRIC patterns to FLUID', () => {
+    for (const legacy of ['RANDOM', 'COSMIC', 'GEOMETRIC', 'unknown']) {
+      storage.set('greetingPattern', legacy);
+      useThemeStore.getState().loadTheme();
+      expect(useThemeStore.getState().greetingPattern).toBe('FLUID');
+    }
   });
 });

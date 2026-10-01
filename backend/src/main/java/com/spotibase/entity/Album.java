@@ -2,6 +2,7 @@ package com.spotibase.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -74,6 +75,7 @@ public class Album {
     // Relationships
     @OneToMany(mappedBy = "album", cascade = CascadeType.ALL)
     @OrderBy("trackNumber ASC")
+    @BatchSize(size = 20)
     @Builder.Default
     private Set<Song> songs = new HashSet<>();
 
@@ -81,6 +83,7 @@ public class Album {
     @JoinTable(name = "liked_albums",
             joinColumns = @JoinColumn(name = "album_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id"))
+    @BatchSize(size = 20)
     @Builder.Default
     private Set<User> likedBy = new HashSet<>();
 }
