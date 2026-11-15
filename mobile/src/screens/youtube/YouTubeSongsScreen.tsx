@@ -26,6 +26,15 @@ import Icon from '../../components/Icon';
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_LIMIT = 20;
+/**
+ * Minimum non-blank query length before a YouTube search fires.
+ * Shorter queries never call youtubeApi.search with the typed text —
+ * they reset to the Tamil default feed (same as empty query) and abort
+ * in-flight requests. Prevents per-keystroke fan-out on inputs like
+ * `a` / `an` that always miss the backend cache (each miss costs
+ * ~2 upstream Google calls and turns ~1s p50 into >6s tail spikes).
+ */
+export const MIN_QUERY_LENGTH = 2;
 // Centralized India-first locale (IN/ta/ta) + Tamil-first default feed query —
 // canonical values live in youtubeApi (YOUTUBE_DEFAULT_LOCALE,
 // YOUTUBE_DEFAULT_TAMIL_QUERY); no literals here.
@@ -103,6 +112,10 @@ const YouTubeSongsScreen = ({ navigation }: any) => {
   const queryRef = useRef('');
   queryRef.current = query;
   const activeQueryRef = useRef<string>(YOUTUBE_DEFAULT_TAMIL_QUERY);
+  // Tracks rendered list size so the min-length guard can skip a redundant
+  // feed refetch when already showing the default feed (zero-cost keystroke).
+  const videosLenRef = useRef(0);
+  videosLenRef.current = videos.length;
 
   const hasMore = nextPageToken != null;
 
@@ -186,6 +199,21 @@ const YouTubeSongsScreen = ({ navigation }: any) => {
 
   const runSearch = useCallback(
     (q: string) => {
+      const trimmed = q.trim();
+      // Min-length guard (submit path bypasses the debounce): never search
+      // a short string — reset to the Tamil feed instead. Skip the refetch
+      // when already showing the feed so stray keystrokes cost zero calls.
+      if (trimmed.length > 0 && trimmed.length < MIN_QUERY_LENGTH) {
+        setFallback(null);
+        if (
+          activeQueryRef.current === YOUTUBE_DEFAULT_TAMIL_QUERY &&
+          videosLenRef.current > 0
+        ) {
+          return;
+        }
+        void fetchFirstPage(YOUTUBE_DEFAULT_TAMIL_QUERY, false);
+        return;
+      }
       void fetchFirstPage(q, false);
     },
     [fetchFirstPage]
@@ -199,9 +227,26 @@ const YouTubeSongsScreen = ({ navigation }: any) => {
         debounceRef.current = null;
       }
       feedAbortRef.current?.abort();
-      if (!text.trim()) {
+      const trimmed = text.trim();
+      if (!trimmed) {
         // Clearing search returns to the Tamil feed, never to an empty state.
         setFallback(null);
+        void fetchFirstPage(YOUTUBE_DEFAULT_TAMIL_QUERY, false);
+        return;
+      }
+      if (trimmed.length < MIN_QUERY_LENGTH) {
+        // Below min length: never call search with the typed text.
+        // Abort already issued above; clear any error banner and reset to
+        // the default/feed state (same as empty query). Already on the
+        // feed → zero-cost no-op (no new request); showing results →
+        // reload the Tamil feed so the list matches the feed state.
+        setFallback(null);
+        if (
+          activeQueryRef.current === YOUTUBE_DEFAULT_TAMIL_QUERY &&
+          videosLenRef.current > 0
+        ) {
+          return;
+        }
         void fetchFirstPage(YOUTUBE_DEFAULT_TAMIL_QUERY, false);
         return;
       }
@@ -226,12 +271,20 @@ const YouTubeSongsScreen = ({ navigation }: any) => {
 
   // Freshness guard: cached feed paints instantly; refetch only when stale
   // (>30s), empty, or explicitly refreshing. Avoids a network storm on every tab focus.
+  // Min-length: a short pending query (e.g. "a") refocuses to the default
+  // feed, never searches the short string.
   useFocusEffect(
     useCallback(() => {
       const fresh =
         lastFeedAtRef.current > 0 && Date.now() - lastFeedAtRef.current < FEED_FRESH_MS;
       if (videos.length === 0 || !fresh) {
-        void fetchFirstPage(queryRef.current, false);
+        const pending = queryRef.current ?? '';
+        const trimmed = pending.trim();
+        const effective =
+          trimmed.length > 0 && trimmed.length < MIN_QUERY_LENGTH
+            ? YOUTUBE_DEFAULT_TAMIL_QUERY
+            : pending;
+        void fetchFirstPage(effective, false);
       }
     }, [fetchFirstPage, videos.length])
   );
@@ -272,7 +325,7 @@ const YouTubeSongsScreen = ({ navigation }: any) => {
     [playVideo, navigation]
   );
 
-  const showingResults = query.trim().length > 0;
+  const showingResults = query.trim().length >= MIN_QUERY_LENGTH;
   const isEmpty = !loading && videos.length === 0;
   const sectionTitle = showingResults ? `Results for "${query.trim()}"` : 'Tamil songs';
 
@@ -430,7 +483,7 @@ const YouTubeSongsScreen = ({ navigation }: any) => {
                 accessibilityLabel="Retry loading Tamil songs"
               />
             </View>
-          ) : null
+          ) : undefined
         }
         ListFooterComponent={renderFooter}
         onEndReached={() => {

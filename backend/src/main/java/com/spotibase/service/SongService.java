@@ -59,6 +59,8 @@ public class SongService {
     private final SongContributingArtistRepository contributingArtistRepository;
     private final UserRepository userRepository;
     private final com.spotibase.ai.service.AiTaggingService aiTaggingService;
+    private final com.spotibase.ai.service.SongEvaluationService songEvaluationService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     // Self-reference for @Cacheable: same-bean calls bypass the cache proxy.
     @Autowired
@@ -269,12 +271,13 @@ public class SongService {
                 song.setCoverUrl(artist.getImageUrl());
             }
 
-            // AI tagging - accurate mood/energy/vibe on upload (FastAPI Qwen -> fallback rule)
+            // Tagging - mood/energy/vibe evaluated from the song's own parameters
+            // (title/artist/genre/language + measured duration/bitrate/sample rate).
             try {
                 String tagTitle = request.getTitle() != null && !request.getTitle().isBlank() ? request.getTitle() : tags.title;
                 String tagGenre = genre != null ? genre.getName() : tags.genre;
                 String tagLang = request.getLanguage() != null ? request.getLanguage() : tags.language;
-                var tag = aiTaggingService.tag(song, tagTitle, artist.getName(), tagGenre, tagLang, tags.durationMs > 0 ? tags.durationMs : null, tags.bitrate > 0 ? tags.bitrate : null);
+                var tag = aiTaggingService.tag(song, tagTitle, artist.getName(), tagGenre, tagLang, tags.durationMs > 0 ? tags.durationMs : null, tags.bitrate > 0 ? tags.bitrate : null, tags.sampleRate > 0 ? tags.sampleRate : null);
                 song.setMoodTags(new ArrayList<>(tag.moodTags()));
                 song.setVibeTags(new ArrayList<>(tag.vibeTags()));
                 try { song.setActivityTags(new ArrayList<>(tag.activityTags())); } catch (Exception ex) {}
@@ -293,6 +296,17 @@ public class SongService {
             syncDenormalizedFields(song, artist, album);
             // Save to DB - if this throws, the catch block will clean up storage
             song = songRepository.save(song);
+
+            // Post-upload Qwen listener-mindset evaluation (async, after
+            // commit — upload response never waits for the AI). The listener
+            // overwrites tags only on a genuine LLM verdict.
+            try {
+                if (eventPublisher != null) {
+                    eventPublisher.publishEvent(new com.spotibase.ai.service.SongUploadedEvent(song.getId()));
+                }
+            } catch (Exception evalEx) {
+                log.debug("Evaluation event publish skipped: {}", evalEx.getMessage());
+            }
 
             // Handle contributing artists AFTER the song is saved so the composite
             // key (songId, artistId, role) is final from the start. Mutating @Id
@@ -759,6 +773,17 @@ public class SongService {
                 .orElseThrow(() -> new ResourceNotFoundException("Song", id));
         song.setArchived(false);
         songRepository.save(song);
+    }
+
+    /**
+     * Synchronous Qwen listener-mindset evaluation (ADMIN re-evaluate
+     * endpoint). Persists only genuine LLM verdicts and evicts cached song
+     * views so the new tags read through immediately.
+     */
+    @Transactional
+    @CacheEvict(value = {"home", "recommendations", "songs"}, allEntries = true)
+    public java.util.Map<String, Object> evaluateSongTags(String id) {
+        return songEvaluationService.evaluateNow(id);
     }
 
     /**

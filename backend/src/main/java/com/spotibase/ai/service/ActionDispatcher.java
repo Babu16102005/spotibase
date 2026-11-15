@@ -70,7 +70,7 @@ public class ActionDispatcher {
                     }
                     // Preserve voice/discovery filters instead of dropping them.
                     String language = strOrNull(params.get("language"));
-                    String genre = firstNonBlank((String) params.get("genre"), (String) params.get("genreName"));
+                    String genre = firstNonBlank(strOrNull(params.get("genre")), strOrNull(params.get("genreName")));
                     // Voice path uses top-5 fast union search (<150ms via FTS+trigram+ILIKE)
                     // Exact intent runs unwrapped so DB failures still surface as
                     // FAILED (fail-open try/catch); only fallbacks are fail-open.
@@ -142,7 +142,7 @@ public class ActionDispatcher {
                     }
                     // Preserve voice/discovery filters instead of dropping them.
                     String language = strOrNull(params.get("language"));
-                    String genre = firstNonBlank((String) params.get("genre"), (String) params.get("genreName"));
+                    String genre = firstNonBlank(strOrNull(params.get("genre")), strOrNull(params.get("genreName")));
                     // Voice path uses top-5 fast union search (<150ms via FTS+trigram+ILIKE)
                     // Exact intent unwrapped so failures surface as FAILED.
                     var result = searchService.search(query, List.of("artist", "song"), 0, 5,
@@ -295,16 +295,19 @@ public class ActionDispatcher {
                 }
             }
             case PLAY_BY_MOOD, PLAY_BY_GENRE, PLAY_BY_LANGUAGE -> {
-                // params may contain mood, genre, language, vibe, activity, exclude_mood
-                String mood = firstNonBlank((String) params.get("mood"), (String) params.get("vibe"));
-                String activity = (String) params.get("activity");
+                // params may contain mood, genre, language, vibe, activity, exclude_mood.
+                // All are read via strOrNull: the AI sometimes sends scalars as
+                // single-element lists (e.g. vibe: ['FEEL_GOOD']) — a raw
+                // (String) cast there threw ClassCastException (voice 500).
+                String mood = firstNonBlank(strOrNull(params.get("mood")), strOrNull(params.get("vibe")));
+                String activity = strOrNull(params.get("activity"));
                 String excludeMood = extractExcludeMood(params.get("exclude_mood"));
-                String language = (String) params.get("language");
-                String genre = (String) params.get("genre");
+                String language = strOrNull(params.get("language"));
+                String genre = strOrNull(params.get("genre"));
                 // Per-action requested filter (PLAY_BY_MOOD->mood, PLAY_BY_GENRE->genre, PLAY_BY_LANGUAGE->language)
                 String requestedMood = mood;
                 String requestedGenre = action == AssistantAction.PLAY_BY_GENRE
-                        ? firstNonBlank(genre, (String) params.get("genreName")) : genre;
+                        ? firstNonBlank(genre, strOrNull(params.get("genreName"))) : genre;
                 String requestedLanguage = action == AssistantAction.PLAY_BY_LANGUAGE ? language : language;
                 if (action == AssistantAction.PLAY_BY_MOOD && (requestedMood == null || requestedMood.isBlank())
                         && activity != null) requestedMood = activity;
@@ -454,14 +457,41 @@ public class ActionDispatcher {
                 }
             }
             case PLAY_YOUTUBE -> {
-                // Direct YouTube play (lyric identified outside the local
-                // catalog, or AI explicitly asks for a video). The app plays
-                // it via youtubePlayerStore.playVideo({ videoId, title,
+                // Explicit "play X on YouTube" (or lyric identified outside
+                // the local catalog). The app plays it via
+                // youtubePlayerStore.playVideo({ videoId, title,
                 // channelTitle, thumbnailUrl }) — no local queue involved.
+                //
+                // videoId present (AI-supplied or lyric chain): play directly.
+                // Otherwise resolve the REAL video live from the query — never
+                // a fabricated id, never a local song instead of YouTube.
                 String videoId = strOrNull(params.get("videoId"));
                 if (videoId == null) {
-                    yield Map.of("status", "FAILED", "query", "",
-                            "displayText", "No YouTube video to play.");
+                    String query = firstNonBlank(
+                            strOrNull(params.get("query")),
+                            strOrNull(params.get("title")),
+                            strOrNull(params.get("song")),
+                            strOrNull(params.get("artist")));
+                    if (query == null || query.isBlank()) {
+                        yield Map.of("status", "FAILED", "query", "",
+                                "displayText", "Tell me which song to play on YouTube.");
+                    }
+                    List<YoutubeVideoResponse> found = youtubeSearchSafe(query, 5);
+                    YoutubeVideoResponse top = null;
+                    for (YoutubeVideoResponse v : found) {
+                        if (v != null && v.getVideoId() != null && !v.getVideoId().isBlank()) {
+                            top = v;
+                            break;
+                        }
+                    }
+                    if (top == null) {
+                        yield Map.of("status", "FAILED", "query", query,
+                                "displayText", "Couldn't find '" + query + "' on YouTube right now.");
+                    }
+                    log.info("YouTube intent '{}...' -> YouTube video {} ('{}')",
+                            query.length() > 30 ? query.substring(0, 30) : query,
+                            top.getVideoId(), top.getTitle());
+                    yield queuedYoutubeResult(query, top);
                 }
                 String ytTitle = firstNonBlank(strOrNull(params.get("title")), videoId);
                 Map<String, Object> out = new HashMap<>();
@@ -480,8 +510,8 @@ public class ActionDispatcher {
                 yield out;
             }
             case PLAY_SIMILAR -> {
-                String source = (String) params.getOrDefault("source", "CURRENT_SONG");
-                String currentSongId = ctx != null ? (String) ctx.get("currentSongId") : null;
+                String source = firstNonBlank(strOrNull(params.get("source")), "CURRENT_SONG");
+                String currentSongId = ctx != null ? strOrNull(ctx.get("currentSongId")) : null;
                 if (currentSongId != null) {
                     List<SongResponse> similars = recommendationService.getSimilarSongs(currentSongId, 10);
                     if (!similars.isEmpty()) {
@@ -492,12 +522,12 @@ public class ActionDispatcher {
                 yield Map.of("status", "NO_CONTEXT");
             }
             case ADD_TO_QUEUE -> {
-                String target = (String) params.getOrDefault("target", "CURRENT_SONG");
+                String target = firstNonBlank(strOrNull(params.get("target")), "CURRENT_SONG");
                 String songId = null;
                 if (target.equals("CURRENT_SONG")) {
-                    songId = ctx != null ? (String) ctx.get("currentSongId") : null;
+                    songId = ctx != null ? strOrNull(ctx.get("currentSongId")) : null;
                 } else {
-                    songId = (String) params.get("songId");
+                    songId = strOrNull(params.get("songId"));
                 }
                 if (songId != null) {
                     queueService.addToQueue(userId, songId, "AI_QUEUE");
@@ -506,7 +536,7 @@ public class ActionDispatcher {
                 yield Map.of("status", "FAILED", "reason", "No song to queue");
             }
             case LIKE_CURRENT, UNLIKE_CURRENT -> {
-                String songId = ctx != null ? (String) ctx.get("currentSongId") : null;
+                String songId = ctx != null ? strOrNull(ctx.get("currentSongId")) : null;
                 if (songId != null) {
                     if (action == AssistantAction.LIKE_CURRENT) {
                         likeService.likeSong(userId, songId);
@@ -518,17 +548,16 @@ public class ActionDispatcher {
                 }
                 yield Map.of("status", "FAILED", "reason", "No current song");
             }
-            case ADD_TO_PLAYLIST, CREATE_PLAYLIST -> {
-                String playlistName = (String) params.getOrDefault("playlist", "Chill");
-                String target = (String) params.getOrDefault("target", "CURRENT_SONG");
+            case ADD_TO_PLAYLIST, CREATE_PLAYLIST -> {                String playlistName = firstNonBlank(strOrNull(params.get("playlist")), "Chill");
+                String target = firstNonBlank(strOrNull(params.get("target")), "CURRENT_SONG");
                 String songId = null;
                 if (ctx != null) {
                     if (target.equals("FIRST_RESULT") && ctx.get("firstResultSongId") != null) {
-                        songId = (String) ctx.get("firstResultSongId");
+                        songId = strOrNull(ctx.get("firstResultSongId"));
                     } else if (ctx.get("currentSongId") != null) {
-                        songId = (String) ctx.get("currentSongId");
+                        songId = strOrNull(ctx.get("currentSongId"));
                     } else if (ctx.get("firstResultSongId") != null) {
-                        songId = (String) ctx.get("firstResultSongId");
+                        songId = strOrNull(ctx.get("firstResultSongId"));
                     }
                 }
                 // Playlist write path is not implemented yet: do not claim success.
@@ -540,6 +569,28 @@ public class ActionDispatcher {
                 if (songId != null) out.put("songId", songId);
                 out.put("displayText", "Playlist editing via voice isn't supported yet. Please add the song to '"
                         + playlistName + "' manually.");
+                yield out;
+            }
+            case CHAT -> {
+                // Free conversation (greetings/thanks/jokes/identity/small-talk):
+                // display-only passthrough. NO queue/search/dispatch, NO realtime
+                // push, NO side effects. results[i] stays parallel to actions[i]
+                // so the app reads results[i].displayText + songs[] (empty).
+                // The Jarvis reply text lives in the top-level `response`
+                // (AssistantService enriches blank displayText from it); params
+                // may also carry text/message/response/displayText/reply when
+                // the AI echoes it there.
+                String text = firstNonBlank(
+                        strOrNull(params.get("displayText")),
+                        strOrNull(params.get("response")),
+                        strOrNull(params.get("text")),
+                        strOrNull(params.get("message")),
+                        strOrNull(params.get("reply")));
+                if (text == null) text = "";
+                Map<String, Object> out = new HashMap<>();
+                out.put("status", "CHAT_OK");
+                out.put("songs", List.of());
+                out.put("displayText", text);
                 yield out;
             }
             default -> Map.of("status", "NOT_IMPLEMENTED", "action", action.name());
@@ -603,6 +654,16 @@ public class ActionDispatcher {
 
     private String strOrNull(Object v) {
         if (v instanceof String s && !s.isBlank()) return s.trim();
+        // The AI (LLM/mock) sometimes sends scalar params as single-element
+        // lists, e.g. vibe: ['FEEL_GOOD']. Unwrap the first element instead
+        // of dropping the value (and never let a raw (String) cast throw
+        // ClassCastException on the dispatch path).
+        if (v instanceof List<?> list) {
+            for (Object item : list) {
+                String s = strOrNull(item);
+                if (s != null) return s;
+            }
+        }
         return null;
     }
 
@@ -853,6 +914,18 @@ public class ActionDispatcher {
         // (f) not in the library -> the app plays the YouTube video.
         log.info("Lyric YouTube identify '{}...' -> YouTube video {} ('{}'), no local match",
                 query.length() > 30 ? query.substring(0, 30) : query, top.getVideoId(), rawTitle);
+        return queuedYoutubeResult(query, top);
+    }
+
+    /**
+     * QUEUED_YOUTUBE payload the app plays in its own player
+     * (youtubePlayerStore.playVideo) — never an external app. Real,
+     * freshly-resolved videos only; callers yield FAILED instead when the
+     * lookup finds nothing.
+     */
+    private Map<String, Object> queuedYoutubeResult(String query, YoutubeVideoResponse top) {
+        String rawTitle = top.getTitle() != null && !top.getTitle().isBlank()
+                ? top.getTitle().trim() : (query != null ? query : "");
         Map<String, Object> out = new HashMap<>();
         out.put("status", "QUEUED_YOUTUBE");
         out.put("query", query != null ? query : "");

@@ -177,8 +177,6 @@ const MainTabs = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {tabBar}
-      {/* AI Orb - Center Illusion - Floating above tabBar */}
-      <AiOrb />
       {isMiniPlayerVisible && <MiniPlayer />}
     </View>
   );
@@ -189,6 +187,10 @@ const RootNavigator = () => {
   const { theme } = useThemeStore();
   const ytCurrentVideo = useYouTubePlayerStore((s) => s.currentVideo);
   const isAdmin = user?.role === 'ADMIN';
+  const { width } = useWindowDimensions();
+  // Desktop shell has no orb today (floating app window + sidebar layout);
+  // keep it that way and float the orb over every screen below desktop size.
+  const isDesktop = Platform.OS === 'web' && width >= DESKTOP_MIN_WIDTH;
 
   if (isLoading) {
     return (
@@ -236,6 +238,11 @@ const RootNavigator = () => {
           <RootStack.Screen name="Auth" component={AuthNavigator} />
         )}
       </RootStack.Navigator>
+      {/* AI Orb - single global instance floating above the tab bar AND
+          stack screens (YouTube/Album/Artist/...), same bottom-center place
+          as the home page. The voice sheet is a native Modal and stays on
+          top of everything, including the YouTube overlay below. */}
+      {isAuthenticated && !isDesktop && <AiOrb />}
       {/* Global floating YouTube player: single instance, outside the stack so
           it persists across screens. z 50 floats above content/tab bar; the
           AiOrb voice sheet is a native Modal and stays on top. */}

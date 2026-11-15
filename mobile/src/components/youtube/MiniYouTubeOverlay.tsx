@@ -49,6 +49,7 @@ import { useThemeStore } from '../../store/themeStore';
 import { youtubeApi, YOUTUBE_DEFAULT_LOCALE } from '../../api/youtubeApi';
 import type { YouTubeVideo } from '../../types/youtube';
 import YouTubePlayer from './YouTubePlayer';
+import type { YouTubePlayerHandle } from './YouTubePlayer';
 import Icon from '../Icon';
 
 interface MiniYouTubeOverlayProps {
@@ -61,6 +62,40 @@ const TAB_CLEARANCE = 96;
 const EDGE_SPRING = { damping: 22, stiffness: 260, mass: 0.8 };
 const BG_PAUSE_TOAST = 'Video paused — background playback isn’t supported.';
 const BG_TOAST_TIMEOUT_MS = 2800;
+
+/**
+ * Mini transport metrics (BUG-2): the mini button row carries exactly 3
+ * compact buttons (play/pause + fullscreen + close — no dedicated expand
+ * chevron; thumbnail/title tap + swipe-up already expand). The row must fit
+ * the right column at the 300px card width AND the 200px minimum:
+ * right column = miniW - row padding (16) - row gap (8) - video width.
+ */
+export const MINI_BTN_SIZE = 34;
+export const MINI_BTN_GAP = 2;
+export const MINI_VIDEO_W_MAX = 148;
+export const MINI_VIDEO_W_MIN = 64;
+/** Responsive mini video width: caps at 148, shrinks so the 3-button row fits. */
+export const miniVideoWidth = (miniW: number): number =>
+  Math.min(MINI_VIDEO_W_MAX, Math.max(MINI_VIDEO_W_MIN, miniW - 134));
+/**
+ * Mini hardening: explicit pixel height for the 16:9 slot + player
+ * (miniVideoW * 9/16). Used alongside aspectRatio (kept as backup) so the
+ * nested aspectRatio chain (slot -> unsized container -> frame) can never
+ * collapse to height 0 on RN builds where nested aspectRatio mis-measures.
+ */
+export const miniVideoHeight = (miniW: number): number =>
+  (miniVideoWidth(miniW) * 9) / 16;
+/** Mini row hardening: title row never measures 0, button row fixed. */
+export const MINI_TITLE_ROW_MIN_H = 40;
+export const MINI_BTN_ROW_H = 34;
+/** Button-row + title-row fit check for the mini right column (tests pin 300px + 200px). */
+export const miniControlsFit = (miniW: number) => {
+  const videoW = miniVideoWidth(miniW);
+  const rightW = miniW - 16 - 8 - videoW;
+  const btnRowW = 3 * MINI_BTN_SIZE + 2 * MINI_BTN_GAP;
+  const titleRowW = 56 + 6; // thumbnail + gap (title flexes with minWidth 0)
+  return { videoW, rightW, btnRowW, titleRowW, fits: rightW >= btnRowW && rightW >= titleRowW };
+};
 
 /**
  * Global floating YouTube overlay — the single YouTubePlayer instance.
@@ -78,9 +113,10 @@ const BG_TOAST_TIMEOUT_MS = 2800;
  *   velocityY > 600) or the exit button reverses to returnMode (unlockAsync).
  * - mini: landscape card (live video left + title/controls right + progress
  *   line); drag anywhere to move (clamped + edge snap kept); TAP the
- *   thumbnail/title (or the expand chevron) to expand; SWIPE UP
- *   (translationY < -60 or velocityY < -500) to expand. Mini bar carries
- *   thumbnail + title + play/pause + fullscreen + expand + close.
+ *   thumbnail/title to expand (no dedicated expand chevron — the 3-button
+ *   row is play/pause + fullscreen + close so the close button never clips);
+ *   SWIPE UP (translationY < -60 or velocityY < -500) to expand. Mini bar
+ *   carries thumbnail + title + play/pause + fullscreen + close.
  *
  * Mutual exclusion both ways (never overlapping audio):
  * - video wins: youtubePlayerStore.playVideo/resumeVideo + YouTubePlayer
@@ -311,8 +347,169 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
     setMuted(!isMuted);
   }, [isMuted, setMuted]);
 
-  const handleExpand = useCallback(() => setMode('expanded'), [setMode]);
-  const handleMinimize = useCallback(() => setMode('mini'), [setMode]);
+  // ---- Two-home handoff (BUG-1 revert: dedicated mini instance) ----
+  // Device-proven: the unified single-WebView tree renders BLACK with no
+  // buttons in mini on real Android (Expo Go), while the original dedicated
+  // mini WebView showed video. Mini reverts to its own <YouTubePlayer>
+  // (own GestureDetector + Animated card); expanded/watch/fullscreen keep
+  // sharing one persistent instance. Handoff preserves position both ways
+  // without store changes; only entering mini reloads (startSeconds).
+  const sharedPlayerRef = useRef<YouTubePlayerHandle | null>(null);
+  const miniPlayerRef = useRef<YouTubePlayerHandle | null>(null);
+  const handoffSecondsRef = useRef<number>(0);
+  const handoffInFlightRef = useRef(false);
+
+  // Fresh video resets the resume offset (predictable entry, no stale seek).
+  useEffect(() => {
+    handoffSecondsRef.current = 0;
+  }, [currentVideo?.videoId]);
+
+  const getTimeWithTimeout = useCallback(
+    async (playerRef: React.RefObject<YouTubePlayerHandle | null>): Promise<number> => {
+      try {
+        const api = playerRef.current as YouTubePlayerHandle | null;
+        if (!api?.getCurrentTime) return 0;
+        const timeout = new Promise<number>((resolve) => {
+          const t: any = setTimeout(() => resolve(0), 800);
+          // Prevent unref issues in Jest/node.
+          try {
+            (t as any)?.unref?.();
+          } catch {}
+        });
+        const time = await Promise.race([
+          api.getCurrentTime().catch(() => 0),
+          timeout,
+        ]);
+        const n = Number(time);
+        if (!Number.isFinite(n) || n < 0) return 0;
+        return Math.floor(n);
+      } catch {
+        return 0;
+      }
+    },
+    [],
+  );
+
+  // Shared -> mini: capture position, pause shared (no store change, no
+  // double-audio), then mount dedicated mini with startSeconds + autoplay.
+  const transitionToMini = useCallback(async () => {
+    if (handoffInFlightRef.current) return;
+    // Already mini or no video: plain mode change.
+    try {
+      const st = useYouTubePlayerStore.getState();
+      if (!st.currentVideo) {
+        st.setMode('mini');
+        return;
+      }
+      if (st.mode === 'mini') return;
+    } catch {}
+    handoffInFlightRef.current = true;
+    try {
+      const t = await getTimeWithTimeout(sharedPlayerRef);
+      handoffSecondsRef.current = t;
+      try {
+        sharedPlayerRef.current?.pause?.();
+      } catch {}
+      try {
+        useYouTubePlayerStore.getState().setMode('mini');
+      } catch {}
+    } finally {
+      handoffInFlightRef.current = false;
+    }
+  }, [getTimeWithTimeout]);
+
+  // Mini -> shared (expanded/fullscreen): capture mini position, pause mini
+  // so it never overlaps, unmount mini via mode change, then seekTo shared
+  // + play/pause to match wasPlaying. Shared WebView stays mounted (hidden
+  // during mini), so no reload — pure seek.
+  const transitionFromMini = useCallback(
+    async (target: 'expanded' | 'fullscreen') => {
+      if (handoffInFlightRef.current) return;
+      try {
+        const st = useYouTubePlayerStore.getState();
+        if (!st.currentVideo) {
+          if (target === 'fullscreen') st.enterFullscreen();
+          else st.setMode('expanded');
+          return;
+        }
+        if (st.mode !== 'mini') {
+          // Not in mini: plain transition (expanded<->fullscreen share one).
+          if (target === 'fullscreen') st.enterFullscreen();
+          else st.setMode('expanded');
+          return;
+        }
+      } catch {}
+      handoffInFlightRef.current = true;
+      try {
+        const wasPlaying = (() => {
+          try {
+            return useYouTubePlayerStore.getState().isPlaying;
+          } catch {
+            return false;
+          }
+        })();
+        const t = await getTimeWithTimeout(miniPlayerRef);
+        handoffSecondsRef.current = t;
+        try {
+          miniPlayerRef.current?.pause?.();
+        } catch {}
+        try {
+          const st = useYouTubePlayerStore.getState();
+          if (target === 'fullscreen') st.enterFullscreen();
+          else st.setMode('expanded');
+        } catch {}
+        // Shared stayed mounted hidden — seek without reload.
+        try {
+          const shared = sharedPlayerRef.current;
+          if (shared?.seekTo) {
+            // Small tick so the mode change propagates before seeking.
+            await new Promise<void>((r) => {
+              try {
+                setTimeout(() => r(), 0);
+              } catch {
+                r();
+              }
+            });
+            shared.seekTo(t);
+            if (!wasPlaying) {
+              // seekTo auto-plays; restore paused-at-position when needed.
+              try {
+                setTimeout(() => {
+                  try {
+                    shared.pause?.();
+                  } catch {}
+                }, 50);
+              } catch {}
+            }
+          }
+        } catch {}
+      } finally {
+        handoffInFlightRef.current = false;
+      }
+    },
+    [getTimeWithTimeout],
+  );
+
+  const handleExpand = useCallback(() => {
+    try {
+      const st = useYouTubePlayerStore.getState();
+      if (st.mode === 'mini') {
+        void transitionFromMini('expanded');
+        return;
+      }
+    } catch {}
+    setMode('expanded');
+  }, [setMode, transitionFromMini]);
+  const handleMinimize = useCallback(() => {
+    try {
+      const st = useYouTubePlayerStore.getState();
+      if (st.mode !== 'mini' && st.currentVideo) {
+        void transitionToMini();
+        return;
+      }
+    } catch {}
+    setMode('mini');
+  }, [setMode, transitionToMini]);
 
   // Up next tap: last-wins into the single WebView (stays on the watch page,
   // still expanded full-page).
@@ -380,12 +577,45 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
   }, [mode]);
 
   const handleEnterFullscreen = useCallback(() => {
+    try {
+      const st = useYouTubePlayerStore.getState();
+      if (st.mode === 'mini') {
+        void transitionFromMini('fullscreen');
+        return;
+      }
+    } catch {}
     enterFullscreen();
-  }, [enterFullscreen]);
+  }, [enterFullscreen, transitionFromMini]);
+
+  const transitionToMiniFromFullscreen = useCallback(async () => {
+    if (handoffInFlightRef.current) return;
+    handoffInFlightRef.current = true;
+    try {
+      const t = await getTimeWithTimeout(sharedPlayerRef);
+      handoffSecondsRef.current = t;
+      try {
+        sharedPlayerRef.current?.pause?.();
+      } catch {}
+      try {
+        useYouTubePlayerStore.getState().exitFullscreen();
+      } catch {}
+    } finally {
+      handoffInFlightRef.current = false;
+    }
+  }, [getTimeWithTimeout]);
 
   const handleExitFullscreen = useCallback(() => {
+    try {
+      const st = useYouTubePlayerStore.getState();
+      const ret = (st as unknown as { returnMode?: 'mini' | 'expanded' }).returnMode ?? 'expanded';
+      if (ret === 'mini' && st.mode === 'fullscreen') {
+        // Fullscreen (shared) -> mini (dedicated): capture + pause + mount.
+        void transitionToMiniFromFullscreen();
+        return;
+      }
+    } catch {}
     exitFullscreen();
-  }, [exitFullscreen]);
+  }, [exitFullscreen, transitionToMiniFromFullscreen]);
 
   const miniPan = useMemo(
     () =>
@@ -403,10 +633,11 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
         })
         .onEnd((e) => {
           // Swipe-up parity: fast/sharp upward swipe expands to the sheet.
+          // Routes through the mini->shared handoff (position-preserving seek).
           try {
             const swipeUp = (e?.translationY ?? 0) < -60 || (e?.velocityY ?? 0) < -500;
             if (swipeUp) {
-              runOnJS(setMode)('expanded');
+              runOnJS(handleExpand)();
               return;
             }
           } catch {}
@@ -420,7 +651,7 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
           posY.value = withSpring(clampedY, EDGE_SPRING);
           runOnJS(persistPosition)(snappedX, clampedY);
         }),
-    [bounds, posX, posY, startX, startY, persistPosition, setMode],
+    [bounds, posX, posY, startX, startY, persistPosition, handleExpand],
   );
 
   const expandPan = useMemo(
@@ -436,18 +667,19 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
         .onEnd((e) => {
           const shouldMinimize = e.translationY > 90 || e.velocityY > 600;
           if (shouldMinimize) {
-            runOnJS(setMode)('mini');
+            // Drag-to-mini routes through shared->mini handoff (capture time).
+            runOnJS(handleMinimize)();
           } else {
             // Swipe up from the expanded WatchSheet -> landscape fullscreen.
             // Mirrors the mini swipe-up thresholds (< -60 / < -500).
             const swipeUp = (e?.translationY ?? 0) < -60 || (e?.velocityY ?? 0) < -500;
             if (swipeUp) {
-              runOnJS(enterFullscreen)();
+              runOnJS(handleEnterFullscreen)();
             }
           }
           sheetDragY.value = withSpring(0, EDGE_SPRING);
         }),
-    [sheetDragY, setMode, enterFullscreen],
+    [sheetDragY, handleMinimize, handleEnterFullscreen],
   );
 
   // Fullscreen reverse: swipe down exits fullscreen back to returnMode
@@ -466,17 +698,23 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
         .onEnd((e) => {
           const shouldExit = e.translationY > 90 || e.velocityY > 600;
           if (shouldExit) {
-            runOnJS(exitFullscreen)();
+            runOnJS(handleExitFullscreen)();
           }
           fullscreenDragY.value = withSpring(0, EDGE_SPRING);
         }),
-    [fullscreenDragY, exitFullscreen],
+    [fullscreenDragY, handleExitFullscreen],
   );
 
   // P0 gesture scope: the sheet drag lives on the handle — drag DOWN to
   // minimize, swipe UP to enter fullscreen. No suggestions list remains
   // below the title, so no Native scroll gesture needs to cooperate.
   const handleSheetGesture = expandPan;
+
+  // Two-home gesture scope: dedicated mini has its own GestureDetector
+  // (miniPan + edge snap); shared home uses fullscreenPan in fullscreen and
+  // stays idle otherwise (handle-only drag so watch Up-next scrolls natively).
+  // Stable fragment order (shared index 0) keeps the shared WebView mounted.
+  const idleGesture = useMemo(() => Gesture.Pan().enabled(false), []);
 
   const miniAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: posX.value }, { translateY: posY.value }],
@@ -552,190 +790,497 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
   const sheetMaxH = Math.max(320, Math.min(winH * 0.86, winH - insets.top - 24));
 
   const bgToastBanner = bgToast ? (
-    <View style={styles.bgToast} testID="mini-youtube-bg-toast" accessibilityRole="alert" accessibilityLiveRegion="polite">
+    <View
+      key="yt-bg-toast"
+      style={styles.bgToast}
+      testID="mini-youtube-bg-toast"
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+    >
       <Text style={styles.bgToastText} numberOfLines={2}>
         {bgToast}
       </Text>
     </View>
   ) : null;
 
-  // Landscape fullscreen: edge-to-edge borderless video, locked to
-  // landscape via ScreenOrientation. Swipe down reverses to returnMode.
-  if (mode === 'fullscreen' || isFullscreen) {
+  // ---- Two player homes (mini revert + shared persistent) ----
+  // Device-proven (Android Expo Go): the unified single-WebView tree renders
+  // BLACK with no buttons in mini while audio plays. Mini reverts to a
+  // DEDICATED <YouTubePlayer> (own GestureDetector + Animated mini card,
+  // like the original) with kept hardening (3-button transport, explicit
+  // pixel video size, poster behind, explicit row heights). Expanded/watch/
+  // fullscreen keep sharing ONE persistent instance (stable key
+  // "yt-single-player") — they render fine and never reload on
+  // expanded<->watch<->fullscreen switches. Handoff preserves seconds both
+  // ways (getCurrentTime 800ms -> 0, startSeconds + seekTo, no store change);
+  // only entering mini reloads (dedicated mount with start offset). Shared
+  // stays mounted hidden (paused, active=false) during mini so returning
+  // seeks without reload — never both playing (no-double-audio).
+  // Priority: fullscreen > mini > watch.
+  const isFs = mode === 'fullscreen' || isFullscreen;
+  const isMiniMode = !isFs && mode === 'mini';
+  const isWatch = !isFs && !isMiniMode && isWatchPage;
+  const isSheet = !isFs && !isMiniMode && !isWatch;
+  const needsHandle = isSheet || isWatch;
+  const outerGesture = isFs ? fullscreenPan : idleGesture;
+
+  // BUG-2: responsive mini video width so the 3-button transport row
+  // (play/pause + fullscreen + close) always fits the right column.
+  // Hardening: explicit pixel height alongside aspectRatio (backup) so the
+  // nested aspectRatio chain can never collapse to a black 0-height box.
+  const miniVideoW = miniVideoWidth(miniW);
+  const miniVideoH = miniVideoHeight(miniW);
+
+  // Dedicated mini home: own GestureDetector + Animated card + dedicated
+  // player. Shared stays mounted hidden (paused) for reload-free return.
+  // Stable order: shared first (index 0) in BOTH branches so the WebView
+  // never remounts — only its hidden style/active flag flips.
+  if (isMiniMode) {
+    const miniRootStyle = [
+      styles.miniFloat,
+      {
+        width: miniW,
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.border,
+        shadowColor: '#000',
+      },
+      miniAnimatedStyle,
+    ];
     return (
-      <GestureDetector gesture={fullscreenPan}>
-        <Animated.View
-          style={[
-            styles.fullscreenWrap,
-            {
-              width: winW,
-              height: winH,
-              paddingTop: insets.top,
-              paddingBottom: Math.max(insets.bottom, 12),
-              paddingLeft: Math.max(insets.left, 8),
-              paddingRight: Math.max(insets.right, 8),
-            },
-            fullscreenAnimatedStyle,
-          ]}
-          testID={testID ?? 'mini-youtube-overlay'}
-          accessibilityRole="none"
-          accessibilityLabel={`YouTube fullscreen: ${currentVideo.title}`}
-        >
-          {/* 16:9 frame: transport floats INSIDE as scrim overlays (top:
-              exit + close; bottom: play/pause). No title above the video —
-              the title block lives BELOW the frame (a11y label on the
-              wrapper still announces it). */}
-          <View
-            style={[styles.fullscreenVideo, { width: fullscreenVideoW, alignSelf: 'center' }]}
-            testID="mini-youtube-fullscreen-view"
-            // P0 iframe fullscreen escape: DOM ESC must reconcile RN state.
-            {...(Platform.OS === 'web'
-              ? ({ onFullscreenChange: handleWebFullscreenChange } as any)
-              : {})}
+      <>
+        {/* Hidden shared home FIRST (stable index 0 + same GestureDetector
+            type + same body/slot nesting as visible): stays mounted paused,
+            never remounts — only hidden style/active flips. */}
+        <GestureDetector key="yt-shared-home" gesture={idleGesture}>
+          <Animated.View
+            // Offscreen (not display:none) so RNTL queries still find it
+            // without includeHiddenElements, yet never visible on device.
+            style={{ position: 'absolute', top: -9999, left: -9999, width: 1, height: 1, opacity: 0 } as any}
+            testID="mini-youtube-shared-hidden"
+            accessibilityLabel="Shared YouTube player (hidden while mini)"
           >
-            <YouTubePlayer
-              video={currentVideo}
-              borderless
-              onClose={closePlayer}
-              testID="mini-youtube-player"
-            />
-            <View style={styles.videoTopOverlay} pointerEvents="box-none">
-              <TouchableOpacity
-                onPress={handleExitFullscreen}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={[styles.fullscreenBtn, styles.scrimBtn]}
-                accessibilityRole="button"
-                accessibilityLabel="Exit fullscreen"
-                testID="mini-youtube-fullscreen-exit"
-              >
-                <Icon name="chevronDown" size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-              <View style={styles.topOverlaySpacer} />
-              <TouchableOpacity
-                onPress={closePlayer}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={[styles.fullscreenBtn, styles.scrimBtn]}
-                accessibilityRole="button"
-                accessibilityLabel="Close video player"
-                testID="mini-youtube-close"
-              >
-                <Icon name="close" size={16} color="#FFFFFF" />
-              </TouchableOpacity>
+            <View key="yt-body" style={styles.stackBody}>
+              <View key="yt-video-slot" style={styles.videoWrap}>
+                <YouTubePlayer
+                  key="yt-single-player"
+                  ref={sharedPlayerRef}
+                  video={currentVideo}
+                  borderless
+                  active={false}
+                  onClose={closePlayer}
+                  testID="mini-youtube-player-hidden"
+                />
+              </View>
             </View>
-            <View style={styles.videoBottomOverlay} pointerEvents="box-none">
-              <TouchableOpacity
-                onPress={togglePlay}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={[styles.fullscreenBtn, styles.scrimBtn]}
-                accessibilityRole="button"
-                accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
-                testID="mini-youtube-play-pause"
+          </Animated.View>
+        </GestureDetector>
+        <GestureDetector key="yt-mini-home" gesture={miniPan}>
+          <Animated.View
+            style={miniRootStyle}
+            testID={testID ?? 'mini-youtube-overlay'}
+            accessibilityRole="none"
+            accessibilityLabel={`Mini YouTube player: ${currentVideo.title}`}
+          >
+            <View key="yt-mini-body" style={styles.miniLandscapeRow}>
+              <View
+                key="yt-mini-video-slot"
+                style={[styles.miniVideoLeft, { width: miniVideoW, height: miniVideoH }]}
+                testID="mini-youtube-video-slot"
               >
-                <Icon name={isPlaying ? 'pause' : 'play'} size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-              <Text style={styles.fullscreenState} accessibilityLiveRegion="polite">
-                {isPlaying ? 'Now playing' : 'Paused'}
-              </Text>
+                {currentVideo.thumbnailUrl ? (
+                  <Image
+                    source={{ uri: currentVideo.thumbnailUrl }}
+                    style={[styles.miniPoster, { width: miniVideoW, height: miniVideoH }]}
+                    resizeMode="cover"
+                    testID="mini-youtube-poster"
+                    accessibilityLabel={`Video thumbnail: ${currentVideo.title}`}
+                    {...({ pointerEvents: 'none' } as any)}
+                  />
+                ) : null}
+                <YouTubePlayer
+                  key="yt-mini-player"
+                  ref={miniPlayerRef}
+                  video={currentVideo}
+                  borderless
+                  explicitHeight={miniVideoH}
+                  startSeconds={handoffSecondsRef.current}
+                  autoplay={isPlaying}
+                  active
+                  onClose={closePlayer}
+                  testID="mini-youtube-player"
+                />
+              </View>
+              <View key="yt-mini-controls" style={styles.miniControlsRight}>
+                <View style={styles.miniTitleRow}>
+                  <TouchableOpacity
+                    onPress={handleExpand}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.miniThumbWrap}
+                    accessibilityRole="button"
+                    accessibilityLabel="Expand video player"
+                    testID="mini-youtube-thumb"
+                  >
+                    {currentVideo.thumbnailUrl ? (
+                      <Image
+                        source={{ uri: currentVideo.thumbnailUrl }}
+                        style={styles.miniThumb}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.miniThumb, styles.miniThumbFallback]} />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleExpand}
+                    style={styles.miniTitleWrap}
+                    accessibilityRole="button"
+                    accessibilityLabel="Expand video player"
+                    testID="mini-youtube-tap-expand"
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.miniTitle, { color: theme.colors.text }]} numberOfLines={2}>
+                      {isPlaying ? 'Now playing' : 'Paused'} · {currentVideo.title}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.miniBtnRow}>
+                  <TouchableOpacity
+                    onPress={togglePlay}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.miniBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
+                    testID="mini-youtube-play-pause"
+                  >
+                    <Icon name={isPlaying ? 'pause' : 'play'} size={16} color={theme.colors.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleEnterFullscreen}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.miniBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Enter fullscreen"
+                    testID="mini-youtube-fullscreen"
+                  >
+                    <Icon name="expand" size={16} color={theme.colors.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={closePlayer}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.miniBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close video player"
+                    testID="mini-youtube-close"
+                  >
+                    <Icon name="close" size={14} color={theme.colors.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
-          {/* Tap parity in fullscreen: tapping the below-frame title exits
-              like swipe-down (thumbnail/title tap parity). */}
-          <TouchableOpacity
-            onPress={handleExitFullscreen}
-            style={styles.nowPlayingBlock}
-            accessibilityRole="button"
-            accessibilityLabel={`Exit fullscreen: ${currentVideo.title}`}
-            testID="mini-youtube-tap-expand"
-            activeOpacity={0.7}
-          >
-            <Text
-              style={styles.nowPlayingTitle}
-              testID="mini-youtube-now-playing-title"
-              numberOfLines={2}
-            >
-              {currentVideo.title}
-            </Text>
-            {!!currentVideo.channelTitle && (
-              <Text
-                style={styles.nowPlayingChannel}
-                testID="mini-youtube-now-playing-channel"
-                numberOfLines={1}
-              >
-                {currentVideo.channelTitle}
-              </Text>
-            )}
-          </TouchableOpacity>
-          <View
-            style={styles.fullscreenProgressTrack}
-            testID="mini-youtube-progress"
-            accessibilityRole="progressbar"
-            accessibilityLabel={isPlaying ? 'Video playing' : 'Video paused'}
-          >
             <View
-              style={[
-                styles.fullscreenProgressFill,
-                { opacity: isPlaying ? 1 : 0.35 },
-              ]}
-            />
-          </View>
-          {currentVideo.thumbnailUrl ? (
-            <TouchableOpacity
-              onPress={handleExitFullscreen}
-              style={styles.hiddenThumbBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Expand video player"
-              testID="mini-youtube-thumb"
+              key="yt-mini-progress"
+              style={styles.miniProgressTrack}
+              testID="mini-youtube-progress"
+              accessibilityRole="progressbar"
+              accessibilityLabel={isPlaying ? 'Video playing' : 'Video paused'}
             >
-              <Image
-                source={{ uri: currentVideo.thumbnailUrl }}
-                style={styles.hiddenThumb}
-                resizeMode="cover"
+              <View
+                style={[
+                  styles.miniProgressFill,
+                  { backgroundColor: theme.colors.primary, opacity: isPlaying ? 1 : 0.35 },
+                ]}
               />
-            </TouchableOpacity>
-          ) : (
-            <View
-              testID="mini-youtube-thumb"
-              style={styles.hiddenThumb}
-              accessibilityLabel="Expand video player"
-            />
-          )}
-          {bgToastBanner}
-        </Animated.View>
-      </GestureDetector>
+            </View>
+            {bgToastBanner}
+          </Animated.View>
+        </GestureDetector>
+      </>
     );
   }
 
-  if (mode === 'mini') {
-    return (
-      <GestureDetector gesture={miniPan}>
-        <Animated.View
-          style={[
-            styles.miniFloat,
+  // The expanded sheet merges the old outer wrap (bottom-anchored,
+  // pointerEvents box-none) with the card chrome (maxWidth 640, top radius,
+  // #000) into this single stable root; children stretch like they did
+  // inside the card.
+  const rootStyle = isFs
+    ? [
+        styles.fullscreenWrap,
+        {
+          width: winW,
+          height: winH,
+          paddingTop: insets.top,
+          paddingBottom: Math.max(insets.bottom, 12),
+          paddingLeft: Math.max(insets.left, 8),
+          paddingRight: Math.max(insets.right, 8),
+        },
+        fullscreenAnimatedStyle,
+      ]
+    : isMiniMode
+      ? [
+          styles.miniFloat,
+          {
+            width: miniW,
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+            shadowColor: '#000',
+          },
+          miniAnimatedStyle,
+        ]
+      : isWatch
+        ? [
+            styles.watchWrap,
             {
-              width: miniW,
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.border,
-              shadowColor: '#000',
+              paddingTop: insets.top,
+              paddingBottom: insets.bottom + keyboardHeight,
             },
-            miniAnimatedStyle,
-          ]}
-          testID={testID ?? 'mini-youtube-overlay'}
-          accessibilityRole="none"
-          accessibilityLabel={`Mini YouTube player: ${currentVideo.title}`}
+            expandedAnimatedStyle,
+          ]
+        : [
+            styles.expandedWrap,
+            styles.expandedCard,
+            {
+              backgroundColor: '#000',
+              borderColor: theme.colors.border,
+              maxHeight: sheetMaxH,
+              alignItems: 'stretch' as const,
+            },
+            expandedAnimatedStyle,
+          ];
+
+  const rootA11yLabel = isFs
+    ? `YouTube fullscreen: ${currentVideo.title}`
+    : isMiniMode
+      ? `Mini YouTube player: ${currentVideo.title}`
+      : isWatch
+        ? `YouTube watch page: ${currentVideo.title}`
+        : `YouTube player expanded: ${currentVideo.title}`;
+
+  // Sheet + watch share the in-frame top transport (fullscreen / minimize /
+  // close float ON the video as scrim circles, above the drag area).
+  const sheetVideoOverlay = (
+    <View style={styles.videoTopOverlay} pointerEvents="box-none">
+      <View style={styles.topOverlaySpacer} />
+      <TouchableOpacity
+        onPress={handleEnterFullscreen}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={[styles.sheetIconBtn, styles.scrimBtn]}
+        accessibilityRole="button"
+        accessibilityLabel="Enter fullscreen"
+        testID="mini-youtube-fullscreen"
+      >
+        <Icon name="expand" size={16} color="#FFFFFF" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={handleMinimize}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={[styles.sheetIconBtn, styles.scrimBtn]}
+        accessibilityRole="button"
+        accessibilityLabel="Minimize video player"
+        testID="mini-youtube-minimize"
+      >
+        <Icon name="chevronDown" size={18} color="#FFFFFF" />
+      </TouchableOpacity>
+      {/* Borderless bare chrome: expanded close lives here (player header is
+          hidden when borderless). Distinct testID so mini's
+          mini-youtube-close stays mini/fullscreen-only. */}
+      <TouchableOpacity
+        onPress={closePlayer}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={[styles.sheetIconBtn, styles.scrimBtn]}
+        accessibilityRole="button"
+        accessibilityLabel="Close video player"
+        testID="mini-youtube-close-expanded"
+      >
+        <Icon name="close" size={14} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  // Transport BELOW the video (play/pause + mute share the store with the
+  // single WebView player). Shared by the sheet and the watch page.
+  const belowVideoTransport = (
+    <View style={styles.expandedControlRow}>
+      <TouchableOpacity
+        onPress={togglePlay}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={styles.expandedControlBtn}
+        accessibilityRole="button"
+        accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
+        testID="mini-youtube-play-pause"
+      >
+        <Icon name={isPlaying ? 'pause' : 'play'} size={20} color="#FFFFFF" />
+      </TouchableOpacity>
+      <Text style={styles.expandedControlState} accessibilityLiveRegion="polite">
+        {isPlaying ? 'Now playing' : 'Paused'}
+      </Text>
+      <View style={styles.expandedControlSpacer} />
+      <TouchableOpacity
+        onPress={toggleMute}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={styles.expandedControlBtn}
+        accessibilityRole="button"
+        accessibilityLabel={isMuted ? 'Unmute video' : 'Mute video'}
+        testID="youtube-mute-toggle"
+      >
+        <Icon name={isMuted ? 'volumeMute' : 'volume'} size={18} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  // YouTube-like title/channel block below the player (text only — no second
+  // player/WebView is ever mounted here).
+  const nowPlayingTitleBlock = (
+    <View style={styles.nowPlayingBlock}>
+      <Text
+        style={styles.nowPlayingTitle}
+        testID="mini-youtube-now-playing-title"
+        numberOfLines={2}
+      >
+        {currentVideo.title}
+      </Text>
+      {!!currentVideo.channelTitle && (
+        <Text
+          style={styles.nowPlayingChannel}
+          testID="mini-youtube-now-playing-channel"
+          numberOfLines={1}
         >
-          {/* Landscape card: live video left + controls right. Dragging starts
-              anywhere on the card; buttons stay tappable because the pan only
-              activates after 8pt of movement. */}
-          <View style={styles.miniLandscapeRow}>
-            <View style={styles.miniVideoLeft}>
-              <YouTubePlayer
-                video={currentVideo}
-                borderless
-                onClose={closePlayer}
-                testID="mini-youtube-player"
+          {currentVideo.channelTitle}
+        </Text>
+      )}
+    </View>
+  );
+
+  return (
+    // Stable fragment root: shared home is ALWAYS index 0 (same position in
+    // mini + non-mini) so its WebView never remounts — only hidden/active
+    // flips. Dedicated mini (index 1) mounts only in mini.
+    <>
+    <GestureDetector key="yt-shared-home" gesture={outerGesture}>
+      <Animated.View
+        style={rootStyle}
+        testID={testID ?? 'mini-youtube-overlay'}
+        accessibilityRole={isMiniMode || isFs ? 'none' : undefined}
+        accessibilityLabel={rootA11yLabel}
+        pointerEvents={isSheet ? 'box-none' : undefined}
+      >
+        {/* Drag handle owns the pan in sheet/watch modes (down to mini, up
+            to fullscreen) — same gesture thresholds as before. Absent in
+            mini/fullscreen, where the outer detector owns the drag. */}
+        {needsHandle ? (
+          <GestureDetector key="yt-handle" gesture={handleSheetGesture}>
+            <Animated.View
+              style={isWatch ? styles.watchDragHandleRow : styles.dragHandleRow}
+              testID="mini-youtube-drag-handle"
+            >
+              <View style={styles.dragHandle} />
+            </Animated.View>
+          </GestureDetector>
+        ) : null}
+        {/* Body: landscape row in mini (live video left + controls right),
+            plain column otherwise. The video slot keeps a stable key
+            (yt-video-slot) and the single player keeps key yt-single-player in
+            the same tree position across modes, so the WebView never remounts.
+            In mini the poster renders first (absolute, behind) and the player
+            second (on top, interactive) — stable keys preserve identity. */}
+        <View key="yt-body" style={isMiniMode ? styles.miniLandscapeRow : styles.stackBody}>
+          <View
+            key="yt-video-slot"
+            style={
+              isMiniMode
+                ? [styles.miniVideoLeft, { width: miniVideoW, height: miniVideoH }]
+                : isFs
+                  ? [styles.fullscreenVideo, { width: fullscreenVideoW, alignSelf: 'center' }]
+                  : isWatch
+                    ? styles.watchVideoWrap
+                    : styles.videoWrap
+            }
+            testID={
+              isFs
+                ? 'mini-youtube-fullscreen-view'
+                : isWatch
+                  ? 'mini-youtube-watch-video'
+                  : isMiniMode
+                    ? 'mini-youtube-video-slot'
+                    : undefined
+            }
+            // P0 iframe fullscreen escape: DOM ESC must reconcile RN state.
+            {...(isFs && Platform.OS === 'web'
+              ? ({ onFullscreenChange: handleWebFullscreenChange } as any)
+              : {})}
+          >
+            {/* Mini poster fallback (hardening): thumbnail UNDER the WebView
+                (absolute fill, pointerEvents none) so a slow/collapsed frame
+                shows art instead of a black void. WebView stays on top and
+                interactive; later sibling paints above. */}
+            {isMiniMode && currentVideo.thumbnailUrl ? (
+              <Image
+                source={{ uri: currentVideo.thumbnailUrl }}
+                style={[styles.miniPoster, { width: miniVideoW, height: miniVideoH }]}
+                resizeMode="cover"
+                testID="mini-youtube-poster"
+                accessibilityLabel={`Video thumbnail: ${currentVideo.title}`}
+                {...({ pointerEvents: 'none' } as any)}
               />
-            </View>
-            <View style={styles.miniControlsRight}>
+            ) : null}
+            <YouTubePlayer
+              key="yt-single-player"
+              ref={sharedPlayerRef}
+              video={currentVideo}
+              borderless
+              active
+              onClose={closePlayer}
+              testID="mini-youtube-player"
+            />
+            {(isSheet || isWatch) && sheetVideoOverlay}
+            {isFs && (
+              <View style={styles.videoTopOverlay} pointerEvents="box-none">
+                <TouchableOpacity
+                  onPress={handleExitFullscreen}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={[styles.fullscreenBtn, styles.scrimBtn]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Exit fullscreen"
+                  testID="mini-youtube-fullscreen-exit"
+                >
+                  <Icon name="chevronDown" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+                <View style={styles.topOverlaySpacer} />
+                <TouchableOpacity
+                  onPress={closePlayer}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={[styles.fullscreenBtn, styles.scrimBtn]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close video player"
+                  testID="mini-youtube-close"
+                >
+                  <Icon name="close" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            )}
+            {isFs && (
+              <View style={styles.videoBottomOverlay} pointerEvents="box-none">
+                <TouchableOpacity
+                  onPress={togglePlay}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={[styles.fullscreenBtn, styles.scrimBtn]}
+                  accessibilityRole="button"
+                  accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
+                  testID="mini-youtube-play-pause"
+                >
+                  <Icon name={isPlaying ? 'pause' : 'play'} size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+                <Text style={styles.fullscreenState} accessibilityLiveRegion="polite">
+                  {isPlaying ? 'Now playing' : 'Paused'}
+                </Text>
+              </View>
+            )}
+          </View>
+          {/* Mini right column: title row (thumb/title tap expands) + the
+              compact 3-button transport (play/pause + fullscreen + close).
+              No dedicated expand chevron — it overflowed the 300px card and
+              clipped the close button. */}
+          {isMiniMode && (
+            <View key="yt-mini-controls" style={styles.miniControlsRight}>
               <View style={styles.miniTitleRow}>
                 <TouchableOpacity
                   onPress={handleExpand}
@@ -781,16 +1326,6 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
                   <Icon name={isPlaying ? 'pause' : 'play'} size={16} color={theme.colors.text} />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={handleExpand}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  style={styles.miniBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Expand video player"
-                  testID="mini-youtube-expand"
-                >
-                  <Icon name="chevronUp" size={18} color={theme.colors.text} />
-                </TouchableOpacity>
-                <TouchableOpacity
                   onPress={handleEnterFullscreen}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   style={styles.miniBtn}
@@ -812,9 +1347,107 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-          {/* Progress line: accent hairline under the landscape card. */}
+          )}
+        </View>
+        {/* Expanded sheet: transport + title only (no Up next inside
+            playback — clean like the original sheet). */}
+        {isSheet && (
+          <React.Fragment key="yt-sheet-below">
+            {belowVideoTransport}
+            {nowPlayingTitleBlock}
+          </React.Fragment>
+        )}
+        {/* Watch page: transport + title + Up next suggestions below. */}
+        {isWatch && (
+          <React.Fragment key="yt-watch-below">
+            {belowVideoTransport}
+            {nowPlayingTitleBlock}
+            <View style={styles.upNextSection}>
+              <Text style={styles.upNextTitle}>Up next</Text>
+              <FlatList
+                data={related}
+                keyExtractor={(item) => item.videoId}
+                renderItem={renderSuggestion}
+                testID="mini-youtube-up-next-list"
+                contentContainerStyle={styles.upNextContent}
+                keyboardShouldPersistTaps="handled"
+                initialNumToRender={8}
+                maxToRenderPerBatch={8}
+                windowSize={5}
+                removeClippedSubviews={Platform.OS !== 'web'}
+              />
+            </View>
+          </React.Fragment>
+        )}
+        {/* Fullscreen: below-frame title (tap exits like swipe-down) +
+            progress + hidden parity thumb. */}
+        {isFs && (
+          <React.Fragment key="yt-fs-below">
+            <TouchableOpacity
+              onPress={handleExitFullscreen}
+              style={styles.nowPlayingBlock}
+              accessibilityRole="button"
+              accessibilityLabel={`Exit fullscreen: ${currentVideo.title}`}
+              testID="mini-youtube-tap-expand"
+              activeOpacity={0.7}
+            >
+              <Text
+                style={styles.nowPlayingTitle}
+                testID="mini-youtube-now-playing-title"
+                numberOfLines={2}
+              >
+                {currentVideo.title}
+              </Text>
+              {!!currentVideo.channelTitle && (
+                <Text
+                  style={styles.nowPlayingChannel}
+                  testID="mini-youtube-now-playing-channel"
+                  numberOfLines={1}
+                >
+                  {currentVideo.channelTitle}
+                </Text>
+              )}
+            </TouchableOpacity>
+            <View
+              style={styles.fullscreenProgressTrack}
+              testID="mini-youtube-progress"
+              accessibilityRole="progressbar"
+              accessibilityLabel={isPlaying ? 'Video playing' : 'Video paused'}
+            >
+              <View
+                style={[
+                  styles.fullscreenProgressFill,
+                  { opacity: isPlaying ? 1 : 0.35 },
+                ]}
+              />
+            </View>
+            {currentVideo.thumbnailUrl ? (
+              <TouchableOpacity
+                onPress={handleExitFullscreen}
+                style={styles.hiddenThumbBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Expand video player"
+                testID="mini-youtube-thumb"
+              >
+                <Image
+                  source={{ uri: currentVideo.thumbnailUrl }}
+                  style={styles.hiddenThumb}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            ) : (
+              <View
+                testID="mini-youtube-thumb"
+                style={styles.hiddenThumb}
+                accessibilityLabel="Expand video player"
+              />
+            )}
+          </React.Fragment>
+        )}
+        {/* Mini progress line: accent hairline under the landscape card. */}
+        {isMiniMode && (
           <View
+            key="yt-mini-progress"
             style={styles.miniProgressTrack}
             testID="mini-youtube-progress"
             accessibilityRole="progressbar"
@@ -827,280 +1460,14 @@ export const MiniYouTubeOverlay: React.FC<MiniYouTubeOverlayProps> = ({
               ]}
             />
           </View>
-          {bgToastBanner}
-        </Animated.View>
-      </GestureDetector>
-    );
-  }
-
-  // REAL YouTube-like watch page: Watch screen focused + expanded. Full-page
-  // takeover from the very top (no bottom-sheet cap, no tab clearance, black
-  // bg): 16:9 video pinned edge-to-edge at the top, transport + title below,
-  // then Up next suggestions below the title. Single WebView invariant holds
-  // (one YouTubePlayer here, none on the Watch screen).
-  if (isWatchPage) {
-    return (
-      <Animated.View
-        style={[
-          styles.watchWrap,
-          {
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom + keyboardHeight,
-          },
-          expandedAnimatedStyle,
-        ]}
-        testID={testID ?? 'mini-youtube-overlay'}
-        accessibilityLabel={`YouTube watch page: ${currentVideo.title}`}
-      >
-        {/* Drag handle owns the pan (down to mini, up to fullscreen) — same
-            gesture thresholds as the sheet. */}
-        <GestureDetector gesture={handleSheetGesture}>
-          <Animated.View style={styles.watchDragHandleRow} testID="mini-youtube-drag-handle">
-            <View style={styles.dragHandle} />
-          </Animated.View>
-        </GestureDetector>
-        {/* 16:9 video pinned at the very top, edge-to-edge. */}
-        <View style={styles.watchVideoWrap} testID="mini-youtube-watch-video">
-          <YouTubePlayer
-            video={currentVideo}
-            borderless
-            onClose={closePlayer}
-            testID="mini-youtube-player"
-          />
-          <View style={styles.videoTopOverlay} pointerEvents="box-none">
-            <View style={styles.topOverlaySpacer} />
-            <TouchableOpacity
-              onPress={handleEnterFullscreen}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.sheetIconBtn, styles.scrimBtn]}
-              accessibilityRole="button"
-              accessibilityLabel="Enter fullscreen"
-              testID="mini-youtube-fullscreen"
-            >
-              <Icon name="expand" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleMinimize}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.sheetIconBtn, styles.scrimBtn]}
-              accessibilityRole="button"
-              accessibilityLabel="Minimize video player"
-              testID="mini-youtube-minimize"
-            >
-              <Icon name="chevronDown" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={closePlayer}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.sheetIconBtn, styles.scrimBtn]}
-              accessibilityRole="button"
-              accessibilityLabel="Close video player"
-              testID="mini-youtube-close-expanded"
-            >
-              <Icon name="close" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-        {/* Transport BELOW the video (play/pause + mute share the store). */}
-        <View style={styles.expandedControlRow}>
-          <TouchableOpacity
-            onPress={togglePlay}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.expandedControlBtn}
-            accessibilityRole="button"
-            accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
-            testID="mini-youtube-play-pause"
-          >
-            <Icon name={isPlaying ? 'pause' : 'play'} size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.expandedControlState} accessibilityLiveRegion="polite">
-            {isPlaying ? 'Now playing' : 'Paused'}
-          </Text>
-          <View style={styles.expandedControlSpacer} />
-          <TouchableOpacity
-            onPress={toggleMute}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.expandedControlBtn}
-            accessibilityRole="button"
-            accessibilityLabel={isMuted ? 'Unmute video' : 'Mute video'}
-            testID="youtube-mute-toggle"
-          >
-            <Icon name={isMuted ? 'volumeMute' : 'volume'} size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.nowPlayingBlock}>
-          <Text
-            style={styles.nowPlayingTitle}
-            testID="mini-youtube-now-playing-title"
-            numberOfLines={2}
-          >
-            {currentVideo.title}
-          </Text>
-          {!!currentVideo.channelTitle && (
-            <Text
-              style={styles.nowPlayingChannel}
-              testID="mini-youtube-now-playing-channel"
-              numberOfLines={1}
-            >
-              {currentVideo.channelTitle}
-            </Text>
-          )}
-        </View>
-        {/* Up next suggestions BELOW the title (virtualized FlatList). */}
-        <View style={styles.upNextSection}>
-          <Text style={styles.upNextTitle}>Up next</Text>
-          <FlatList
-            data={related}
-            keyExtractor={(item) => item.videoId}
-            renderItem={renderSuggestion}
-            testID="mini-youtube-up-next-list"
-            contentContainerStyle={styles.upNextContent}
-            keyboardShouldPersistTaps="handled"
-            initialNumToRender={8}
-            maxToRenderPerBatch={8}
-            windowSize={5}
-            removeClippedSubviews={Platform.OS !== 'web'}
-          />
-        </View>
+        )}
         {bgToastBanner}
       </Animated.View>
-    );
-  }
-
-  return (
-    <Animated.View
-      pointerEvents="box-none"
-      style={[
-        styles.expandedWrap,
-        { paddingBottom: expandedBottomPad },
-        expandedAnimatedStyle,
-      ]}
-      testID={testID ?? 'mini-youtube-overlay'}
-      accessibilityLabel={`YouTube player expanded: ${currentVideo.title}`}
-    >
-      <Animated.View
-        style={[
-          styles.expandedCard,
-          {
-            backgroundColor: '#000',
-            borderColor: theme.colors.border,
-            maxHeight: sheetMaxH,
-          },
-        ]}
-      >
-        {/* P0: gesture scope — the drag handle owns the pan (drag down to
-            minimize, swipe up to fullscreen). No "Up next" suggestions list
-            below the title (removed by product request), so no Native scroll
-            gesture is needed. Transport buttons live OUTSIDE this detector
-            (on the video overlay + control row below) so taps are never
-            swallowed by the drag gesture. */}
-        <GestureDetector gesture={handleSheetGesture}>
-          <Animated.View style={styles.dragHandleRow} testID="mini-youtube-drag-handle">
-            <View style={styles.dragHandle} />
-          </Animated.View>
-        </GestureDetector>
-        {/* Sticky 16:9 video top — the single global WebView (borderless
-            edge-to-edge) with the sheet transport floating top-right ON the
-            video (scrim circles, above the drag area). */}
-        <View style={styles.videoWrap}>
-          <YouTubePlayer
-            video={currentVideo}
-            borderless
-            onClose={closePlayer}
-            testID="mini-youtube-player"
-          />
-          <View style={styles.videoTopOverlay} pointerEvents="box-none">
-            <View style={styles.topOverlaySpacer} />
-            <TouchableOpacity
-              onPress={handleEnterFullscreen}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.sheetIconBtn, styles.scrimBtn]}
-              accessibilityRole="button"
-              accessibilityLabel="Enter fullscreen"
-              testID="mini-youtube-fullscreen"
-            >
-              <Icon name="expand" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleMinimize}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.sheetIconBtn, styles.scrimBtn]}
-              accessibilityRole="button"
-              accessibilityLabel="Minimize video player"
-              testID="mini-youtube-minimize"
-            >
-              <Icon name="chevronDown" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-            {/* Borderless bare chrome: expanded close lives here (player
-                header is hidden when borderless). Distinct testID so mini's
-                mini-youtube-close stays mini/fullscreen-only. */}
-            <TouchableOpacity
-              onPress={closePlayer}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[styles.sheetIconBtn, styles.scrimBtn]}
-              accessibilityRole="button"
-              accessibilityLabel="Close video player"
-              testID="mini-youtube-close-expanded"
-            >
-              <Icon name="close" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-        {/* Transport BELOW the video (play/pause + mute share the store
-            with the single WebView player). */}
-        <View style={styles.expandedControlRow}>
-          <TouchableOpacity
-            onPress={togglePlay}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.expandedControlBtn}
-            accessibilityRole="button"
-            accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
-            testID="mini-youtube-play-pause"
-          >
-            <Icon name={isPlaying ? 'pause' : 'play'} size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.expandedControlState} accessibilityLiveRegion="polite">
-            {isPlaying ? 'Now playing' : 'Paused'}
-          </Text>
-          <View style={styles.expandedControlSpacer} />
-          <TouchableOpacity
-            onPress={toggleMute}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.expandedControlBtn}
-            accessibilityRole="button"
-            accessibilityLabel={isMuted ? 'Unmute video' : 'Mute video'}
-            testID="youtube-mute-toggle"
-          >
-            <Icon name={isMuted ? 'volumeMute' : 'volume'} size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-        {/* YouTube-like title/channel block below the player (text only —
-            no second player/WebView mounted here). */}
-        <View style={styles.nowPlayingBlock}>
-          <Text
-            style={styles.nowPlayingTitle}
-            testID="mini-youtube-now-playing-title"
-            numberOfLines={2}
-          >
-            {currentVideo.title}
-          </Text>
-          {!!currentVideo.channelTitle && (
-            <Text
-              style={styles.nowPlayingChannel}
-              testID="mini-youtube-now-playing-channel"
-              numberOfLines={1}
-            >
-              {currentVideo.channelTitle}
-            </Text>
-          )}
-        </View>
-        {/* WatchSheet suggestions removed (no "Up next" inside playback).
-            Clean sheet: video + transport row + now-playing title only. */}
-        {bgToastBanner}
-      </Animated.View>
-    </Animated.View>
+    </GestureDetector>
+    </>
   );
 };
+
 
 const styles = StyleSheet.create({
   // Floating layer above screens/tab bar (z 50); AiOrb voice sheet is a
@@ -1138,6 +1505,7 @@ const styles = StyleSheet.create({
   miniThumbWrap: {
     borderRadius: 8,
     overflow: 'hidden',
+    flexShrink: 0,
   },
   miniThumb: {
     width: 56,
@@ -1156,11 +1524,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   miniBtn: {
-    minWidth: 36,
-    minHeight: 36,
+    width: MINI_BTN_SIZE,
+    height: MINI_BTN_SIZE,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 18,
+    borderRadius: 17,
   },
   miniTitle: {
     flex: 1,
@@ -1183,9 +1552,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#000',
     flexShrink: 0,
+    // Hardening: explicit pixel height is also set inline
+    // (miniVideoW * 9/16); aspectRatio stays as backup. Relative so the
+    // absolute poster fallback fills the slot behind the WebView.
+    position: 'relative',
+  },
+  // Poster fallback UNDER the mini WebView (absolute fill, behind, never
+  // intercepts touches). Shows art when the frame is slow/collapsed.
+  miniPoster: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    borderRadius: 8,
+    backgroundColor: '#000',
+    zIndex: 0,
   },
   miniControlsRight: {
     flex: 1,
+    flexShrink: 1,
     minWidth: 0,
     justifyContent: 'center',
     gap: 4,
@@ -1193,12 +1577,27 @@ const styles = StyleSheet.create({
   miniTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 0,
     gap: 6,
+    // Hardening: explicit min height so the row can never measure 0 on
+    // builds where nested flex collapses.
+    minHeight: 40,
   },
   miniBtnRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'nowrap',
+    minWidth: 0,
     gap: 2,
+    // Hardening: fixed row height matching the 34px buttons so transport
+    // can never collapse to 0.
+    height: 34,
+    minHeight: 34,
+  },
+  // Non-mini modes stack the single video slot full-width (same tree
+  // position as the mini landscape row, so the player never remounts).
+  stackBody: {
+    width: '100%',
   },
   // Progress line under the mini landscape card.
   miniProgressTrack: {

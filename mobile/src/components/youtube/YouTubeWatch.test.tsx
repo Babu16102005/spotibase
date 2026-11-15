@@ -427,7 +427,8 @@ describe('WATCH-4 swipe down to mini / swipe-up + tap to expand', () => {
     const src = OVERLAY_SRC();
     expect(src).toMatch(/translationY > 90/);
     expect(src).toMatch(/velocityY > 600/);
-    expect(src).toContain("setMode)('mini')");
+    // Drag-to-mini routes through handoff (handleMinimize) which captures time.
+    expect(src).toMatch(/handleMinimize|setMode.*mini/);
   });
 
   it('swipe is vertical-only (horizontal drag does not minimize)', () => {
@@ -436,16 +437,48 @@ describe('WATCH-4 swipe down to mini / swipe-up + tap to expand', () => {
     expect(src).toMatch(/activeOffsetY/);
   });
 
-  it('minimize button collapses to mini; expand button restores the sheet', () => {
+  it('minimize button collapses to dedicated mini via handoff; thumbnail/title tap restores via seek', async () => {
     act(() => {
       useYouTubePlayerStore.getState().playVideo(vid());
     });
-    const { getByTestId } = render(<MiniYouTubeOverlay />);
+    const { getByTestId, queryByTestId } = render(<MiniYouTubeOverlay />);
     fireEvent.press(getByTestId('mini-youtube-minimize'));
-    expect(useYouTubePlayerStore.getState().mode).toBe('mini');
-    expect(getByTestId('mini-youtube-expand')).toBeTruthy();
-    fireEvent.press(getByTestId('mini-youtube-expand'));
-    expect(useYouTubePlayerStore.getState().mode).toBe('expanded');
+    await waitFor(() => expect(useYouTubePlayerStore.getState().mode).toBe('mini'));
+    // No dedicated expand chevron (it clipped the close button): tap parity.
+    expect(queryByTestId('mini-youtube-expand')).toBeNull();
+    expect(getByTestId('mini-youtube-tap-expand')).toBeTruthy();
+    fireEvent.press(getByTestId('mini-youtube-tap-expand'));
+    await waitFor(() => expect(useYouTubePlayerStore.getState().mode).toBe('expanded'));
+  });
+
+  it('shared persists across expanded/watch/fullscreen (no re-resolve); mini entry reloads dedicated only', async () => {
+    act(() => {
+      useYouTubePlayerStore.getState().playVideo(vid());
+    });
+    const { getByTestId, queryAllByTestId } = render(<MiniYouTubeOverlay />);
+    await waitFor(() => expect(getByTestId('youtube-player-webview')).toBeTruthy());
+    expect(queryAllByTestId('youtube-player-webview')).toHaveLength(1);
+    const callsAfterMount = resolveMock.mock.calls.length;
+    const nonceBefore = useYouTubePlayerStore.getState().replayNonce;
+
+    // Expanded -> fullscreen (shared, no reload).
+    act(() => {
+      useYouTubePlayerStore.getState().enterFullscreen();
+    });
+    await waitFor(() =>
+      expect(getByTestId('mini-youtube-fullscreen-exit')).toBeTruthy(),
+    );
+    act(() => {
+      useYouTubePlayerStore.getState().exitFullscreen();
+    });
+    await waitFor(() => expect(getByTestId('mini-youtube-minimize')).toBeTruthy());
+
+    // Same shared WebView throughout those: no re-resolve, no replay bump.
+    expect(queryAllByTestId('youtube-player-webview')).toHaveLength(1);
+    expect(queryAllByTestId('mini-youtube-player')).toHaveLength(1);
+    expect(resolveMock.mock.calls.length).toBe(callsAfterMount);
+    expect(useYouTubePlayerStore.getState().replayNonce).toBe(nonceBefore);
+    expect(useYouTubePlayerStore.getState().currentVideo?.videoId).toBe('dQw4w9WgXcQ');
   });
 
   it('mini card drag uses edge snap (nearest horizontal edge, clamped Y)', () => {
@@ -455,14 +488,14 @@ describe('WATCH-4 swipe down to mini / swipe-up + tap to expand', () => {
     expect(src).toMatch(/withSpring/);
   });
 
-  it('mini swipe-up expands (translationY < -60 or velocityY < -500)', () => {
+  it('mini swipe-up expands via handoff (translationY < -60 or velocityY < -500)', () => {
     const src = OVERLAY_SRC();
     expect(src).toMatch(/translationY.*< -60/);
     expect(src).toMatch(/velocityY.*< -500/);
-    expect(src).toContain("runOnJS(setMode)('expanded')");
+    expect(src).toMatch(/runOnJS\((handleExpand|setMode)\)/);
   });
 
-  it('tap parity: thumbnail / title tap expands like swipe-up', () => {
+  it('tap parity: thumbnail / title tap expands like swipe-up (async handoff)', async () => {
     act(() => {
       useYouTubePlayerStore.getState().playVideo(vid());
       useYouTubePlayerStore.getState().setMode('mini');
@@ -471,7 +504,7 @@ describe('WATCH-4 swipe down to mini / swipe-up + tap to expand', () => {
     expect(getByTestId('mini-youtube-thumb')).toBeTruthy();
     expect(getByTestId('mini-youtube-tap-expand')).toBeTruthy();
     fireEvent.press(getByTestId('mini-youtube-tap-expand'));
-    expect(useYouTubePlayerStore.getState().mode).toBe('expanded');
+    await waitFor(() => expect(useYouTubePlayerStore.getState().mode).toBe('expanded'));
   });
 });
 

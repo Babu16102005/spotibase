@@ -6,11 +6,6 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/word.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#09090b"
-    },
     "ios": {
       "supportsTablet": true,
       "requireFullScreen": true,
@@ -110,10 +105,14 @@
         {
           "microphonePermission": "Allow SpotiBase to use the microphone for AI voice commands.",
           "speechRecognitionPermission": "Allow SpotiBase to use speech recognition for AI voice assistance.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-asset"
     ],
     "extra": {},
     "owner": "spotibase"

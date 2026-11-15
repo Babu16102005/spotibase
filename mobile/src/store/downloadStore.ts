@@ -3,16 +3,21 @@ import { DownloadResponse, DownloadStatsResponse } from '../types';
 import { downloadApi } from '../api/client';
 import { useAuthStore } from './authStore';
 
-// 401/403 from a protected endpoint means the session is dead (the api client
+// 401 from a protected endpoint means the session is dead (the api client
 // already attempted a refresh): log out once so RootNavigator redirects to
-// Login. Expected 401s while logged out and offline/network errors stay
-// silent instead of spamming console.error on every focus.
+// Login. 403 = authenticated-but-forbidden and must NEVER log out (show the
+// error instead). Expected 401s while logged out and offline/network errors
+// stay silent instead of spamming console.error on every focus.
 const handleDownloadAuthError = (err: any, message: string): boolean => {
   const status = err?.response?.status;
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     if (!err?._refreshNetworkError && useAuthStore.getState().isAuthenticated) {
       useAuthStore.getState().logout();
     }
+    return true;
+  }
+  if (status === 403) {
+    // Forbidden but still authenticated: never log out.
     return true;
   }
   if (!err?.response) return true;
@@ -53,10 +58,15 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       set({ downloads: response.data, isLoading: false });
       await get().fetchStats();
     } catch (err: any) {
-      if (err?.response?.status === 401 || err?.response?.status === 403) {
+      if (err?.response?.status === 401) {
         if (!err?._refreshNetworkError && useAuthStore.getState().isAuthenticated) {
           useAuthStore.getState().logout();
         }
+        set({ isLoading: false });
+        return;
+      }
+      if (err?.response?.status === 403) {
+        // Authenticated-but-forbidden: never log out, just stop loading.
         set({ isLoading: false });
         return;
       }

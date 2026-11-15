@@ -147,7 +147,8 @@ apple:
 
 # YouTube proxy (GET /api/v1/youtube/trending|search|resolve).
 # Without YOUTUBE_API_KEY the service serves a built-in 19-entry mock
-# catalogue (15 + 4 Tamil/Kollywood); with a key it calls YouTube Data API v3 (5s timeout) and
+# catalogue (15 + 4 Tamil/Kollywood); with a key it calls YouTube Data API v3 (8s total
+# budget: Bs 6s search + Bh 2s hydration) and
 # fails open to mock on quota 429 / network errors. The key is never logged.
 youtube:
   api-key: ${YOUTUBE_API_KEY:}
@@ -155,7 +156,7 @@ youtube:
   base-url: ${YOUTUBE_BASE_URL:https://www.googleapis.com/youtube/v3}
   region-code: ${YOUTUBE_REGION_CODE:IN}
   relevance-language: ${YOUTUBE_RELEVANCE_LANGUAGE:ta}
-  timeout-seconds: ${YOUTUBE_TIMEOUT_SECONDS:5}
+  timeout-seconds: ${YOUTUBE_TIMEOUT_SECONDS:8}
   # Split of the total outbound budget (Bs + Bh <= total, all in seconds):
   # search-timeout-seconds (Bs) for search.list — unset (-1) defaults to max(1, timeout-seconds - 2).
   search-timeout-seconds: ${YOUTUBE_SEARCH_TIMEOUT_SECONDS:-1}

@@ -1,11 +1,15 @@
 /**
- * Jest configuration for SpotiBase mobile (Expo SDK 57 / RN 0.86).
+ * Jest configuration for SpotiBase mobile (Expo SDK 58 / RN 0.88).
  * Uses jest-expo preset; the allowlist in transformIgnorePatterns is the
  * documented Expo pattern extended for the native modules used by this app
  * (react-native-track-player, react-native-mmkv, reanimated/worklets, etc.).
  */
 module.exports = {
   preset: 'jest-expo',
+
+  // Reanimated 4.x ships a resolver that swaps native-only modules for their
+  // web counterparts under Jest (prevents JSReanimated init crashes).
+  resolver: 'react-native-reanimated/jest/resolver',
 
   // Files that must be transpiled even though they live in node_modules.
   transformIgnorePatterns: [
@@ -20,6 +24,12 @@ module.exports = {
 
   // Global setup: applied after the test framework is installed.
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+
+  // Gesture Handler 3.x requires its Jest mocks (root view + UI-runtime bindings).
+  setupFiles: [
+    '<rootDir>/jest.gesture.setup.js',
+    '<rootDir>/node_modules/react-native-gesture-handler/jestSetup.js',
+  ],
 
   // Static asset imports -> stub module.
   moduleNameMapper: {

@@ -28,6 +28,13 @@ if (typeof Function.prototype.resolveWeak !== 'function') {
 
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 
+// Gesture Handler 3 throws in DEV when a GestureDetector renders without a
+// GestureHandlerRootView ancestor. Unit tests mount components in isolation,
+// so neutralise the assertion for the test environment.
+jest.mock('react-native-gesture-handler/src/v3/detectors/useEnsureGestureHandlerRootView', () => ({
+  useEnsureGestureHandlerRootView: () => undefined,
+}));
+
 jest.mock('react-native-webview', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -59,6 +66,17 @@ jest.mock('expo-audio', () => ({
   setAudioModeAsync: jest.fn(async () => {}),
   getRecordingPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
   requestRecordingPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+}));
+
+// expo-speech (Jarvis TTS): never talk in Jest. speak is sync void per SDK
+// v57 docs; stop/isSpeakingAsync are async. Callbacks (onDone/onStopped)
+// are NOT auto-invoked — tests drive state via the bubble text + mock calls.
+jest.mock('expo-speech', () => ({
+  speak: jest.fn(),
+  stop: jest.fn(async () => {}),
+  isSpeakingAsync: jest.fn(async () => false),
+  getAvailableVoicesAsync: jest.fn(async () => []),
+  maxSpeechInputLength: Number.MAX_VALUE,
 }));
 
 // RN's Animated.loop/timing would keep JS timers alive and fire state updates

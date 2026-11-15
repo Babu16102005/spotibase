@@ -51,6 +51,15 @@ public class R2StorageService {
     @Value("${r2.songs-path:songs}")
     private String songsPath;
 
+    /**
+     * Total budget for a single song-file PUT. FLACs are tens of MB and
+     * cannot finish inside the 10s client default on a normal uplink, which
+     * used to abort the whole song save ("0 succeeded, N failed"). Applies
+     * to putObject only; list/get/delete keep the tight client defaults.
+     */
+    @Value("${r2.upload-timeout-seconds:300}")
+    private int uploadTimeoutSeconds;
+
     private S3Client s3Client;
 
     @PostConstruct
@@ -147,12 +156,19 @@ public class R2StorageService {
 
     private void uploadFile(MultipartFile file, String key) {
         try {
+            // Request-level timeout upgrade: this PUT streams a whole audio
+            // file and legitimately takes minutes on slow uplinks. It
+            // overrides the 10s/5s client defaults for this call only.
+            int attemptSeconds = Math.min(60, uploadTimeoutSeconds);
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(bucketName)
                     .key(key)
                     .contentType(file.getContentType())
                     .contentLength(file.getSize())
                     .cacheControl("public, max-age=3600")
+                    .overrideConfiguration(b -> b
+                            .apiCallTimeout(Duration.ofSeconds(uploadTimeoutSeconds))
+                            .apiCallAttemptTimeout(Duration.ofSeconds(attemptSeconds)))
                     .build();
 
             // P0-4: stream the upload — fromBytes(file.getBytes()) loads the

@@ -385,7 +385,7 @@ const PlayerSheet = ({ onLayout }: PlayerSheetProps) => {
 
   // Local drag offset during collapse swipe
   const dragOffset = useSharedValue(0);
-  const sheetRef = useRef<View>(null);
+  const sheetRef = useRef<React.ComponentRef<typeof Animated.View>>(null);
 
   // Sync shared values with isExpanded state (triggered by store)
   useEffect(() => {

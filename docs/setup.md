@@ -1,4 +1,4 @@
-# SpotiBase — Local Development Setup
+﻿# SpotiBase â€” Local Development Setup
 
 This guide covers a full local dev environment: the Spring Boot backend, the Expo mobile app, and the database/storage options.
 
@@ -20,13 +20,13 @@ This guide covers a full local dev environment: the Spring Boot backend, the Exp
 Copy-Item .env.example .env
 ```
 
-The backend reads `.env` from the repo root when launched via `backend\run-prod.ps1` (the production launcher) — the script loads it into the process environment before starting the jar. Docker Compose also interpolates variables from the same file.
+The backend reads `.env` from the repo root when launched via `backend\run-prod.ps1` (the production launcher) â€” the script loads it into the process environment before starting the jar. Docker Compose also interpolates variables from the same file.
 
 Minimal set to boot the backend against a Supabase database:
 
-- `SUPABASE_PROJECT_REF` — your project ref (e.g. `abcdefghijklmnop`) and `SUPABASE_DB_USERNAME`/`SUPABASE_DB_PASSWORD` (see below)
+- `SUPABASE_PROJECT_REF` â€” your project ref (e.g. `abcdefghijklmnop`) and `SUPABASE_DB_USERNAME`/`SUPABASE_DB_PASSWORD` (see below)
 - `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`
-- `JWT_SECRET` — generate with `openssl rand -base64 32`
+- `JWT_SECRET` â€” generate with `openssl rand -base64 32`
 
 Everything else (`R2_*`, `MAIL_*`, `OPENAI_API_KEY`, social keys) can be added as you work on those features.
 
@@ -38,11 +38,11 @@ Three naming mismatches exist between `.env.example` and what `application.yml` 
 |---|---|---|
 | Supabase URL | `SUPABASE_URL` | `SUPABASE_PROJECT_REF` (app builds `https://<ref>.supabase.co`) |
 | SMTP | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` |
-| JWT expiry | `JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION` | Hardcoded 24 h access / 30 d refresh — env vars ignored |
+| JWT expiry | `JWT_EXPIRATION`, `JWT_REFRESH_EXPIRATION` | Hardcoded 24 h access / 30 d refresh â€” env vars ignored |
 
 ## 2. Database: Supabase vs local
 
-### Option A — Supabase (cloud, matches production)
+### Option A â€” Supabase (cloud, matches production)
 
 1. Create a project at [supabase.com](https://supabase.com).
 2. Open the SQL editor and run `supabase-schema.sql` (creates all 18 tables, extensions `pg_trgm` and `uuid-ossp`).
@@ -56,9 +56,9 @@ SUPABASE_DB_PASSWORD=your-db-password
 
 The backend defaults to the Supabase pooler in session mode: `jdbc:postgresql://aws-1-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require`, with the username composed as `<username>.<project-ref>` (required on the pooler). Override with `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` if needed.
 
-4. Flyway runs on boot: `baseline-on-migrate: true` with `baseline-version: 18`, so only migrations `V19+` apply to a schema created from `supabase-schema.sql`. Migrations `V1`–`V18` live in `backend/src/main/resources/db/migration/` and are applied automatically on a fresh database.
+4. Flyway runs on boot: `baseline-on-migrate: true` with `baseline-version: 18`, so only migrations `V19+` apply to a schema created from `supabase-schema.sql`. Migrations `V1`â€“`V18` live in `backend/src/main/resources/db/migration/` and are applied automatically on a fresh database.
 
-### Option B — Docker Postgres (local)
+### Option B â€” Docker Postgres (local)
 
 ```powershell
 docker compose -f docker-compose.yml up -d spotibase-db
@@ -66,7 +66,7 @@ docker compose -f docker-compose.yml up -d spotibase-db
 
 - Host port **5433**, database/user/password `spotibase` / `spotibase` / `spotibase_local_dev`
 - Flyway migrations are mounted into `/docker-entrypoint-initdb.d/` so a fresh volume is initialized with the schema
-- The dev compose backend points at this database (`SPRING_DATASOURCE_URL=jdbc:postgresql://spotibase-db:5432/spotibase?sslmode=disable`) — no Supabase pooler needed
+- The dev compose backend points at this database (`SPRING_DATASOURCE_URL=jdbc:postgresql://spotibase-db:5432/spotibase?sslmode=disable`) â€” no Supabase pooler needed
 
 ## 3. Backend (Spring Boot)
 
@@ -95,9 +95,9 @@ The default datasource points at the Supabase pooler; export the variables above
 
 Verify:
 
-- `http://localhost:8088/actuator/health` → `{"status":"UP"}`
-- `http://localhost:8088/swagger-ui/index.html` → Swagger UI
-- `http://localhost:8088/api-docs` → OpenAPI JSON
+- `http://localhost:8088/actuator/health` â†’ `{"status":"UP"}`
+- `http://localhost:8088/swagger-ui/index.html` â†’ Swagger UI
+- `http://localhost:8088/api-docs` â†’ OpenAPI JSON
 
 Notes:
 
@@ -115,7 +115,7 @@ npx expo start       # Metro dev server
 ```
 
 - Press `w` for web, `a` for Android emulator, `i` for iOS simulator (macOS only).
-- The app targets Expo SDK 57 / React Native 0.86 / React 19.2.
+- The app targets Expo SDK 58 / React Native 0.88 / React 19.3.
 
 ### API URL
 
@@ -145,7 +145,7 @@ npm run android    # expo run:android
 npm run ios        # expo run:ios
 ```
 
-Store builds use EAS. The repo does not commit an `eas.json` (CI writes it from a secret), and `app.json` carries a placeholder `extra.eas.projectId` ("spotibase") — create `mobile/eas.json` locally and set a real project ID before running `eas build`.
+Store builds use EAS. The repo does not commit an `eas.json` (CI writes it from a secret), and `app.json` carries a placeholder `extra.eas.projectId` ("spotibase") â€” create `mobile/eas.json` locally and set a real project ID before running `eas build`.
 
 ## 5. Useful scripts
 

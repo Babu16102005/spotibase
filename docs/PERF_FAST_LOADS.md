@@ -1,25 +1,25 @@
-# PERF — Fast Loads (Spotify-like)
+﻿# PERF â€” Fast Loads (Spotify-like)
 
 Current state: React Query SWR + unified TTLs + cursor paging + parallel
-library + slim cards + HTTP caching. This doc is the contract — keep code
+library + slim cards + HTTP caching. This doc is the contract â€” keep code
 and doc in sync.
 
 ## 1. How data loading is organised
 
 ```
 Screen (Home / Library / AllSongs / Search)
-  │  paints synchronously from MMKV snapshot (initialData)
-  │  useHome / useLibrary / useSongs / useSearch / useLibraryParts
-  ▼
+  â”‚  paints synchronously from MMKV snapshot (initialData)
+  â”‚  useHome / useLibrary / useSongs / useSearch / useLibraryParts
+  â–¼
 React Query cache (staleTime per bucket, gcTime 30m)
-  │  stale? → network   fresh? → no network
-  ▼
+  â”‚  stale? â†’ network   fresh? â†’ no network
+  â–¼
 dedupedGet (transport single-flight: identical concurrent GETs share
 one promise; AbortSignal requests are never coalesced)
-  │  10s reads / 8s search / 30s ceiling / uploads timeout 0
-  ▼
-Backend: ?fields=card projection → clamped size → Cache-Control + ETag
-  ▼
+  â”‚  10s reads / 8s search / 30s ceiling / uploads timeout 0
+  â–¼
+Backend: ?fields=card projection â†’ clamped size â†’ Cache-Control + ETag
+  â–¼
 DB: V22 pg_trgm + V23/V25 covering + keyset indexes
 ```
 
@@ -38,7 +38,7 @@ Key files:
 | Transport dedupe + timeouts | `mobile/src/api/client.ts` (`dedupedGet`, `READ_TIMEOUT_MS`, `SEARCH_TIMEOUT_MS`) |
 | Snapshots (instant paint) | `mobile/src/cache/homeFeedCache.ts`, `mobile/src/cache/songListCache.ts`, `readLibrarySnapshot` in `useLibrary.ts` |
 | Images / lists | `mobile/src/components/AppImage.tsx`, `mobile/src/components/AppList.tsx`, `coverSource`/`getImageUrl` in `mobile/src/utils/index.ts` |
-| Session ↔ cache wiring | `mobile/src/store/authStore.ts` |
+| Session â†” cache wiring | `mobile/src/store/authStore.ts` |
 | Backend cards | `backend/.../dto/response/SongCardResponse.java` |
 | Backend cache/ETag | `SongController`, `HomeController`, `LibraryController`, `SearchController`, `config/EtagConfig.java` |
 | DB | `V22__enable_pg_trgm.sql`, `V23__perf_spotify_indexes.sql`, `V25__home_covering_indexes.sql` |
@@ -63,11 +63,11 @@ in `queryClient.ts` is the midpoint fallback; every hook overrides with its buck
 | `SEARCH` | `60_000` (60s) | `useSearch` (per debounced query), `prefetchSearchTrending` |
 
 `gcTime` is `30 * 60 * 1000` everywhere. Never declare a local freshness
-window — import `TTL_MS` / `isFresh`.
+window â€” import `TTL_MS` / `isFresh`.
 
 ## 3. `?fields=card` usage
 
-`SongCardResponse.isCardView(fields)` — only the exact value `card` projects;
+`SongCardResponse.isCardView(fields)` â€” only the exact value `card` projects;
 missing/blank/anything else returns `full` (backward-compat default).
 
 Card shape (only these fields):
@@ -78,7 +78,7 @@ Card shape (only these fields):
 ```
 
 `likeCount` is `playCount` aliased. `lyrics`, `fileUrl` and all other
-full-only fields are dropped — assert with `doesNotExist` (see
+full-only fields are dropped â€” assert with `doesNotExist` (see
 `PerfCardCacheTest`).
 
 Where it applies: `GET /songs`, `/songs/cursor`, `/songs/home`,
@@ -100,7 +100,7 @@ Use `card` for every scrolling list/tile. Use `full` only for detail screens
   `OFFSET`/`COUNT` per page).
 - Fallback: on `404`/`405` (backend without the endpoint) the fetcher switches
   to `songApi.getAll(page, limit)` once and stays in numeric mode for the rest
-  of the list (`cursorUnsupported: true`). Any other status rethrows — no
+  of the list (`cursorUnsupported: true`). Any other status rethrows â€” no
   silent fallback.
 - `flattenSongsPages` dedupes by `id` across pages.
 
@@ -113,22 +113,22 @@ Use `card` for every scrolling list/tile. Use `full` only for detail screens
 | `prefetchSongs()` | `isFresh(getSongsAt(), TTL.SONGS)` | `prefetchInfiniteQuery(['songs','infinite',size], pages: 1)` |
 | `prefetchNextSongsPage(limit, getNextParam)` | caller-supplied cursor | fetches one page ahead, appends via `setQueryData` (no spinner while scrolling) |
 | `prefetchSearchTrending()` | none (cheap, landing data) | warms `['search','trending']` for `SearchScreen` |
-| `warmCriticalCaches()` | — | `Promise.allSettled([home, library, songs])` after login / session restore |
+| `warmCriticalCaches()` | â€” | `Promise.allSettled([home, library, songs])` after login / session restore |
 
 Call from `useFocusEffect`, never from render. All helpers are best-effort
 (`try/catch`, never block paint). Auth flows warm `home + songs` after
 `loadSession` restore and after login/register/socialAuth (which `clear()` first).
 
-## 6. Image sizing — 200 lists / 800 detail
+## 6. Image sizing â€” 200 lists / 800 detail
 
-- `coverSource(url, size)` → `getImageUrl(url, size)` → `{ uri }` or bundled
+- `coverSource(url, size)` â†’ `getImageUrl(url, size)` â†’ `{ uri }` or bundled
   `PLACEHOLDER_IMAGE` when empty (`mobile/src/utils/index.ts`).
 - `getImageUrl` appends `?width=<size>&quality=80` for `supabase.co` CDN URLs
   (resized server-side, edge-cached); other hosts pass through untouched.
 - Contract: **lists `coverSource(url, 200)`**, **detail `coverSource(url, 800)`**.
   `SongRow`, `SongCard`, `AlbumCard`, `ArtistCard`, `PlaylistCard` use 200;
   `AlbumScreen`, `PlaylistScreen`, `ArtistScreen`, `PlayerScreen` use 800.
-  Default is 200 (`coverSource`) / 300 (`getImageUrl`) — pass explicitly.
+  Default is 200 (`coverSource`) / 300 (`getImageUrl`) â€” pass explicitly.
 - `AppImage` (`components/AppImage.tsx`): `expo-image` fast path when installed
   (`cachePolicy="memory-disk"`, `recyclingKey={id}`, `transition={200}`,
   placeholder) else RN `Image` with identical props. Check with
@@ -139,8 +139,8 @@ Call from `useFocusEffect`, never from render. All helpers are best-effort
 
 ## 7. Cache invalidation rules (`query/invalidate.ts`)
 
-Prefix invalidation — `['songs']` also clears `['songs','infinite',…]`,
-`['library']` also clears `['library','parts',…]`:
+Prefix invalidation â€” `['songs']` also clears `['songs','infinite',â€¦]`,
+`['library']` also clears `['library','parts',â€¦]`:
 
 | Helper | Key | Route new code through |
 |---|---|---|
@@ -149,13 +149,13 @@ Prefix invalidation — `['songs']` also clears `['songs','infinite',…]`,
 | `invalidateHome()` | `['home']` | song mutations |
 | `invalidateSearch()` | `['search']` | search-affecting writes |
 | `invalidateAll()` | all | rare, global refresh |
-| `clearAllQueries()` → `queryClient.clear()` | teardown | account switch, login/register/socialAuth (before prefetch), logout |
+| `clearAllQueries()` â†’ `queryClient.clear()` | teardown | account switch, login/register/socialAuth (before prefetch), logout |
 
 Mutation hooks (all `onSettled`, so failures also refresh):
 
-- `useLikeSong` / `useUnlikeSong` / `useDeleteSong` / `useUploadSongs` →
+- `useLikeSong` / `useUnlikeSong` / `useDeleteSong` / `useUploadSongs` â†’
   songs + library + home.
-- `useCreatePlaylist` → library only.
+- `useCreatePlaylist` â†’ library only.
 
 `logout()` (`store/authStore.ts`): `storage.clearAll()` (auth) +
 `feedCache.clearAll()` (snapshots incl. persisted queue key) +
@@ -169,9 +169,9 @@ Backend clamps (never trust client `size`):
 
 | Endpoint | Card cap | Full cap |
 |---|---|---|
-| `GET /songs`, `/songs/cursor`, `/songs/home` | `?fields=card` → **30** | default → **50** |
-| `/songs/search`, `GET /search` | — | **20** |
-| `/search/suggestions`, `/search/trending` | — | **20** (limit) |
+| `GET /songs`, `/songs/cursor`, `/songs/home` | `?fields=card` â†’ **30** | default â†’ **50** |
+| `/songs/search`, `GET /search` | â€” | **20** |
+| `/search/suggestions`, `/search/trending` | â€” | **20** (limit) |
 
 HTTP caching:
 
@@ -182,7 +182,7 @@ HTTP caching:
 - ETag: `ShallowEtagHeaderFilter` (`config/EtagConfig.java`) on exact list
   paths only (`/home`, `/library*`, `/songs`, `/songs/cursor`, `/songs/home|search|trending|new-releases|featured`,
   `/search/suggestions`, `/search/trending`). Repeat GETs with `If-None-Match`
-  → `304` without JSON. `/songs/{id}/stream` and `/songs/{id}` detail are
+  â†’ `304` without JSON. `/songs/{id}/stream` and `/songs/{id}` detail are
   deliberately excluded (own R2 ETag/206 contract).
 - DB: V22 enables `pg_trgm`; V23 adds `idx_songs_active_created/playcount/new/name`,
   GIN trigram on `primary_artist_name`/`album_name`, `idx_users_email_active`,
@@ -191,7 +191,7 @@ HTTP caching:
   (`SEARCH_TIMEOUT_MS`, non-deduped, `AbortSignal` per keystroke, 300ms debounce
   in `useSearch`), create ceiling 30s, uploads `timeout: 0`.
 
-Budget rule: lists = card + ≤30 items + 200px thumbs; anything heavier needs
+Budget rule: lists = card + â‰¤30 items + 200px thumbs; anything heavier needs
 a comment explaining why.
 
 ## 9. How to verify
@@ -199,33 +199,33 @@ a comment explaining why.
 Unit / contract (must stay green):
 
 ```powershell
-# Mobile — 10 tests: cursor size/cursorId/fallback, featured gating, invalidate keys, logout clear
+# Mobile â€” 10 tests: cursor size/cursorId/fallback, featured gating, invalidate keys, logout clear
 cd mobile; npx jest src/query/perf.test.ts --runInBand
 
-# Backend — 5 tests: card shape + clamps + Cache-Control (songs/cursor/search/suggestions)
+# Backend â€” 5 tests: card shape + clamps + Cache-Control (songs/cursor/search/suggestions)
 cd backend; ./mvnw -q -Dtest=PerfCardCacheTest test
 ```
 
 Manual (production check):
 
-1. Cold start logged-in → home/library paint instantly from snapshot (no spinner), network only if stale.
-2. All Songs scroll → no footer spinner on steady scroll (`prefetchNextSongsPage`), next page arrives before `onEndReached`.
-3. Back-nav home → library → home: instant (30m `gcTime`), no refetch within TTL.
-4. Like a song → library + home + catalogue refresh (invalidation).
-5. Logout → login as another user: no data leakage (cache + snapshots cleared).
+1. Cold start logged-in â†’ home/library paint instantly from snapshot (no spinner), network only if stale.
+2. All Songs scroll â†’ no footer spinner on steady scroll (`prefetchNextSongsPage`), next page arrives before `onEndReached`.
+3. Back-nav home â†’ library â†’ home: instant (30m `gcTime`), no refetch within TTL.
+4. Like a song â†’ library + home + catalogue refresh (invalidation).
+5. Logout â†’ login as another user: no data leakage (cache + snapshots cleared).
 6. DevTools: list responses carry `Cache-Control: private, max-age=30` (authed)
    and repeat GETs return `304`; card JSON has no `lyrics`/`fileUrl`;
    images load `?width=200` variants in lists, `?width=800` on detail.
 7. Throttle to Slow 3G: search stays cancellable (typing never shows stale
    results), reads fail fast at 10s/8s.
 
-## 10. Expo SDK 57 notes
+## 10. Expo SDK 58 notes
 
-- Pinned: `expo ~57.0.26`, `react-native 0.86.3`, `react 19.2.3`
+- Pinned: `expo ~58.0.19`, `react-native 0.88.0`, `react 19.3.0`
   (`mobile/package.json`). Versioned docs:
-  https://docs.expo.dev/versions/v57.0.0/ — read before touching native deps.
+  https://docs.expo.dev/versions/v58.0.0/ â€” read before touching native deps.
 - `expo-image` and `@shopify/flash-list` are **optional peers** (not in
-  `package.json`): enable the fast paths with — never pin manually:
+  `package.json`): enable the fast paths with â€” never pin manually:
 
 ```powershell
 cd mobile
@@ -239,4 +239,4 @@ npx expo install @shopify/flash-list
   `isFlashListAvailable()`, never a direct import in screens.
 - New lists: use `AppList` + `AppImage` + `coverSource(url, 200)` +
   `recyclingKey={id}` from the start. New images: 200 in rows/tiles, 800 on
-  detail — the CDN variant, not the original.
+  detail â€” the CDN variant, not the original.

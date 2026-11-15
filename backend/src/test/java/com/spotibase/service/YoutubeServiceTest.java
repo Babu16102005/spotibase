@@ -625,7 +625,7 @@ class YoutubeServiceTest {
         liveMode();
         when(youtubeClient.searchPaged(anyString(), anyString(), anyString(), anyString(), anyInt(), any(), anyString()))
                 .thenThrow(new com.spotibase.exception.YoutubeUpstreamException(
-                        "YouTube search timed out after 3s"));
+                        "YouTube search timed out after 6s"));
 
         long start = System.nanoTime();
         YoutubeSearchResponse res = youtubeService.search("queen", 5);
@@ -642,7 +642,7 @@ class YoutubeServiceTest {
         liveMode();
         when(youtubeClient.fetchTrendingPaged(anyString(), anyInt(), any(), anyString()))
                 .thenThrow(new com.spotibase.exception.YoutubeUpstreamException(
-                        "YouTube trending timed out after 5s"));
+                        "YouTube trending timed out after 8s"));
 
         long start = System.nanoTime();
         YoutubeTrendingResponse res = youtubeService.getTrending("US", 5);

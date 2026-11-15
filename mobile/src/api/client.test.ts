@@ -133,13 +133,74 @@ describe('api/client', () => {
 
       expect(storage.getString('accessToken')).toBe('expired-token');
       expect(storage.getString('refreshToken')).toBe('refresh-token');
+      expect((error as any)._refreshNetworkError).toBe(true);
       expect(instance).not.toHaveBeenCalled();
+    });
+
+    it('keeps session and flags the original 401 when refresh times out (ECONNABORTED)', async () => {
+      storage.set('accessToken', 'expired-token');
+      storage.set('refreshToken', 'refresh-token');
+      const timeoutErr: any = new Error('timeout of 10000ms exceeded');
+      timeoutErr.code = 'ECONNABORTED';
+      (axios.post as jest.Mock).mockRejectedValue(timeoutErr);
+
+      const error = authError();
+      const rejected = await responseRejected(error).catch((e: any) => e);
+
+      expect(rejected).toBe(error);
+      expect((rejected as any)._refreshNetworkError).toBe(true);
+      expect(storage.getString('accessToken')).toBe('expired-token');
+      expect(storage.getString('refreshToken')).toBe('refresh-token');
+      expect(instance).not.toHaveBeenCalled();
+    });
+
+    it('keeps session and flags the original 401 when refresh fails with 5xx (cold backend)', async () => {
+      storage.set('accessToken', 'expired-token');
+      storage.set('refreshToken', 'refresh-token');
+      (axios.post as jest.Mock).mockRejectedValue({ response: { status: 502 } });
+
+      const error = authError();
+      const rejected = await responseRejected(error).catch((e: any) => e);
+
+      // Transient: original 401 rejected WITH flag so screens keep the session.
+      expect(rejected).toBe(error);
+      expect((rejected as any)._refreshNetworkError).toBe(true);
+      expect(storage.getString('accessToken')).toBe('expired-token');
+      expect(storage.getString('refreshToken')).toBe('refresh-token');
+      expect(instance).not.toHaveBeenCalled();
+    });
+
+    it('keeps session and flags the original 401 when refresh has no response (offline)', async () => {
+      storage.set('accessToken', 'expired-token');
+      storage.set('refreshToken', 'refresh-token');
+      (axios.post as jest.Mock).mockRejectedValue({ request: {}, message: 'Network Error' });
+
+      const error = authError();
+      const rejected = await responseRejected(error).catch((e: any) => e);
+
+      expect(rejected).toBe(error);
+      expect((rejected as any)._refreshNetworkError).toBe(true);
+      expect(storage.getString('accessToken')).toBe('expired-token');
+      expect(storage.getString('refreshToken')).toBe('refresh-token');
     });
 
     it('clears storage when the refresh endpoint rejects the grant (401)', async () => {
       storage.set('accessToken', 'expired-token');
       storage.set('refreshToken', 'dead-refresh');
       const grantError = { response: { status: 401 }, config: { headers: {} } };
+      (axios.post as jest.Mock).mockRejectedValue(grantError);
+
+      await expect(responseRejected(authError())).rejects.toBe(grantError);
+
+      expect(storage.getString('accessToken')).toBeUndefined();
+      expect(storage.getString('refreshToken')).toBeUndefined();
+      expect(instance).not.toHaveBeenCalled();
+    });
+
+    it('clears storage when the refresh endpoint rejects with 400 (malformed grant)', async () => {
+      storage.set('accessToken', 'expired-token');
+      storage.set('refreshToken', 'dead-refresh');
+      const grantError = { response: { status: 400 }, config: { headers: {} } };
       (axios.post as jest.Mock).mockRejectedValue(grantError);
 
       await expect(responseRejected(authError())).rejects.toBe(grantError);

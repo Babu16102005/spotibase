@@ -428,7 +428,7 @@ const AllSongsScreen = ({ navigation }: any) => {
             </View>
           ) : !hasMore && !searchQuery.trim() && songs.length > 0 ? (
             <Text style={[styles.footerText, { color: theme.colors.textTertiary }]}>You're all caught up</Text>
-          ) : null
+          ) : undefined
         }
         contentContainerStyle={[styles.listContent, selectionMode ? { paddingBottom: 140 } : null]}
       />

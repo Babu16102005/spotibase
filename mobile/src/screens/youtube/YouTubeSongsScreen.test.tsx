@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import YouTubeSongsScreen from './YouTubeSongsScreen';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import YouTubeSongsScreen, { MIN_QUERY_LENGTH } from './YouTubeSongsScreen';
 import { youtubeApi } from '../../api/youtubeApi';
 import { useYouTubePlayerStore } from '../../store/youtubePlayerStore';
 import type { YouTubeVideo } from '../../types/youtube';
@@ -54,6 +54,9 @@ const searchInputProps = 'Search Tamil & Indian songs…';
 const tamilHeading = 'Tamil songs';
 const tamilQuery = 'Tamil songs';
 const searchLocale = { regionCode: 'IN', relevanceLanguage: 'ta', hl: 'ta' };
+const SEARCH_LIMIT = 20;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe('YouTubeSongsScreen', () => {
   beforeEach(() => {
@@ -69,7 +72,7 @@ describe('YouTubeSongsScreen', () => {
 
     expect(searchMock).toHaveBeenCalledWith(
       tamilQuery,
-      25,
+      SEARCH_LIMIT,
       undefined,
       expect.any(AbortSignal),
       searchLocale
@@ -140,7 +143,7 @@ describe('YouTubeSongsScreen', () => {
     await waitFor(() => {
       expect(searchMock).toHaveBeenCalledWith(
         'acoustic',
-        25,
+        SEARCH_LIMIT,
         undefined,
         expect.any(AbortSignal),
         searchLocale
@@ -187,7 +190,7 @@ describe('YouTubeSongsScreen', () => {
       // Tamil feed refetch on clear.
       expect(searchMock).toHaveBeenLastCalledWith(
         tamilQuery,
-        25,
+        SEARCH_LIMIT,
         undefined,
         expect.any(AbortSignal),
         searchLocale
@@ -239,7 +242,7 @@ describe('YouTubeSongsScreen', () => {
     await waitFor(() => {
       expect(searchMock).toHaveBeenCalledWith(
         tamilQuery,
-        25,
+        SEARCH_LIMIT,
         'TOKEN2',
         expect.any(AbortSignal),
         searchLocale
@@ -250,5 +253,166 @@ describe('YouTubeSongsScreen', () => {
     });
     // Dedupe: the repeated first video appears exactly once.
     expect(getByTestId('youtube-result-dQw4w9WgXcQ')).toBeTruthy();
+  });
+});
+
+describe('YouTubeSongsScreen min query length guard', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useYouTubePlayerStore.getState().closePlayer();
+    searchMock.mockResolvedValue({ data: { videos: [vid('dQw4w9WgXcQ', 'Lo-Fi Beats')] } });
+  });
+
+  it('exports MIN_QUERY_LENGTH = 2', () => {
+    expect(MIN_QUERY_LENGTH).toBe(2);
+  });
+
+  it('1-char keystroke makes zero new api calls and never searches the short string', async () => {
+    const { getByPlaceholderText, getByText } = render(
+      <YouTubeSongsScreen navigation={navigation} />
+    );
+    await waitFor(() => {
+      expect(getByText(tamilHeading)).toBeTruthy();
+    });
+    // Initial Tamil feed load.
+    expect(searchMock).toHaveBeenCalledTimes(1);
+
+    const input = getByPlaceholderText(searchInputProps);
+    fireEvent.changeText(input, 'a');
+    // Wait past the 300ms debounce to prove nothing fires.
+    await act(async () => {
+      await sleep(450);
+    });
+
+    // Zero new calls: still only the initial feed load, and critically no
+    // call with the 1-char string (each such call is a backend cache miss
+    // costing ~2 upstream Google calls).
+    expect(searchMock).toHaveBeenCalledTimes(1);
+    expect(searchMock.mock.calls.filter((c) => c[0] === 'a')).toHaveLength(0);
+    // Feed state preserved.
+    expect(getByText(tamilHeading)).toBeTruthy();
+    expect(getByText('Lo-Fi Beats')).toBeTruthy();
+  });
+
+  it('blank-ish 1-char query (" a ") is also guarded', async () => {
+    const { getByPlaceholderText, getByText } = render(
+      <YouTubeSongsScreen navigation={navigation} />
+    );
+    await waitFor(() => {
+      expect(getByText(tamilHeading)).toBeTruthy();
+    });
+
+    const input = getByPlaceholderText(searchInputProps);
+    fireEvent.changeText(input, ' a ');
+    await act(async () => {
+      await sleep(450);
+    });
+
+    expect(searchMock).toHaveBeenCalledTimes(1);
+    expect(searchMock.mock.calls.filter((c) => String(c[0]).trim() === 'a')).toHaveLength(0);
+  });
+
+  it('submit with 1 char does not search the short string', async () => {
+    const { getByPlaceholderText, getByText } = render(
+      <YouTubeSongsScreen navigation={navigation} />
+    );
+    await waitFor(() => {
+      expect(getByText(tamilHeading)).toBeTruthy();
+    });
+
+    const input = getByPlaceholderText(searchInputProps);
+    fireEvent.changeText(input, 'a');
+    fireEvent(input, 'submitEditing');
+
+    await act(async () => {
+      await sleep(150);
+    });
+
+    expect(searchMock.mock.calls.filter((c) => c[0] === 'a')).toHaveLength(0);
+    expect(searchMock).toHaveBeenCalledTimes(1);
+    expect(getByText(tamilHeading)).toBeTruthy();
+  });
+
+  it('2+ chars search after debounce', async () => {
+    searchMock.mockResolvedValueOnce({ data: { videos: [vid('dQw4w9WgXcQ', 'Lo-Fi Beats')] } });
+    searchMock.mockResolvedValueOnce({ data: { videos: [vid('AbCdEfGhIjk', 'AB Results')] } });
+
+    const { getByPlaceholderText, getByText } = render(
+      <YouTubeSongsScreen navigation={navigation} />
+    );
+    await waitFor(() => {
+      expect(getByText(tamilHeading)).toBeTruthy();
+    });
+
+    const input = getByPlaceholderText(searchInputProps);
+    fireEvent.changeText(input, 'ab');
+    // Debounced: no immediate call.
+    expect(searchMock.mock.calls.filter((c) => c[0] === 'ab')).toHaveLength(0);
+
+    await act(async () => {
+      await sleep(450);
+    });
+
+    await waitFor(() => {
+      expect(searchMock).toHaveBeenCalledWith(
+        'ab',
+        SEARCH_LIMIT,
+        undefined,
+        expect.any(AbortSignal),
+        searchLocale
+      );
+    });
+    await waitFor(() => {
+      expect(getByText('AB Results')).toBeTruthy();
+    });
+  });
+
+  it('clearing back below min-length aborts in-flight and restores the Tamil feed', async () => {
+    searchMock.mockResolvedValueOnce({ data: { videos: [vid('dQw4w9WgXcQ', 'Lo-Fi Beats')] } });
+    searchMock.mockResolvedValueOnce({ data: { videos: [vid('RgKAFK5djSk', 'Acoustic Morning')] } });
+    searchMock.mockResolvedValueOnce({ data: { videos: [vid('dQw4w9WgXcQ', 'Lo-Fi Beats')] } });
+
+    const { getByPlaceholderText, getByText, queryByText } = render(
+      <YouTubeSongsScreen navigation={navigation} />
+    );
+    await waitFor(() => {
+      expect(getByText(tamilHeading)).toBeTruthy();
+    });
+
+    const input = getByPlaceholderText(searchInputProps);
+    fireEvent.changeText(input, 'acoustic');
+    fireEvent(input, 'submitEditing');
+    await waitFor(() => {
+      expect(getByText('Acoustic Morning')).toBeTruthy();
+    });
+    const callsAfterSearch = searchMock.mock.calls.length;
+
+    const abortSpy = jest.spyOn(AbortController.prototype, 'abort');
+    try {
+      fireEvent.changeText(input, 'a');
+      // Abort is issued synchronously on every keystroke (cancels the
+      // in-flight search before the guard resets to the feed).
+      expect(abortSpy).toHaveBeenCalled();
+    } finally {
+      abortSpy.mockRestore();
+    }
+
+    await waitFor(() => {
+      // Reset to the default/feed state — never a search for 'a'.
+      expect(searchMock).toHaveBeenLastCalledWith(
+        tamilQuery,
+        SEARCH_LIMIT,
+        undefined,
+        expect.any(AbortSignal),
+        searchLocale
+      );
+    });
+    expect(searchMock.mock.calls.length).toBeGreaterThan(callsAfterSearch);
+    expect(searchMock.mock.calls.filter((c) => c[0] === 'a')).toHaveLength(0);
+    await waitFor(() => {
+      expect(getByText(tamilHeading)).toBeTruthy();
+      expect(getByText('Lo-Fi Beats')).toBeTruthy();
+    });
+    expect(queryByText('Acoustic Morning')).toBeNull();
   });
 });

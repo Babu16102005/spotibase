@@ -1,4 +1,4 @@
-# SpotiBase
+﻿# SpotiBase
 
 SpotiBase is a full-stack, Spotify-inspired music streaming platform. A single Expo (React Native) client powers iOS, Android and a web PWA, backed by a Spring Boot REST API with JWT authentication, STOMP WebSockets for realtime features, and object storage split between Cloudflare R2 (song files) and Supabase Storage (covers and avatars).
 
@@ -6,26 +6,26 @@ This is a monorepo: `backend/` (Spring Boot), `mobile/` (Expo app), plus infrast
 
 ## Features
 
-- **Authentication** — register, login, JWT access + refresh token pair, email password reset, and social login (Google/Apple provider endpoint)
-- **Content** — songs, albums and artists with cover art; audio upload in multiple formats including FLAC (50 MB upload limit, metadata parsed with jaudiotagger)
-- **Playlists** — create, update, duplicate, merge, reorder; public/private toggle; collaborative playlists with realtime edits and collaborators
-- **Queue & player** — queue management, play-next, move, clear, and save/restore queue state (offline persistence)
-- **Library** — liked songs/albums/artists, recently played, and full listening history
-- **Downloads** — per-song downloads for offline playback (quality selection), stats, and play tracking
-- **Notifications** — server-side notifications pushed in realtime over WebSocket
-- **Search** — full-text search with filters (language, year, genre, sort), type-ahead suggestions, and trending searches
-- **Home** — personalized sections and daily mixes computed from listening history and likes
-- **Admin** — dashboard, user management and roles, song/album moderation (soft delete/restore), featured content, and analytics (overview, user growth, top songs, top genres)
-- **Realtime** — STOMP WebSocket for presence, cross-device queue sync, and collaborative playlist updates
-- **Storage & Free Tier Safety** — songs stored on Cloudflare R2 (S3-compatible) with Range-enabled streaming redirects; covers/avatars on Supabase Storage. Includes an automated **9.5 GB Restriction Threshold** (out of 10 GB Free Tier capacity) enforcing an admin upload soft cap to prevent free-tier overages.
-- **Offline-ready mobile** — MMKV-backed cache, downloads screen, queue save/restore
-- **Web PWA** — Expo web export (service worker + manifest) served as static files
+- **Authentication** â€” register, login, JWT access + refresh token pair, email password reset, and social login (Google/Apple provider endpoint)
+- **Content** â€” songs, albums and artists with cover art; audio upload in multiple formats including FLAC (50 MB upload limit, metadata parsed with jaudiotagger)
+- **Playlists** â€” create, update, duplicate, merge, reorder; public/private toggle; collaborative playlists with realtime edits and collaborators
+- **Queue & player** â€” queue management, play-next, move, clear, and save/restore queue state (offline persistence)
+- **Library** â€” liked songs/albums/artists, recently played, and full listening history
+- **Downloads** â€” per-song downloads for offline playback (quality selection), stats, and play tracking
+- **Notifications** â€” server-side notifications pushed in realtime over WebSocket
+- **Search** â€” full-text search with filters (language, year, genre, sort), type-ahead suggestions, and trending searches
+- **Home** â€” personalized sections and daily mixes computed from listening history and likes
+- **Admin** â€” dashboard, user management and roles, song/album moderation (soft delete/restore), featured content, and analytics (overview, user growth, top songs, top genres)
+- **Realtime** â€” STOMP WebSocket for presence, cross-device queue sync, and collaborative playlist updates
+- **Storage & Free Tier Safety** â€” songs stored on Cloudflare R2 (S3-compatible) with Range-enabled streaming redirects; covers/avatars on Supabase Storage. Includes an automated **9.5 GB Restriction Threshold** (out of 10 GB Free Tier capacity) enforcing an admin upload soft cap to prevent free-tier overages.
+- **Offline-ready mobile** â€” MMKV-backed cache, downloads screen, queue save/restore
+- **Web PWA** â€” Expo web export (service worker + manifest) served as static files
 
 ## Architecture
 
 ```
 +--------------------------+          +------------------------------+
-|  Mobile app (Expo SDK 57)  |        |  Web PWA (expo web export)     |
+|  Mobile app (Expo SDK 58)  |        |  Web PWA (expo web export)     |
 |  iOS / Android / Web      |          |  served statically on :3000   |
 +------------+--------------+          +--------------+---------------+
              |  REST /api/v1 (JSON)                    |  REST + STOMP WS
@@ -60,15 +60,15 @@ This is a monorepo: `backend/` (Spring Boot), `mobile/` (Expo app), plus infrast
 | Backend | Spring Boot 3.4.1 (Java 17), Spring Security + JJWT 0.12.6, Spring Data JPA/Hibernate, Flyway, Springdoc OpenAPI 2.7.0, Spring WebSocket (STOMP), Spring AI (OpenAI starter), Bucket4j rate limiting, MapStruct, Lombok |
 | Database | PostgreSQL 16 (Supabase pooler in production, `postgres:16-alpine` in Docker), Redis 7 (provisioned in compose; not yet wired into the app) |
 | Storage | Cloudflare R2 (song files, S3 API), Supabase Storage (covers/avatars) via AWS S3 SDK 2.29.9 |
-| Mobile | Expo SDK 57, React Native 0.86, React 19.2, TypeScript, Zustand, TanStack Query, axios, @stomp/stompjs, react-native-track-player, shaka-player (web) |
+| Mobile | Expo SDK 58, React Native 0.88, React 19.3, TypeScript, Zustand, TanStack Query, axios, @stomp/stompjs, react-native-track-player, shaka-player (web) |
 | Infra | Docker Compose (dev + prod stacks), nginx reverse proxy, GitHub Actions CI/CD, Vercel (web deploys), EAS (native builds) |
 
 ## Repository layout
 
 | Path | Contents |
 |---|---|
-| `backend/` | Spring Boot app — `target/spotibase-backend-1.0.0.jar`, `src/main`, `src/test`, `Dockerfile`, `run-prod.ps1` |
-| `mobile/` | Expo app (iOS/Android/web) — `src/`, Jest tests, `Dockerfile.web` |
+| `backend/` | Spring Boot app â€” `target/spotibase-backend-1.0.0.jar`, `src/main`, `src/test`, `Dockerfile`, `run-prod.ps1` |
+| `mobile/` | Expo app (iOS/Android/web) â€” `src/`, Jest tests, `Dockerfile.web` |
 | `nginx/prod.conf` | Production reverse proxy (SSL, rate limiting, WebSocket) |
 | `docker-compose.yml` | Dev stack: Postgres :5433, backend :8080, Redis :6379 |
 | `docker-compose.prod.yml` | Prod stack: Postgres, Redis, backend :8088, mobile-web :3000, optional nginx |
@@ -90,7 +90,7 @@ Copy-Item .env.example .env
 
 Then fill in `.env` with real values (see the environment table below). A valid `JWT_SECRET` and the Supabase credentials are required for the backend to start meaningfully; other keys can be added as features are exercised.
 
-### Path A — One-command production launcher (Windows)
+### Path A â€” One-command production launcher (Windows)
 
 Requires Java 17+, Maven 3.9+, and Node.js (for the Expo web export). The launcher builds the backend jar if missing (`mvn clean package -DskipTests`), starts it against the Supabase database on **:8088**, exports the mobile web bundle if missing (`npx expo export --platform web --output-dir dist-prod`), serves it on **:3000**, then runs the 48 smoke tests.
 
@@ -113,7 +113,7 @@ Services land at:
 - Swagger UI: `http://localhost:8088/swagger-ui/index.html`
 - OpenAPI JSON: `http://localhost:8088/api-docs`
 
-### Path B — Docker dev stack
+### Path B â€” Docker dev stack
 
 ```powershell
 docker compose -f docker-compose.yml up -d
@@ -125,7 +125,7 @@ docker compose -f docker-compose.yml up -d
 
 The dev backend expects `SUPABASE_PROJECT_REF`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET` and `OPENAI_API_KEY` from `.env`; SMTP and R2 values default to empty.
 
-### Path C — Docker production stack
+### Path C â€” Docker production stack
 
 The prod compose file is self-contained (its own Postgres, Redis, backend on **8088**, `mobile-web` on **3000**, optional nginx on 80/443):
 
@@ -191,7 +191,7 @@ Native builds go through EAS (`eas build --platform android --profile production
 |---|---|---|
 | Backend unit/controller tests (JUnit 5) | `cd backend; mvn test` | 323 tests |
 | Mobile Jest tests | `cd mobile; npm test` | 119 tests |
-| Mobile lint / typecheck | `npm run lint` / `npm run typecheck` | — |
+| Mobile lint / typecheck | `npm run lint` / `npm run typecheck` | â€” |
 | Production smoke tests (needs running stack) | `powershell -ExecutionPolicy Bypass -File tests\prod-smoke-tests.ps1` | 48 tests |
 
 See `docs/testing.md` for details.
@@ -200,9 +200,9 @@ See `docs/testing.md` for details.
 
 GitHub Actions (`.github/workflows/`), triggered on push/PR to `main` and `develop`:
 
-1. `ci.yml` — `validate` job detects changed paths, then runs the backend and mobile pipelines and a `docker-compose-test` integration job (builds both images, boots Postgres + backend on :8088, health-checks backend and the web bundle on :3000), finishing with a notify step.
-2. `backend.yml` — Maven tests against a Postgres 16 service, package the jar, build/push a `ghcr.io` image, then deploy-staging (develop) / deploy-production (main) hooks.
-3. `mobile.yml` — lint + typecheck, Jest with coverage, Expo web export (verifies `index.html`, `manifest.json`, `sw.js`), EAS Android/iOS builds, and Vercel preview/production deploys of the web build.
+1. `ci.yml` â€” `validate` job detects changed paths, then runs the backend and mobile pipelines and a `docker-compose-test` integration job (builds both images, boots Postgres + backend on :8088, health-checks backend and the web bundle on :3000), finishing with a notify step.
+2. `backend.yml` â€” Maven tests against a Postgres 16 service, package the jar, build/push a `ghcr.io` image, then deploy-staging (develop) / deploy-production (main) hooks.
+3. `mobile.yml` â€” lint + typecheck, Jest with coverage, Expo web export (verifies `index.html`, `manifest.json`, `sw.js`), EAS Android/iOS builds, and Vercel preview/production deploys of the web build.
 
 ## Deployment
 
@@ -230,17 +230,17 @@ To safely operate within the **10 GB Free Tier limit** of Cloudflare R2 and Supa
 | Symptom | Check |
 |---|---|
 | Backend won't start | `backend\prod_stdout.log` and `backend\prod_stderr.log` (launcher), or `docker compose -f docker-compose.prod.yml logs backend` |
-| Health shows DOWN | `http://localhost:8088/actuator/health` — DB reachable? `.env` correct? SMTP health is disabled by design so it never pulls health DOWN |
-| Port already in use | Launcher skips or fails on :8088 / :3000. Note: local Apache often owns port 8080 — prod intentionally uses 8088 |
+| Health shows DOWN | `http://localhost:8088/actuator/health` â€” DB reachable? `.env` correct? SMTP health is disabled by design so it never pulls health DOWN |
+| Port already in use | Launcher skips or fails on :8088 / :3000. Note: local Apache often owns port 8080 â€” prod intentionally uses 8088 |
 | JVM crash | Look for `hs_err_pid*.log` crash files in `backend/` (the JVM working directory) |
 | Frontend not reachable | `frontend_stdout.log` / `frontend_stderr.log` at repo root; rebuild with `npm run web:build` |
 | Smoke tests fail | Run `powershell -ExecutionPolicy Bypass -File tests\prod-smoke-tests.ps1 -Quiet` to get the failure list |
 
 ## Documentation index
 
-- `docs/setup.md` — local development setup (backend, mobile, Supabase)
-- `docs/api-overview.md` — REST endpoint map, auth model, WebSocket topics
-- `docs/deployment.md` — production deployment walkthrough
-- `docs/testing.md` — test suites, how to run them, CI coverage
+- `docs/setup.md` â€” local development setup (backend, mobile, Supabase)
+- `docs/api-overview.md` â€” REST endpoint map, auth model, WebSocket topics
+- `docs/deployment.md` â€” production deployment walkthrough
+- `docs/testing.md` â€” test suites, how to run them, CI coverage
 #   s p o t i b a s e  
  

@@ -270,10 +270,19 @@ export const useHomeTiers = ({ enabled = true }: UseHomeTiersOptions = {}) => {
           return;
         }
         const status = err?.response?.status;
-        const isAuthError =
+        // Backend contract: 401 = dead session (UnauthorizedException after a
+        // failed refresh) -> log out. 403 = authenticated-but-forbidden and
+        // must NEVER log out (show the error instead). A refresh-transient
+        // 401 carries _refreshNetworkError and also never logs out.
+        const isSessionExpired =
+          status === 401 && !err?._refreshNetworkError;
+        const isForbidden = status === 403;
+        const isAuthNoRetry =
           (status === 401 || status === 403) && !err?._refreshNetworkError;
+        // 403 without a flag is still deterministic (forbidden): never retry.
+        const noRetry = isAuthNoRetry || isForbidden;
         if (
-          isAuthError &&
+          isSessionExpired &&
           useAuthStore.getState().isAuthenticated
         ) {
           // Session expired/revoked: log out once (RootNavigator redirects
@@ -282,7 +291,7 @@ export const useHomeTiers = ({ enabled = true }: UseHomeTiersOptions = {}) => {
           try {
             useAuthStore.getState().logout();
           } catch {}
-        } else if (!isAuthError && !isRetry && sectionsRef.current[tier].length === 0) {
+        } else if (!noRetry && !isRetry && sectionsRef.current[tier].length === 0) {
           // Single automatic retry for a flaky first failure with nothing
           // on screen (e.g. timeout): wait ~500ms then retry once in the
           // same session if still current + mounted. The retry re-enters
@@ -313,7 +322,7 @@ export const useHomeTiers = ({ enabled = true }: UseHomeTiersOptions = {}) => {
           return;
         } else if (!err?.response) {
           // Offline/transient: keep the cached feed silently.
-        } else if (!isAuthError) {
+        } else if (!isSessionExpired && !isForbidden && !err?._refreshNetworkError) {
           console.error(`Failed to fetch home tier ${tier}:`, err);
         }
         // Never overwrite fresh data with a failure — sections stay as-is.

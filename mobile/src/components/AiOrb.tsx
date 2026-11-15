@@ -21,6 +21,7 @@ import Animated, {
   withSequence,
   Easing,
   cancelAnimation,
+  interpolate,
 } from 'react-native-reanimated';
 import { usePlayerStore, useThemeStore } from '../store';
 import { useYouTubePlayerStore } from '../store/youtubePlayerStore';
@@ -33,6 +34,7 @@ import { VoiceLiveResults } from './VoiceLiveResults';
 import type { SongResponse } from '../types';
 import { SiriOrb } from './SiriOrb';
 import { StarOrb } from './StarOrb';
+import { Strands } from './Strands';
 import Icon from './Icon';
 import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
 import {
@@ -47,6 +49,7 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
+import * as Speech from 'expo-speech';
 
 type AiState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'done' | 'error';
 
@@ -55,6 +58,12 @@ const { width: SCREEN_W } = Dimensions.get('window');
 // 7s listen window (mirrors the scheduleAutoStop timeout below). Drives the
 // "Listening... (live) · Ns" countdown shown in the sheet and LIVE badge.
 const LISTEN_WINDOW_MS = 7000;
+
+// Double-tap window for the orb kill-switch: two presses within this window
+// while active (listening/thinking/speaking) cancel everything and go idle
+// — no upload, no new listen. Manual timestamp (RN has no onDoublePress)
+// keeps web + native parity.
+const DOUBLE_TAP_WINDOW_MS = 400;
 
 export const AiOrb: React.FC = () => {
   const { theme } = useThemeStore();
@@ -97,6 +106,9 @@ export const AiOrb: React.FC = () => {
     }),
   });
 
+  // Active AI state: rest of the time (idle) -> normal orb; once clicked/active -> Strands
+  const isUserActive = state !== 'idle';
+
   // Live countdown for the 7s listen window.
   const listenStartedAtRef = useRef<number>(0);
   const [listenSecsLeft, setListenSecsLeft] = useState<number>(
@@ -136,10 +148,78 @@ export const AiOrb: React.FC = () => {
   // and a second command never runs while one is already in flight.
   const actionInFlightRef = useRef(false);
   const lastCommandRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
+  // Double-tap kill-switch: timestamp of the last orb press.
+  const lastTapAtRef = useRef(0);
+  // Generation token: incremented by stopAll so late /ai/text + /ai/voice
+  // responses (and their trailing idle timers) are dropped as stale instead
+  // of playing/speaking after the user cancelled.
+  const aiRequestTokenRef = useRef(0);
 
   const setTranscriptSync = (t: string) => {
     transcriptRef.current = t;
     setTranscript(t);
+  };
+
+  // Jarvis voice (expo-speech SDK v57.0.0, Expo Go compatible): every Jarvis
+  // reply is spoken aloud via Speech.speak. speakReply sets state 'speaking'
+  // while talking; onDone/onStopped/onError -> 'done'. stopSpeaking guards a
+  // missing native module so web/jest never crash. speakTokenRef invalidates
+  // stale callbacks when a new utterance starts or listening interrupts
+  // (mutual exclusion: mic tap stops TTS).
+  const speakTokenRef = useRef(0);
+  const stopSpeaking = async (): Promise<void> => {
+    speakTokenRef.current++;
+    try {
+      const mod: any = Speech as any;
+      if (mod && typeof mod.stop === 'function') {
+        await mod.stop();
+      }
+    } catch {}
+  };
+  const speakReply = (text?: string | null): void => {
+    const clean = (text || '').trim();
+    if (!clean) return;
+    try {
+      const mod: any = Speech as any;
+      if (!mod || typeof mod.speak !== 'function') return;
+      // Stop previous utterance before queuing the new one (expo-speech
+      // queues by default; stop() clears the queue so only the latest
+      // Jarvis line is audible). Fire-and-forget: never await here.
+      try {
+        const maybe = mod.stop();
+        if (maybe && typeof maybe.catch === 'function') maybe.catch(() => {});
+      } catch {}
+      const myToken = ++speakTokenRef.current;
+      setState('speaking');
+      // After the utterance finishes (or is stopped / errors), show 'done'
+      // briefly, then fall back to idle so the Strands design returns to the
+      // normal orb instead of sticking around after the work is complete.
+      const settleToIdle = () => {
+        setTimeout(() => {
+          if (speakTokenRef.current === myToken) setState('idle');
+        }, 1500);
+      };
+      mod.speak(clean, {
+        onDone: () => {
+          if (speakTokenRef.current === myToken) {
+            setState('done');
+            settleToIdle();
+          }
+        },
+        onStopped: () => {
+          if (speakTokenRef.current === myToken) {
+            setState('done');
+            settleToIdle();
+          }
+        },
+        onError: () => {
+          if (speakTokenRef.current === myToken) {
+            setState('done');
+            settleToIdle();
+          }
+        },
+      });
+    } catch {}
   };
 
   // Helpers: classify mic contention (dual-mic race) vs other failures.
@@ -278,6 +358,7 @@ export const AiOrb: React.FC = () => {
   });
 
   // Best-effort cleanup so a stray recorder/STT session never outlives the orb.
+  // Also stops Jarvis TTS (mutual exclusion on unmount).
   useEffect(() => {
     return () => {
       if (autoStopTimerRef.current) {
@@ -285,6 +366,11 @@ export const AiOrb: React.FC = () => {
         autoStopTimerRef.current = null;
       }
       isListeningRef.current = false;
+      speakTokenRef.current++;
+      try {
+        const maybe = (Speech as any)?.stop?.();
+        if (maybe && typeof maybe.catch === 'function') maybe.catch(() => {});
+      } catch {}
       if (Platform.OS !== 'web') {
         try {
           ExpoSpeechRecognitionModule.abort();
@@ -391,6 +477,41 @@ export const AiOrb: React.FC = () => {
     opacity: glowOpacity.value * 1.25,
   }));
 
+  // Commercial-grade transition between Normal Orb (idle) and Strands (active after click)
+  const transitionProgress = useSharedValue(0);
+
+  useEffect(() => {
+    if (isUserActive) {
+      transitionProgress.value = withTiming(1, {
+        duration: 440,
+        easing: Easing.bezier(0.22, 1, 0.36, 1),
+      });
+    } else {
+      transitionProgress.value = withTiming(0, {
+        duration: 480,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      });
+    }
+  }, [isUserActive]);
+
+  const normalOrbAnimatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(transitionProgress.value, [0, 1], [1, 0.32]);
+    const opacity = interpolate(transitionProgress.value, [0, 0.65, 1], [1, 0.2, 0]);
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
+  const strandsAnimatedStyle = useAnimatedStyle(() => {
+    const scale = interpolate(transitionProgress.value, [0, 0.85, 1], [0.35, 1.04, 1]);
+    const opacity = interpolate(transitionProgress.value, [0, 0.35, 1], [0, 0.85, 1]);
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
   const shouldDedupeCommand = (text: string): boolean => {
     const norm = text.trim().toLowerCase();
     const now = Date.now();
@@ -398,6 +519,14 @@ export const AiOrb: React.FC = () => {
     if (norm && norm === lastCommandRef.current.text && now - lastCommandRef.current.at < 1500) return true;
     lastCommandRef.current = { text: norm, at: now };
     return false;
+  };
+
+  const getResultDisplayText = (data: any): string | undefined => {
+    const results: any[] = data?.results || [];
+    for (const r of results) {
+      if (r && typeof r.displayText === 'string' && r.displayText.trim()) return r.displayText;
+    }
+    return undefined;
   };
 
   /**
@@ -408,6 +537,7 @@ export const AiOrb: React.FC = () => {
    * NOTE: backend PLAY_BY_MOOD also pushes STOMP QUEUE_SYNC, but we
    * intentionally do NOT subscribe to it here — the playMultiple below is the
    * one explicit play, so there is never a double play.
+   * Returns the exact bubble text that was set (so executeAction can speak it).
    */
   const playBackendSongIds = async (
     songIds: string[],
@@ -417,7 +547,7 @@ export const AiOrb: React.FC = () => {
     // Default 5-cap preserves every existing caller; PLAY_LIKED passes 20 so
     // the full backend-served liked queue (<=20 ids) plays instead of 5.
     maxCount: number = 5,
-  ): Promise<boolean> => {
+  ): Promise<string> => {
     const uniqueIds = [...new Set((songIds || []).filter(Boolean))].slice(0, maxCount);
     if (uniqueIds.length > 0) {
       const songs: any[] = [];
@@ -431,8 +561,9 @@ export const AiOrb: React.FC = () => {
         await playerState.playMultiple(songs, 0);
         // Success refines the pre-surfaced displayText into a concrete
         // "Playing" line; empty paths below keep displayText / No results.
-        setResponse(playLabel ? `Playing ${playLabel} - ${songs[0].title}` : `Playing ${songs[0].title}`);
-        return true;
+        const text = playLabel ? `Playing ${playLabel} - ${songs[0].title}` : `Playing ${songs[0].title}`;
+        setResponse(text);
+        return text;
       }
     }
     // Fallback only when backend was empty/unresolvable: one searchApi call.
@@ -443,36 +574,112 @@ export const AiOrb: React.FC = () => {
         const s = r.data?.songs || [];
         if (s.length > 0) {
           await playerState.playMultiple(s, 0);
-          setResponse(`Playing ${q} - ${s[0].title}`);
-          return true;
+          const text = `Playing ${q} - ${s[0].title}`;
+          setResponse(text);
+          return text;
         }
       } catch {}
     }
-    setResponse(resultDisplayText || (q ? `No results for '${q}'` : 'No results'));
-    return false;
+    const text = resultDisplayText || (q ? `No results for '${q}'` : 'No results');
+    setResponse(text);
+    return text;
+  };
+
+  const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+  /**
+   * In-app YouTube playback for AI results. The backend lyric chain
+   * (youtubeLyricFallback) returns QUEUED_YOUTUBE + videoId inside
+   * results[i] while the action stays PLAY/SEARCH_* — so this must run
+   * before the action switch, or the video is silently dropped and only
+   * local songs (or "No results") play. Plays via the global single
+   * YouTube player (same as tapping a row) — never an external app.
+   * Returns the spoken line, or null when this result is not a video.
+   */
+  const playYoutubeResult = (result: any): string | null => {
+    const rawId = result?.videoId;
+    const videoId = typeof rawId === 'string' ? rawId.trim() : '';
+    if (!YOUTUBE_ID_RE.test(videoId)) return null;
+    const ytTitle =
+      (typeof result?.title === 'string' && result.title.trim()) || 'Unknown title';
+    const ytChannel =
+      (typeof result?.channelTitle === 'string' && result.channelTitle.trim()) || '';
+    const video: YouTubeVideo = {
+      videoId,
+      title: ytTitle,
+      channelTitle: ytChannel,
+      thumbnailUrl:
+        (typeof result?.thumbnailUrl === 'string' && result.thumbnailUrl) ||
+        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    };
+    useYouTubePlayerStore.getState().playVideo(video);
+    const ytText = `Playing ${ytTitle} on YouTube`;
+    setResponse(ytText);
+    return ytText;
   };
 
   const executeAction = async (data: any) => {
     const actions: any[] = data.actions || [];
     const results: any[] = data.results || [];
+    let lastSpoken: string | undefined;
     for (let i = 0; i < actions.length; i++) {
       const act = actions[i];
       const action = act.action as string;
       const params = act.parameters || {};
       const result = results[i] || {};
+      // Lyric-identified YouTube video (any action): play in-app first.
+      if (result?.status === 'QUEUED_YOUTUBE') {
+        const spoken = playYoutubeResult(result);
+        if (spoken) {
+          lastSpoken = spoken;
+          continue;
+        }
+      }
       try {
         switch (action) {
+          case 'CHAT': {
+            // Free conversation (no music action): display + speak the Jarvis
+            // text, never playback or search. Contract: results[i] =
+            // {status: CHAT_OK, songs: [], displayText: <Jarvis text>},
+            // top-level response mirrors it.
+            const raw =
+              (typeof result.displayText === 'string' && result.displayText.trim()
+                ? result.displayText
+                : (data as any)?.response || (data as any)?.displayText || '');
+            const clean = String(raw || '').trim();
+            if (clean) {
+              setResponse(clean);
+              lastSpoken = clean;
+            }
+            break;
+          }
           case 'NEXT':
             await playerState.next();
+            if (typeof result.displayText === 'string' && result.displayText.trim()) {
+              setResponse(result.displayText);
+              lastSpoken = result.displayText;
+            }
             break;
           case 'PREVIOUS':
             await playerState.previous();
+            if (typeof result.displayText === 'string' && result.displayText.trim()) {
+              setResponse(result.displayText);
+              lastSpoken = result.displayText;
+            }
             break;
           case 'PAUSE':
             await playerState.pause();
+            if (typeof result.displayText === 'string' && result.displayText.trim()) {
+              setResponse(result.displayText);
+              lastSpoken = result.displayText;
+            }
             break;
           case 'RESUME':
             await playerState.resume();
+            if (typeof result.displayText === 'string' && result.displayText.trim()) {
+              setResponse(result.displayText);
+              lastSpoken = result.displayText;
+            }
             break;
           case 'PLAY':
           case 'PLAY_SONG': {
@@ -489,17 +696,29 @@ export const AiOrb: React.FC = () => {
               '';
             if (songIds.length === 0 && !fallbackQuery.trim()) {
               await playerState.resume();
+              if (typeof result.displayText === 'string' && result.displayText.trim()) {
+                setResponse(result.displayText);
+                lastSpoken = result.displayText;
+              }
               break;
             }
             const label = params.artist || params.song || fallbackQuery || 'results';
-            await playBackendSongIds(songIds, result.displayText, fallbackQuery, label);
+            lastSpoken = await playBackendSongIds(songIds, result.displayText, fallbackQuery, label);
             break;
           }
           case 'SHUFFLE_ON':
             playerState.setShuffle(true);
+            if (typeof result.displayText === 'string' && result.displayText.trim()) {
+              setResponse(result.displayText);
+              lastSpoken = result.displayText;
+            }
             break;
           case 'SHUFFLE_OFF':
             playerState.setShuffle(false);
+            if (typeof result.displayText === 'string' && result.displayText.trim()) {
+              setResponse(result.displayText);
+              lastSpoken = result.displayText;
+            }
             break;
           case 'LIKE_CURRENT': {
             // call like API if current track exists
@@ -507,6 +726,10 @@ export const AiOrb: React.FC = () => {
               const curId = playerState.currentTrack?.id;
               if (curId) await songApi.like(curId);
             } catch {}
+            if (typeof result.displayText === 'string' && result.displayText.trim()) {
+              setResponse(result.displayText);
+              lastSpoken = result.displayText;
+            }
             break;
           }
           case 'SEARCH_ARTIST':
@@ -517,7 +740,7 @@ export const AiOrb: React.FC = () => {
             const query =
               params.query || params.song || params.artist || params.album || params.title || params.name || '';
             const label = params.artist || params.song || query || 'results';
-            await playBackendSongIds(songIds, result.displayText, query, label);
+            lastSpoken = await playBackendSongIds(songIds, result.displayText, query, label);
             break;
           }
           case 'PLAY_BY_MOOD':
@@ -530,7 +753,7 @@ export const AiOrb: React.FC = () => {
             const vibe = Array.isArray(params.vibe) ? params.vibe[0] : params.vibe;
             const fallbackQuery = params.mood || params.genre || params.language || vibe || '';
             const label = params.mood || params.genre || params.language || vibe || 'matching';
-            await playBackendSongIds(songIds, result.displayText, fallbackQuery, label);
+            lastSpoken = await playBackendSongIds(songIds, result.displayText, fallbackQuery, label);
             break;
           }
           case 'PLAY_RANDOM': {
@@ -539,7 +762,7 @@ export const AiOrb: React.FC = () => {
             // with no fallback query — empty/unresolvable ids keeps the
             // backend displayText (or "No results").
             const songIds: string[] = result.songs || [];
-            await playBackendSongIds(songIds, result.displayText);
+            lastSpoken = await playBackendSongIds(songIds, result.displayText);
             break;
           }
           case 'PLAY_LIKED': {
@@ -548,7 +771,7 @@ export const AiOrb: React.FC = () => {
             // backend-first path, widened to 20 so the full liked queue
             // plays; success refines to "Playing liked songs - <title>".
             const songIds: string[] = result.songs || [];
-            await playBackendSongIds(songIds, result.displayText, '', 'liked songs', 20);
+            lastSpoken = await playBackendSongIds(songIds, result.displayText, '', 'liked songs', 20);
             break;
           }
           case 'PLAY_SIMILAR': {
@@ -566,6 +789,9 @@ export const AiOrb: React.FC = () => {
                 }
                 if (songs.length > 0) {
                   await playerState.playMultiple(songs, 0);
+                  const text = `Playing ${songs[0].title}`;
+                  setResponse(text);
+                  lastSpoken = text;
                   break;
                 }
               }
@@ -575,7 +801,17 @@ export const AiOrb: React.FC = () => {
               if (seed) {
                 const r = await searchApi.search(seed, 'song', 0);
                 const s = (r.data?.songs || []).filter((t: any) => t.id !== cur?.id);
-                if (s.length > 0) await playerState.playMultiple(s, 0);
+                if (s.length > 0) {
+                  await playerState.playMultiple(s, 0);
+                  const text = `Playing ${s[0].title}`;
+                  setResponse(text);
+                  lastSpoken = text;
+                  break;
+                }
+              }
+              if (typeof result.displayText === 'string' && result.displayText.trim()) {
+                setResponse(result.displayText);
+                lastSpoken = result.displayText;
               }
             } catch {}
             break;
@@ -588,7 +824,13 @@ export const AiOrb: React.FC = () => {
                 result.songId || params.songId || playerState.currentTrack?.id;
               if (!targetId) break;
               const alreadyQueued = (playerState.queue || []).find((t: any) => t.id === targetId);
-              if (alreadyQueued) break;
+              if (alreadyQueued) {
+                if (typeof result.displayText === 'string' && result.displayText.trim()) {
+                  setResponse(result.displayText);
+                  lastSpoken = result.displayText;
+                }
+                break;
+              }
               try {
                 const r = await songApi.getById(targetId);
                 if (r.data) await playerState.addToQueue(r.data);
@@ -597,33 +839,26 @@ export const AiOrb: React.FC = () => {
                   await playerState.addToQueue(playerState.currentTrack);
                 }
               }
+              if (typeof result.displayText === 'string' && result.displayText.trim()) {
+                setResponse(result.displayText);
+                lastSpoken = result.displayText;
+              }
             } catch {}
             break;
           }
           case 'PLAY_YOUTUBE': {
-            // Backend QUEUED_YOUTUBE: lyric-identified song not in the local
-            // catalog. Params carry { videoId, title, channelTitle }. Plays on
-            // the same global single player as YouTubeSongsScreen taps —
-            // playVideo() pauses audio + mutual-exclusion internally, so no
-            // explicit pause here (mirrors the tap handler).
-            const rawId = params.videoId ?? result.videoId;
-            const videoId = typeof rawId === 'string' ? rawId.trim() : '';
-            if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
-              if (result.displayText) setResponse(result.displayText);
-              break;
+            // Explicit YouTube request: videoId may ride in params (AI) or
+            // in results[i] (backend QUEUED_YOUTUBE). Same in-app single
+            // player as taps — never an external app.
+            const spoken =
+              playYoutubeResult({ ...result, ...params }) ??
+              playYoutubeResult(result);
+            if (spoken) {
+              lastSpoken = spoken;
+            } else if (result.displayText) {
+              setResponse(result.displayText);
+              lastSpoken = result.displayText;
             }
-            const ytTitle =
-              params.title || result.title || 'Unknown title';
-            const ytChannel =
-              params.channelTitle || result.channelTitle || '';
-            const video: YouTubeVideo = {
-              videoId,
-              title: ytTitle,
-              channelTitle: ytChannel,
-              thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-            };
-            useYouTubePlayerStore.getState().playVideo(video);
-            setResponse(`Playing ${ytTitle} on YouTube`);
             break;
           }
           default:
@@ -634,6 +869,12 @@ export const AiOrb: React.FC = () => {
         console.warn('AI action failed', action, e);
       }
     }
+    // Jarvis voice: speak the final reply once (short displayText/response
+    // as-is). Prefers the refined "Playing ..." line when playback succeeded,
+    // else the backend displayText / top-level response.
+    const fallbackText = getResultDisplayText(data) || (data as any)?.response || (data as any)?.displayText;
+    const toSpeak = (lastSpoken || fallbackText || '').trim();
+    if (toSpeak) speakReply(toSpeak);
   };
   const searchApiSearch = async (q: string) => {
     try {
@@ -643,25 +884,18 @@ export const AiOrb: React.FC = () => {
     } catch {}
   };
 
-  const getResultDisplayText = (data: any): string | undefined => {
-    const results: any[] = data?.results || [];
-    for (const r of results) {
-      if (r && typeof r.displayText === 'string' && r.displayText.trim()) return r.displayText;
-    }
-    return undefined;
-  };
-
   const handleText = async (text: string) => {
     if (!text.trim()) return;
     // Dedupe rapid taps (e.g. double-tapped chips): same text within 1.5s or
     // a command already in flight is ignored.
     if (shouldDedupeCommand(text)) return;
     actionInFlightRef.current = true;
+    const myReq = aiRequestTokenRef.current;
     // Freeze live partials: the full /ai/text result now owns the sheet.
     voice.cancel();
     setTranscriptSync(text);
     setState('thinking');
-    setShowSheet(true);
+    if (isKeyboardMode) setShowSheet(true);
     try {
       const ctx = {
         currentSongId: playerState.currentTrack?.id,
@@ -669,29 +903,43 @@ export const AiOrb: React.FC = () => {
         playing: true,
       };
       const res = await aiApi.text(text, ctx);
+      // Double-tap stop invalidates this generation: drop the late result so
+      // nothing plays or speaks after the user cancelled.
+      if (myReq !== aiRequestTokenRef.current) return;
       const data: any = res.data;
       if (data.clarificationNeeded) {
-        setResponse(data.clarificationQuestion || 'Could you rephrase?');
-        setState('error');
+        const q = data.clarificationQuestion || 'Could you rephrase?';
+        setResponse(q);
+        // Jarvis voice: speak the clarification (short as-is).
+        speakReply(q);
       } else {
         // Surface backend displayText (per-result) first; executeAction refines
         // it to "Playing <title>" on success or keeps "No results" on empty.
         setResponse(getResultDisplayText(data) || data.response || `Done: ${data.actions?.map((a: any) => a.action).join(', ')}`);
         setState('done');
         await executeAction(data);
+        if (myReq !== aiRequestTokenRef.current) return;
       }
       setTimeout(() => {
+        if (myReq !== aiRequestTokenRef.current) return;
         setState('idle');
         // keep sheet open for 2s to show response
-        setTimeout(() => setShowSheet(false), 1200);
+        setTimeout(() => {
+          if (myReq !== aiRequestTokenRef.current) return;
+          setShowSheet(false);
+        }, 1200);
       }, 900);
     } catch (e: any) {
+      if (myReq !== aiRequestTokenRef.current) return;
       const msg = e?.response?.data?.message || e?.message || 'AI unavailable';
       setResponse(msg);
       setState('error');
-      setTimeout(() => setState('idle'), 2000);
+      setTimeout(() => {
+        if (myReq !== aiRequestTokenRef.current) return;
+        setState('idle');
+      }, 2000);
     } finally {
-      actionInFlightRef.current = false;
+      if (myReq === aiRequestTokenRef.current) actionInFlightRef.current = false;
     }
   };
 
@@ -699,11 +947,12 @@ export const AiOrb: React.FC = () => {
     const isPlaceholder = (t?: string) => !t || t === 'Listening...' || t === 'Listening... speak now' || t.trim() === '';
     const cleanFallback = isPlaceholder(transcriptFallback) ? undefined : transcriptFallback;
     if (!uri && !cleanFallback) return;
+    const myReq = aiRequestTokenRef.current;
     // Freeze live partials: the full /ai/voice upload now owns the sheet.
     voice.cancel();
     setTranscriptSync(cleanFallback || 'Listening...');
     setState('thinking');
-    setShowSheet(true);
+    if (isKeyboardMode) setShowSheet(true);
     try {
       const ctx = {
         currentSongId: playerState.currentTrack?.id,
@@ -748,22 +997,33 @@ export const AiOrb: React.FC = () => {
                   : 'audio.m4a';
         res = await aiApi.voice(uri, cleanFallback, ctx, filename);
       }
+      // Double-tap stop invalidates this generation: drop the late result so
+      // nothing plays or speaks after the user cancelled.
+      if (myReq !== aiRequestTokenRef.current) return;
       const data: any = res.data;
       // backend may echo transcript in data.transcript
       if (data.transcript) setTranscriptSync(data.transcript);
       if (data.clarificationNeeded) {
-        setResponse(data.clarificationQuestion || 'Could you rephrase?');
-        setState('error');
+        const q = data.clarificationQuestion || 'Could you rephrase?';
+        setResponse(q);
+        // Jarvis voice: speak the clarification (short as-is).
+        speakReply(q);
       } else {
         setResponse(getResultDisplayText(data) || data.response || `Done: ${data.actions?.map((a: any) => a.action).join(', ')}`);
         setState('done');
         await executeAction(data);
+        if (myReq !== aiRequestTokenRef.current) return;
       }
       setTimeout(() => {
+        if (myReq !== aiRequestTokenRef.current) return;
         setState('idle');
-        setTimeout(() => setShowSheet(false), 1200);
+        setTimeout(() => {
+          if (myReq !== aiRequestTokenRef.current) return;
+          setShowSheet(false);
+        }, 1200);
       }, 900);
     } catch (e: any) {
+      if (myReq !== aiRequestTokenRef.current) return;
       // Missing-audio (backend 400 "Required part") vs mic vs upload failure:
       // always prefix specifically and surface status+message, never generic.
       const status = e?.response?.status as number | undefined;
@@ -792,7 +1052,10 @@ export const AiOrb: React.FC = () => {
         : ' — try again or type your command';
       setResponse(`${prefix}${statusPart}${msgPart}${hint}`);
       setState('error');
-      setTimeout(() => setState('idle'), 2000);
+      setTimeout(() => {
+        if (myReq !== aiRequestTokenRef.current) return;
+        setState('idle');
+      }, 2000);
     }
   };
 
@@ -801,6 +1064,61 @@ export const AiOrb: React.FC = () => {
       clearTimeout(autoStopTimerRef.current);
       autoStopTimerRef.current = null;
     }
+  };
+
+  /**
+   * Double-tap kill-switch: stop whatever the orb is doing (listening /
+   * thinking / speaking) and park at idle — no upload, no new listen, no
+   * late play/speak side effects.
+   *
+   * - listening: discards mic audio (revoke blob on web, drop recorder uri
+   *   natively) + aborts STT + freezes live partials via voice.cancel.
+   * - thinking: invalidates the in-flight /ai/text + /ai/voice generation
+   *   (aiRequestTokenRef) so late responses return early and trailing
+   *   idle/close timers no-op.
+   * - speaking: Speech.stop (expo-speech v57: interrupts + clears queue) +
+   *   speakTokenRef invalidation so stale onDone/onStopped never fire.
+   * Keeps transcript/response context (does not wipe the sheet) and clears
+   * only placeholder "Listening..." text.
+   */
+  const stopAll = async (): Promise<void> => {
+    aiRequestTokenRef.current++;
+    actionInFlightRef.current = false;
+    clearAutoStop();
+    isListeningRef.current = false;
+    try { voice.cancel(); } catch {}
+    await stopSpeaking();
+    if (Platform.OS === 'web') {
+      try { recognitionRef.current?.stop(); } catch {}
+      recognitionRef.current = null;
+      try {
+        const rec: any = mediaRecorderRef.current;
+        if (rec && rec.state !== 'inactive') {
+          try { rec.onstop = null; } catch {}
+          try { rec.stop(); } catch {}
+          try { rec.stream?.getTracks?.()?.forEach?.((t: any) => { try { t.stop(); } catch {} }); } catch {}
+        } else {
+          try { rec?.stream?.getTracks?.()?.forEach?.((t: any) => { try { t.stop(); } catch {} }); } catch {}
+        }
+      } catch {}
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+    } else {
+      try { ExpoSpeechRecognitionModule.abort(); } catch {}
+      try {
+        const rec = recorderRef.current;
+        recorderRef.current = null;
+        if (rec) {
+          try {
+            const maybeStop = (rec as any).stop();
+            if (maybeStop && typeof maybeStop.catch === 'function') maybeStop.catch(() => {});
+          } catch {}
+        }
+      } catch {}
+    }
+    sttAudioUriRef.current = '';
+    if (isPlaceholderTranscript(transcriptRef.current)) setTranscriptSync('');
+    setState('idle');
   };
 
   // Stable waveform heights: random once per listening session (memo), not
@@ -929,13 +1247,14 @@ export const AiOrb: React.FC = () => {
       setResponse(display);
       setState('idle');
       setIsKeyboardMode(true);
+      setShowSheet(true);
       Alert.alert(
         'Microphone Permission',
         'SpotiBase needs microphone for AI voice. Please Allow in Settings.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Open Settings', onPress: () => Linking.openSettings?.() || Linking.openURL('app-settings:') },
-          { text: 'Type Instead', onPress: () => setIsKeyboardMode(true) },
+          { text: 'Type Instead', onPress: () => { setIsKeyboardMode(true); setShowSheet(true); } },
         ]
       );
       return;
@@ -1199,6 +1518,7 @@ export const AiOrb: React.FC = () => {
     // so rapid double-taps result in a single playMultiple.
     if (shouldDedupeCommand(`partial:${song.id || song.title}`)) return;
     actionInFlightRef.current = true;
+    const myReq = aiRequestTokenRef.current;
     clearAutoStop();
     isListeningRef.current = false;
     voice.cancel();
@@ -1222,18 +1542,29 @@ export const AiOrb: React.FC = () => {
     setState('thinking');
     try {
       await playerState.playMultiple(songs, index);
-      setResponse(`Playing ${song.title}`);
-      setState('done');
+      if (myReq !== aiRequestTokenRef.current) return;
+      const text = `Playing ${song.title}`;
+      setResponse(text);
+      // Jarvis voice: speak the confirmed play line.
+      speakReply(text);
       setTimeout(() => {
+        if (myReq !== aiRequestTokenRef.current) return;
         setState('idle');
-        setTimeout(() => setShowSheet(false), 1200);
+        setTimeout(() => {
+          if (myReq !== aiRequestTokenRef.current) return;
+          setShowSheet(false);
+        }, 1200);
       }, 900);
     } catch {
+      if (myReq !== aiRequestTokenRef.current) return;
       setResponse(`Could not play ${song.title} — try again or type your command.`);
       setState('error');
-      setTimeout(() => setState('idle'), 2000);
+      setTimeout(() => {
+        if (myReq !== aiRequestTokenRef.current) return;
+        setState('idle');
+      }, 2000);
     } finally {
-      actionInFlightRef.current = false;
+      if (myReq === aiRequestTokenRef.current) actionInFlightRef.current = false;
     }
   };
 
@@ -1241,9 +1572,26 @@ export const AiOrb: React.FC = () => {
     // Haptic
     try { const Haptics = require('expo-haptics'); await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
 
+    // Double-tap kill-switch: two presses within DOUBLE_TAP_WINDOW_MS while
+    // the orb is active stop everything (listening/thinking/speaking) and
+    // park at idle — no upload, no new listen. Single-tap paths below are
+    // unchanged (listening tap submits, thinking tap is ignored, idle tap
+    // stops TTS then listens).
+    const now = Date.now();
+    const isDoubleTap = now - lastTapAtRef.current < DOUBLE_TAP_WINDOW_MS;
+    lastTapAtRef.current = now;
+    if (isDoubleTap && state !== 'idle') {
+      lastTapAtRef.current = 0;
+      await stopAll();
+      return;
+    }
+
     if (state === 'listening') {
       // Second tap stops: sequence STT stop() first (frees the mic), then the
       // recorder, then upload with transcript_fallback.
+      // Generation guard: a double-tap stopAll during the async mic stop
+      // bumps aiRequestTokenRef — discard instead of uploading.
+      const myReq = aiRequestTokenRef.current;
       clearAutoStop();
       isListeningRef.current = false;
       // Freeze live partials before the full /ai/voice upload owns the sheet.
@@ -1254,6 +1602,7 @@ export const AiOrb: React.FC = () => {
           const rec: any = mediaRecorderRef.current;
           if (rec) {
             const { uri, transcript: t } = await stopWebMedia();
+            if (myReq !== aiRequestTokenRef.current) return;
             const raw = t && t.length > 2 ? t : transcriptRef.current;
             const fallback = isPlaceholderTranscript(raw) ? undefined : raw;
             if (uri) {
@@ -1267,6 +1616,7 @@ export const AiOrb: React.FC = () => {
             }
           }
         } catch (e: any) {
+          if (myReq !== aiRequestTokenRef.current) return;
           const raw = e?.message || String(e);
           console.log('[Mic] stop-tap web failed', raw);
           const msg =
@@ -1286,6 +1636,7 @@ export const AiOrb: React.FC = () => {
             console.log('[Mic] stop-tap STT stop failed', stopErr?.message || stopErr);
           }
           const uri = await stopNativeRecording();
+          if (myReq !== aiRequestTokenRef.current) return;
           const raw = sttTranscriptRef.current;
           const fallback = isPlaceholderTranscript(raw) ? undefined : raw;
           if (uri) {
@@ -1298,6 +1649,7 @@ export const AiOrb: React.FC = () => {
             setTimeout(() => setState('idle'), 1500);
           }
         } catch (e: any) {
+          if (myReq !== aiRequestTokenRef.current) return;
           const raw = e?.message || String(e);
           console.log('[Mic] stop-tap native failed', (e as any)?.code, raw);
           const msg =
@@ -1312,7 +1664,15 @@ export const AiOrb: React.FC = () => {
       return;
     }
 
-    if (state === 'thinking' || state === 'speaking') return;
+    if (state === 'thinking') return;
+
+    // Mutual exclusion: tapping to speak again stops any in-flight Jarvis TTS
+    // before the mic opens (also invalidates stale onDone/onStopped).
+    // Generation guard: a double-tap stopAll during this await bumps the
+    // token — do not reopen the mic after a cancel.
+    const listenReq = aiRequestTokenRef.current;
+    await stopSpeaking();
+    if (listenReq !== aiRequestTokenRef.current) return;
 
     // Start listening
     setTranscriptSync('');
@@ -1324,7 +1684,6 @@ export const AiOrb: React.FC = () => {
     voice.reset();
     setResponse('');
     setState('listening');
-    setShowSheet(true);
     isListeningRef.current = true;
 
     if (Platform.OS === 'web') {
@@ -1387,18 +1746,30 @@ export const AiOrb: React.FC = () => {
   };
 
   const onLongPress = () => {
+    // Typing interrupts any in-flight Jarvis speech.
+    speakTokenRef.current++;
+    try {
+      const maybe = (Speech as any)?.stop?.();
+      if (maybe && typeof maybe.catch === 'function') maybe.catch(() => {});
+    } catch {}
     setIsKeyboardMode(true);
     setShowSheet(true);
     setState('idle');
   };
 
   // Backdrop close: abort any in-flight listening (timer/STT/recorder +
-  // live partials) before hiding, so closing mid-listen never leaves the
-  // mic running or a stale upload racing the next tap.
+  // live partials) AND stop Jarvis TTS before hiding, so closing mid-listen
+  // or mid-speech never leaves the mic running, TTS talking, or a stale
+  // upload racing the next tap.
   const closeSheet = () => {
     clearAutoStop();
     isListeningRef.current = false;
     try { voice.cancel(); } catch {}
+    speakTokenRef.current++;
+    try {
+      const maybe = (Speech as any)?.stop?.();
+      if (maybe && typeof maybe.catch === 'function') maybe.catch(() => {});
+    } catch {}
     if (Platform.OS === 'web') {
       try { recognitionRef.current?.stop(); } catch {}
       recognitionRef.current = null;
@@ -1456,6 +1827,7 @@ export const AiOrb: React.FC = () => {
           <TouchableOpacity
             testID="ai-orb-button"
             accessibilityLabel="AI voice button"
+            accessibilityHint="Tap to speak. Double tap to stop speaking, thinking, or listening."
             onPress={onOrbPress}
             onLongPress={onLongPress}
             activeOpacity={1}
@@ -1464,44 +1836,58 @@ export const AiOrb: React.FC = () => {
             {/* Thick 100% opaque base shield */}
             <View style={styles.thickBaseLayer} pointerEvents="none" />
 
-            {variant === 'midnight' ? (
-              <StarOrb size="58px" />
-            ) : (
-              <SiriOrb
-                size="58px"
-                colors={orbColors}
-                animationDuration={state === 'listening' ? 6 : state === 'thinking' ? 4 : 20}
+            {/* Normal orb layer — compresses + fades out when user activates */}
+            <Animated.View style={[styles.orbLayer, normalOrbAnimatedStyle]} pointerEvents="none">
+              {variant === 'midnight' ? (
+                <StarOrb size="58px" />
+              ) : (
+                <SiriOrb
+                  size="58px"
+                  colors={orbColors}
+                  animationDuration={state === 'listening' ? 6 : 20}
+                />
+              )}
+            </Animated.View>
+
+            {/* Strands layer — blooms in when user activates */}
+            <Animated.View style={[styles.orbLayer, strandsAnimatedStyle]} pointerEvents="none">
+              <Strands
+                size={58}
+                count={4}
+                speed={state === 'speaking' ? 1.4 : 1.0}
+                amplitude={state === 'speaking' ? 1.3 : 1.0}
+                waviness={1.4}
+                thickness={0.8}
+                glow={3.0}
+                colors={
+                  variant === 'midnight'
+                    ? ['#ff3e1c', '#1c8cff', '#a855f7', '#38bdf8']
+                    : ['#1DB954', '#1ed760', '#38bdf8', '#a855f7']
+                }
+                style={{ width: 58, height: 58, borderRadius: 29, overflow: 'hidden' }}
               />
-            )}
-            {/* Mic / state overlay on top of Siri orb */}
-            <View style={styles.siriOverlay} pointerEvents="none">
-              {state === 'thinking' ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : state === 'listening' ? (
-                <View style={styles.listeningBars}>
-                  <View style={[styles.bar, { height: 10, backgroundColor: '#fff', opacity: 0.9 }]} />
-                  <View style={[styles.bar, { height: 16, backgroundColor: '#fff' }]} />
-                  <View style={[styles.bar, { height: 12, backgroundColor: '#fff', opacity: 0.9 }]} />
-                </View>
-              ) : state === 'done' ? (
-                <Text style={{ fontSize: 16 }}>✨</Text>
-              ) : state === 'error' ? (
-                <Text style={{ fontSize: 14 }}>⚠️</Text>
-              ) : null}
-            </View>
+            </Animated.View>
           </TouchableOpacity>
         </Animated.View>
 
         {/* Label below orb */}
         <View style={styles.labelWrap}>
-          <Text style={[styles.label, { color: state === 'listening' ? '#FF3B30' : state === 'thinking' ? '#A78BFA' : theme.colors.textSecondary }]}>
-            {state === 'idle' ? 'AI' : state === 'listening' ? 'Listening...' : state === 'thinking' ? 'Thinking...' : state === 'done' ? 'Done' : 'Try again'}
+          <Text style={[styles.label, { color: state === 'listening' ? '#FF3B30' : state === 'thinking' ? '#A78BFA' : state === 'speaking' ? '#1DB954' : theme.colors.textSecondary }]}>
+            {state === 'idle' ? 'AI' : state === 'listening' ? 'Listening...' : state === 'thinking' ? 'Thinking...' : state === 'speaking' ? 'Speaking...' : state === 'done' ? 'Done' : 'Try again'}
           </Text>
         </View>
+
+        {/* Accessible non-disruptive feedback container when not in keyboard mode */}
+        {!isKeyboardMode && (
+          <View style={styles.srOnly} pointerEvents="none" aria-live="polite">
+            {!!transcript && <Text style={styles.bubbleText}>"{transcript}"</Text>}
+            {!!response && <Text style={styles.bubbleText}>{response}</Text>}
+          </View>
+        )}
       </View>
 
-      {/* Full-screen sheet when active */}
-      <Modal visible={showSheet} transparent animationType="fade" onRequestClose={closeSheet}>
+      {/* Full-screen sheet only when in keyboard mode / explicit text entry */}
+      <Modal visible={showSheet && isKeyboardMode} transparent animationType="fade" onRequestClose={closeSheet}>
         <View style={styles.sheetBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeSheet} />
           <View style={[styles.sheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -1510,7 +1896,7 @@ export const AiOrb: React.FC = () => {
               <View style={[styles.sheetGlow, { backgroundColor: theme.colors.primary }]} />
               <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>SpotiBase AI</Text>
               <Text style={[styles.sheetSub, { color: theme.colors.textSecondary }]}>
-                {isKeyboardMode ? 'Type your command below' : state === 'listening' ? `Listening... (live) · ${listenSecsLeft}s — tap orb to stop` : state === 'thinking' ? 'Understanding...' : 'Tap orb and speak'}
+                {isKeyboardMode ? 'Type your command below' : state === 'listening' ? `Listening... (live) · ${listenSecsLeft}s — tap orb to stop` : state === 'thinking' ? 'Understanding...' : state === 'speaking' ? 'Speaking... — tap orb to interrupt' : 'Tap orb and speak'}
               </Text>
             </View>
 
@@ -1593,7 +1979,11 @@ export const AiOrb: React.FC = () => {
             )}
 
             {!!response && (
-              <View style={[styles.bubble, styles.responseBubble, { backgroundColor: theme.dark ? '#1DB95415' : '#F0FDF4', borderColor: theme.colors.primary + '30' }]}>
+              <View
+                accessible
+                accessibilityLiveRegion="polite"
+                accessibilityLabel={`Jarvis says ${response}`}
+                style={[styles.bubble, styles.responseBubble, { backgroundColor: theme.dark ? '#1DB95415' : '#F0FDF4', borderColor: theme.colors.primary + '30' }]}>
                 <Text style={[styles.bubbleLabel, { color: theme.colors.primary }]}>AI</Text>
                 <Text style={[styles.bubbleText, { color: theme.colors.text }]}>{response}</Text>
               </View>
@@ -1651,7 +2041,7 @@ export const AiOrb: React.FC = () => {
                   ))}
                 </View>
                 {!isKeyboardMode && (
-                  <Text style={[styles.hint, { color: theme.colors.textTertiary }]}>Long press orb for text input • Tap orb to speak</Text>
+                  <Text style={[styles.hint, { color: theme.colors.textTertiary }]}>Long press orb for text input • Tap orb to speak • Double-tap to stop</Text>
                 )}
               </View>
             )}
@@ -1757,6 +2147,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     zIndex: 0,
   },
+  orbLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   siriOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   listeningBars: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   bar: { width: 3, borderRadius: 2, minHeight: 8 },
@@ -1769,6 +2170,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   label: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
+  srOnly: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: 'hidden',
+    opacity: 0,
+  },
   sheetBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

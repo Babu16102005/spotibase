@@ -86,6 +86,12 @@ services:
       - STT_MODEL=${STT_MODEL:-small}
       - QWEN_MODEL=${QWEN_MODEL:-Qwen/Qwen2.5-3B-Instruct}
       - HF_TOKEN=${HF_TOKEN:-}
+      # Cloudflare Workers AI (real Qwen): without these the AI server
+      # silently falls back to mock for every LLM call. Never log these.
+      - CF_ACCOUNT_ID=${CF_ACCOUNT_ID:-}
+      - CF_AI_TOKEN=${CF_AI_TOKEN:-}
+      - CF_MODEL=${CF_MODEL:-@cf/qwen/qwen3-30b-a3b-fp8}
+      - CF_TIMEOUT_S=${CF_TIMEOUT_S:-4.0}
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis

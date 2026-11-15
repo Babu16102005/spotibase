@@ -133,21 +133,26 @@ describe('borderless video (overlay embeds bleed edge-to-edge)', () => {
     standalone.unmount();
   });
 
-  it('overlay embeds the player borderless in every mode (mini/expanded/fullscreen)', () => {
+  it('overlay embeds two homes: shared persistent (expanded/watch/fullscreen) + dedicated mini', () => {
     const src = OVERLAY_SRC();
-    // All three <YouTubePlayer usages carry the borderless flag.
+    // Two-home invariant: shared <YouTubePlayer> (stable key yt-single-player)
+    // for expanded/watch/fullscreen + dedicated mini (key yt-mini-player) with
+    // own GestureDetector + card. Both borderless.
     const usages = src.match(/<YouTubePlayer/g) || [];
-    expect(usages.length).toBeGreaterThanOrEqual(3);
-    const borderlessUsages = src.match(/<YouTubePlayer[\s\S]*?borderless/g) || [];
-    expect(borderlessUsages.length).toBe(usages.length);
+    expect(usages.length).toBeGreaterThanOrEqual(2);
+    expect(src).toMatch(/<YouTubePlayer[\s\S]*?borderless/);
+    expect(src).toContain('key="yt-single-player"');
+    expect(src).toContain('key="yt-mini-player"');
   });
 });
 
 describe('fullscreen landscape: swipe up/down + orientation lock', () => {
   it('static: expanded swipe-up enters fullscreen; fullscreen swipe-down exits (vertical-only)', () => {
     const src = OVERLAY_SRC();
-    expect(src).toContain('runOnJS(enterFullscreen)()');
-    expect(src).toContain('runOnJS(exitFullscreen)()');
+    // Handoff wrappers route through handleEnter/Exit (which fall through to
+    // enter/exit when not crossing mini). Accept either form.
+    expect(src).toMatch(/runOnJS\((handleEnterFullscreen|enterFullscreen)\)\(\)/);
+    expect(src).toMatch(/runOnJS\((handleExitFullscreen|exitFullscreen)\)\(\)/);
     expect(src).toMatch(/translationY.*< -60/);
     expect(src).toMatch(/translationY > 90/);
     expect(src).toMatch(/failOffsetX/);
@@ -204,7 +209,7 @@ describe('fullscreen landscape: swipe up/down + orientation lock', () => {
     expect(ScreenOrientation.lockAsync).toHaveBeenCalled();
   });
 
-  it('runtime: exit button leaves fullscreen back to the entry mode', () => {
+  it('runtime: exit button leaves fullscreen back to the entry mode', async () => {
     act(() => {
       useYouTubePlayerStore.getState().playVideo(vid());
       useYouTubePlayerStore.getState().setMode('mini');
@@ -212,7 +217,8 @@ describe('fullscreen landscape: swipe up/down + orientation lock', () => {
     });
     const { getByTestId } = render(<MiniYouTubeOverlay />);
     fireEvent.press(getByTestId('mini-youtube-fullscreen-exit'));
-    expect(useYouTubePlayerStore.getState().mode).toBe('mini');
+    // Fullscreen->mini handoff is async (capture time before exit).
+    await waitFor(() => expect(useYouTubePlayerStore.getState().mode).toBe('mini'));
     expect(useYouTubePlayerStore.getState().isFullscreen).toBe(false);
   });
 });
@@ -232,29 +238,40 @@ describe('mini landscape card: live video + drag + progress', () => {
     expect(src).toMatch(/minDistance\(8\)/);
     expect(src).toMatch(/snappedX/);
     expect(src).toMatch(/withSpring/);
-    expect(src).toContain("runOnJS(setMode)('expanded')");
+    // Mini swipe-up routes through handoff (handleExpand) which seeks shared.
+    expect(src).toMatch(/runOnJS\((handleExpand|setMode)\)/);
   });
 
-  it('runtime: mini shows live player + thumb/title tap + transport + progress', async () => {
+  it('static: mini button row keeps close visible (3 compact buttons, no wrap/clip)', () => {
+    const src = OVERLAY_SRC();
+    // No dedicated expand chevron: it overflowed the ~112px right column and
+    // clipped close under the card's overflow:hidden. Tap parity remains.
+    expect(src).not.toContain('mini-youtube-expand');
+    expect(src).toContain('mini-youtube-tap-expand');
+    expect(src).toMatch(/flexWrap: 'nowrap'/);
+    expect(src).toContain('miniControlsFit');
+  });
+
+  it('runtime: mini shows dedicated live player + thumb/title tap + transport + progress', async () => {
     act(() => {
       useYouTubePlayerStore.getState().playVideo(vid());
       useYouTubePlayerStore.getState().setMode('mini');
     });
-    const { getByTestId } = render(<MiniYouTubeOverlay />);
+    const { getByTestId, queryByTestId, queryAllByTestId } = render(<MiniYouTubeOverlay />);
     expect(getByTestId('mini-youtube-player')).toBeTruthy();
     expect(getByTestId('mini-youtube-thumb')).toBeTruthy();
     expect(getByTestId('mini-youtube-tap-expand')).toBeTruthy();
     expect(getByTestId('mini-youtube-play-pause')).toBeTruthy();
-    expect(getByTestId('mini-youtube-expand')).toBeTruthy();
+    expect(queryByTestId('mini-youtube-expand')).toBeNull();
     expect(getByTestId('mini-youtube-fullscreen')).toBeTruthy();
     expect(getByTestId('mini-youtube-close')).toBeTruthy();
     expect(getByTestId('mini-youtube-progress')).toBeTruthy();
-    await waitFor(() =>
-      expect(getByTestId('youtube-player-webview')).toBeTruthy(),
-    );
+    // Dedicated mini + hidden shared (two homes, two WebViews in mini).
+    await waitFor(() => expect(queryAllByTestId('mini-youtube-player')).toHaveLength(1));
+    expect(getByTestId('mini-youtube-shared-hidden')).toBeTruthy();
   });
 
-  it('runtime: mini play/pause + expand + fullscreen entry all work without unloading', () => {
+  it('runtime: mini play/pause + expand + fullscreen entry all work without unloading', async () => {
     act(() => {
       useYouTubePlayerStore.getState().playVideo(vid());
       useYouTubePlayerStore.getState().setMode('mini');
@@ -266,7 +283,8 @@ describe('mini landscape card: live video + drag + progress', () => {
     fireEvent.press(getByTestId('mini-youtube-play-pause'));
     expect(useYouTubePlayerStore.getState().isPlaying).toBe(true);
     fireEvent.press(getByTestId('mini-youtube-fullscreen'));
-    expect(useYouTubePlayerStore.getState().mode).toBe('fullscreen');
+    // Mini->fullscreen handoff is async (getCurrentTime + seek).
+    await waitFor(() => expect(useYouTubePlayerStore.getState().mode).toBe('fullscreen'));
   });
 });
 

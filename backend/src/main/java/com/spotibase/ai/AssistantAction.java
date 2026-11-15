@@ -53,6 +53,11 @@ public enum AssistantAction {
     GET_QUEUE,
     GET_RECOMMENDATIONS,
 
+    // Free conversation (no music action, display-only):
+    // AI returns CHAT {} for greetings/thanks/identity/jokes/small-talk.
+    // Backend passthrough: no queue/search/dispatch, app just shows/speaks `response`.
+    CHAT,
+
     // Clarification
     CLARIFICATION_NEEDED
 }

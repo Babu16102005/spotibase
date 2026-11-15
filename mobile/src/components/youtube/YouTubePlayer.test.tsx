@@ -6,10 +6,15 @@ import YouTubePlayer, {
   YOUTUBE_PLAYER_BASE_URL,
   YOUTUBE_EMBED_HOST,
   YOUTUBE_TARGET_ORIGIN,
+  YT_TIME_TIMEOUT_MS,
+  QUERY_TIME_IFRAMES_JS,
+  seekToIframesJs,
+  seekOnlyIframesJs,
   buildYouTubeEmbedUrl,
   sanitizeEmbedUrl,
   youtubeWatchUrl,
 } from './YouTubePlayer';
+import type { YouTubePlayerHandle } from './YouTubePlayer';
 import { youtubeApi } from '../../api/youtubeApi';
 import { useYouTubePlayerStore } from '../../store/youtubePlayerStore';
 import type { YouTubeVideo } from '../../types/youtube';
@@ -256,5 +261,97 @@ describe('YouTubePlayer native WebView (#153)', () => {
       expect(getByTestId('youtube-player-webview')).toBeTruthy();
     });
     expect(resolveMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('YouTubePlayer position bridge (mini <-> shared handoff, no reload)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    openURLSpy.mockResolvedValue(true as any);
+    useYouTubePlayerStore.setState({ currentVideo: null, isPlaying: false });
+    resolveMock.mockResolvedValue(backendResolve('dQw4w9WgXcQ'));
+    jest.replaceProperty(Platform, 'OS', 'ios');
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('buildYouTubeEmbedUrl with startSeconds adds start param + forces autoplay', () => {
+    const url = new URL(buildYouTubeEmbedUrl('dQw4w9WgXcQ', false, 42));
+    expect(url.searchParams.get('start')).toBe('42');
+    expect(url.searchParams.get('autoplay')).toBe('1');
+    expect(url.searchParams.get('mute')).toBeNull();
+    // Floors + clamps.
+    expect(new URL(buildYouTubeEmbedUrl('dQw4w9WgXcQ', false, 42.9)).searchParams.get('start')).toBe('42');
+    expect(new URL(buildYouTubeEmbedUrl('dQw4w9WgXcQ', false, 0)).searchParams.get('start')).toBeNull();
+    expect(new URL(buildYouTubeEmbedUrl('dQw4w9WgXcQ', false, -5)).searchParams.get('start')).toBeNull();
+  });
+
+  it('sanitizeEmbedUrl preserves startSeconds + strips mute', () => {
+    const parsed = new URL(
+      sanitizeEmbedUrl('https://www.youtube.com/embed/dQw4w9WgXcQ?rel=1&mute=1', 'dQw4w9WgXcQ', false, 77),
+    );
+    expect(parsed.searchParams.get('start')).toBe('77');
+    expect(parsed.searchParams.get('autoplay')).toBe('1');
+    expect(parsed.searchParams.get('mute')).toBeNull();
+  });
+
+  it('exports seek + time bridges targeting the www origin', () => {
+    expect(YT_TIME_TIMEOUT_MS).toBe(800);
+    expect(QUERY_TIME_IFRAMES_JS).toContain('yt-time');
+    expect(QUERY_TIME_IFRAMES_JS).toContain('getCurrentTime');
+    const seekJs = seekToIframesJs(42);
+    expect(seekJs).toContain('seekTo');
+    expect(seekJs).toContain('[42,true]');
+    expect(seekJs).toContain('playVideo');
+    expect(seekJs).toContain('https://www.youtube.com');
+    expect(seekOnlyIframesJs(10)).toContain('[10,true]');
+    expect(seekOnlyIframesJs(10)).not.toContain('playVideo');
+  });
+
+  it('startSeconds prop flows into the embed URL start param', async () => {
+    const { getByTestId } = render(<YouTubePlayer video={vid()} startSeconds={65} />);
+    await waitFor(() => expect(getByTestId('youtube-player-webview')).toBeTruthy());
+    const html: string = (getByTestId('youtube-player-webview') as any).props.source.html;
+    // Inline shell escapes & -> &amp;; decode for URL asserts.
+    const decoded = html.replace(/&amp;/g, '&');
+    expect(decoded).toContain('start=65');
+    expect(decoded).toContain('autoplay=1');
+  });
+
+  it('getCurrentTime resolves via yt-time message (NaN -> 0 fallback)', async () => {
+    const ref = React.createRef<YouTubePlayerHandle>();
+    const { getByTestId } = render(<YouTubePlayer video={vid()} ref={ref as any} />);
+    await waitFor(() => expect(getByTestId('youtube-player-webview')).toBeTruthy());
+    expect(ref.current?.getCurrentTime).toBeTruthy();
+    expect(ref.current?.seekTo).toBeTruthy();
+
+    const pending = ref.current!.getCurrentTime();
+    act(() => {
+      (getByTestId('youtube-player-webview') as any).props.onMessage({
+        nativeEvent: { data: JSON.stringify({ type: 'yt-time', seconds: 123.7 }) },
+      });
+    });
+    await expect(pending).resolves.toBeCloseTo(123.7, 5);
+
+    // NaN -> 0.
+    const pendingNaN = ref.current!.getCurrentTime();
+    act(() => {
+      (getByTestId('youtube-player-webview') as any).props.onMessage({
+        nativeEvent: { data: JSON.stringify({ type: 'yt-time', seconds: NaN }) },
+      });
+    });
+    // JSON NaN becomes null -> fallback 0.
+    await expect(pendingNaN).resolves.toBe(0);
+  });
+
+  it('suspended (active=false) stays paused despite isPlaying (no-double-audio gate)', async () => {
+    useYouTubePlayerStore.setState({ currentVideo: vid(), isPlaying: true });
+    const { getByTestId, queryByTestId } = render(<YouTubePlayer video={vid()} active={false} />);
+    await waitFor(() => expect(getByTestId('youtube-player-webview')).toBeTruthy());
+    // Hidden home never shows unmute overlay as playing; it mounts paused.
+    expect(queryByTestId('youtube-player-fallback')).toBeNull();
+    expect(getByTestId('youtube-player-webview')).toBeTruthy();
   });
 });

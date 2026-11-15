@@ -177,10 +177,10 @@ describe('authStore', () => {
       expect(state.user).toBeNull();
     });
 
-    it('clears storage and state when the refresh fails', async () => {
+    it('clears storage and state when the refresh grant is rejected (401)', async () => {
       storage.set('accessToken', 'expired-token');
       storage.set('refreshToken', 'stale-refresh');
-      (authApi.refresh as jest.Mock).mockRejectedValue(new Error('expired'));
+      (authApi.refresh as jest.Mock).mockRejectedValue({ response: { status: 401 } });
 
       await useAuthStore.getState().loadSession();
 
@@ -190,6 +190,89 @@ describe('authStore', () => {
       expect(state.user).toBeNull();
       expect(state.isAuthenticated).toBe(false);
       expect(state.isLoading).toBe(false);
+    });
+
+    it('keeps the stored token when the refresh fails transiently (500, no cache)', async () => {
+      storage.set('accessToken', 'expired-token');
+      storage.set('refreshToken', 'stale-refresh');
+      (authApi.refresh as jest.Mock).mockRejectedValue({ response: { status: 500 } });
+
+      await useAuthStore.getState().loadSession();
+
+      // Transient 5xx must NOT wipe: token stays, loading simply stops.
+      expect(storage.getString('refreshToken')).toBe('stale-refresh');
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+
+    it('keeps the cached session when background refresh times out (ECONNABORTED)', async () => {
+      const user = makeUser();
+      const response = makeAuthResponse({ user });
+      storage.set('accessToken', response.accessToken);
+      storage.set('refreshToken', response.refreshToken);
+      storage.set('userCache', JSON.stringify(user));
+      const timeoutErr: any = new Error('timeout of 10000ms exceeded');
+      timeoutErr.code = 'ECONNABORTED';
+      (authApi.refresh as jest.Mock).mockRejectedValue(timeoutErr);
+
+      await useAuthStore.getState().loadSession();
+      // Background refresh runs detached: flush the microtask.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(storage.getString('refreshToken')).toBe(response.refreshToken);
+      const state = useAuthStore.getState();
+      expect(state.user).toEqual(user);
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.isLoading).toBe(false);
+    });
+
+    it('keeps the cached session when background refresh fails with 500 (cold backend)', async () => {
+      const user = makeUser();
+      const response = makeAuthResponse({ user });
+      storage.set('accessToken', response.accessToken);
+      storage.set('refreshToken', response.refreshToken);
+      storage.set('userCache', JSON.stringify(user));
+      (authApi.refresh as jest.Mock).mockRejectedValue({ response: { status: 500 } });
+
+      await useAuthStore.getState().loadSession();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(storage.getString('refreshToken')).toBe(response.refreshToken);
+      const state = useAuthStore.getState();
+      expect(state.user).toEqual(user);
+      expect(state.isAuthenticated).toBe(true);
+    });
+
+    it('keeps the cached session when background refresh has no response (offline)', async () => {
+      const user = makeUser();
+      const response = makeAuthResponse({ user });
+      storage.set('accessToken', response.accessToken);
+      storage.set('refreshToken', response.refreshToken);
+      storage.set('userCache', JSON.stringify(user));
+      (authApi.refresh as jest.Mock).mockRejectedValue(new Error('Network Error'));
+
+      await useAuthStore.getState().loadSession();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(storage.getString('refreshToken')).toBe(response.refreshToken);
+      expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    });
+
+    it('wipes the cached session when background refresh is rejected (401 invalid grant)', async () => {
+      const user = makeUser();
+      const response = makeAuthResponse({ user });
+      storage.set('accessToken', response.accessToken);
+      storage.set('refreshToken', response.refreshToken);
+      storage.set('userCache', JSON.stringify(user));
+      (authApi.refresh as jest.Mock).mockRejectedValue({ response: { status: 401 } });
+
+      await useAuthStore.getState().loadSession();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(storage.getString('accessToken')).toBeUndefined();
+      expect(storage.getString('refreshToken')).toBeUndefined();
+      const state = useAuthStore.getState();
+      expect(state.user).toBeNull();
+      expect(state.isAuthenticated).toBe(false);
     });
   });
 

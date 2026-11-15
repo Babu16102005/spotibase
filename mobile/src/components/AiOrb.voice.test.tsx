@@ -51,6 +51,8 @@ const mockUseSTTEvent = useSpeechRecognitionEvent as jest.Mock;
 const mockAiVoice = (aiApi.voice as jest.Mock);
 const mockAiText = (aiApi.text as jest.Mock);
 const mockGetInfo = jest.requireMock('expo-file-system').getInfoAsync as jest.Mock;
+const mockSpeak = jest.requireMock('expo-speech').speak as jest.Mock;
+const mockStop = jest.requireMock('expo-speech').stop as jest.Mock;
 
 // Handlers captured from useSpeechRecognitionEvent('result' | 'error', cb).
 let sttHandlers: Record<string, (e: any) => void>;
@@ -69,6 +71,25 @@ const makeRecorder = (uri = 'file://recording.m4a') => ({
 });
 
 const pressOrb = (getByTestId: (id: string) => any) => fireEvent.press(getByTestId('ai-orb-button'));
+
+// ── Tap-clock ────────────────────────────────────────────────────────────
+// The orb double-tap kill-switch (DOUBLE_TAP_WINDOW_MS = 400ms in AiOrb.tsx)
+// classifies a second press <400ms after the previous as "stop everything"
+// and a slower second press as the normal single-tap (listening tap submits).
+// Jest runs fast enough that two `await act(press)` calls land <400ms apart,
+// so tests that model "tap, speak, tap to submit" must advance this clock
+// between presses. Tests for the kill-switch itself deliberately do NOT
+// advance it (rapid taps).
+let tapClock = 0;
+let nowSpy: jest.SpyInstance | null = null;
+const useTapClock = () => {
+  tapClock = Date.now();
+  nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => tapClock);
+};
+/** Simulate the user pausing (speaking / reading) between two orb taps. */
+const tapGap = (ms = 1000) => {
+  tapClock += ms;
+};
 
 // Generic-error strings that must NEVER surface from the voice path.
 const FORBIDDEN_GENERIC = [/unexpected/i, /something went wrong/i, /an error occurred/i, /unknown error/i];
@@ -108,6 +129,8 @@ describe('AiOrb mic voice input', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+    nowSpy?.mockRestore();
+    nowSpy = null;
     (Alert.alert as jest.Mock).mockRestore?.();
   });
 
@@ -166,6 +189,7 @@ describe('AiOrb mic voice input', () => {
       currentRecorder = makeRecorder(uri);
       // Model a real 4s HIGH_QUALITY m4a (>2KB).
       mockGetInfo.mockResolvedValue({ exists: true, size: 8192, uri });
+      useTapClock();
 
       const { getByTestId, getByText } = render(<AiOrb />);
       await act(async () => { pressOrb(getByTestId); });
@@ -178,6 +202,9 @@ describe('AiOrb mic voice input', () => {
       expect(getByText('"play calm"')).toBeTruthy();
 
       // Second tap stops and uploads with the interim transcript as fallback.
+      // Slow tap (user spoke first) -> single-tap submit, not the double-tap
+      // kill-switch.
+      tapGap();
       await act(async () => { pressOrb(getByTestId); });
 
       await waitFor(() => expect(mockAiVoice).toHaveBeenCalled());
@@ -195,6 +222,7 @@ describe('AiOrb mic voice input', () => {
 
     it('falls back to typed text when the uri is empty but interim transcript exists', async () => {
       currentRecorder = makeRecorder('');
+      useTapClock();
       // stop() resolves but uri is empty (e.g. simulator with no mic data).
       const { getByTestId } = render(<AiOrb />);
       await act(async () => { pressOrb(getByTestId); });
@@ -203,6 +231,8 @@ describe('AiOrb mic voice input', () => {
       await act(async () => {
         sttHandlers['result']?.({ results: [{ transcript: 'next song', isFinal: true }] });
       });
+      // Slow tap -> single-tap submit path (falls back to /ai/text).
+      tapGap();
       await act(async () => { pressOrb(getByTestId); });
 
       await waitFor(() => expect(mockAiText).toHaveBeenCalledWith('next song', expect.anything()));
@@ -319,6 +349,7 @@ describe('AiOrb mic voice input', () => {
     it('never renders a generic unexpected-error string on voice failure', async () => {
       mockAiVoice.mockRejectedValueOnce({ response: { status: 500, data: { message: 'boom' } }, message: 'boom' });
       currentRecorder = makeRecorder('file://fail.m4a');
+      useTapClock();
 
       const { getByTestId, queryByText } = render(<AiOrb />);
       await act(async () => { pressOrb(getByTestId); });
@@ -327,6 +358,8 @@ describe('AiOrb mic voice input', () => {
       });
       // Force the voice path (uri present) so the 500 surfaces; the component
       // retries as text when a transcript exists — either surface must be specific.
+      // Slow tap -> single-tap submit so the upload actually runs.
+      tapGap();
       await act(async () => { pressOrb(getByTestId); });
       await act(async () => {});
 
@@ -355,16 +388,141 @@ describe('AiOrb mic voice input', () => {
 
     it('empty-capture copy is specific ("No audio") rather than generic', async () => {
       currentRecorder = makeRecorder('');
+      useTapClock();
       const { getByTestId, getByText } = render(<AiOrb />);
       await act(async () => { pressOrb(getByTestId); });
       await waitFor(() => expect(mockSTTStart).toHaveBeenCalled());
       // No interim transcript and empty uri -> "No audio" branch.
+      // Slow tap -> single-tap submit path.
+      tapGap();
       await act(async () => { pressOrb(getByTestId); });
 
       await waitFor(() => expect(getByText('No audio')).toBeTruthy());
       for (const pattern of FORBIDDEN_GENERIC) {
         expect(pattern.test('No audio')).toBe(false);
       }
+    });
+  });
+
+  describe('double-tap stop (speaking / thinking / listening)', () => {
+    it('double-tap while listening discards the mic without uploading', async () => {
+      currentRecorder = makeRecorder('file://double-tap.m4a');
+      // No tap-clock: two rapid presses (<400ms) -> kill-switch.
+      const { getByTestId, getByText } = render(<AiOrb />);
+      await act(async () => { pressOrb(getByTestId); });
+      await waitFor(() => expect(mockSTTStart).toHaveBeenCalled());
+      expect(getByText('Listening...')).toBeTruthy();
+
+      // Rapid second tap -> stop everything, no /ai/voice upload.
+      await act(async () => { pressOrb(getByTestId); });
+      await act(async () => {});
+
+      expect(mockAiVoice).not.toHaveBeenCalled();
+      expect(mockAiText).not.toHaveBeenCalled();
+      expect(mockSTTAbort).toHaveBeenCalled();
+      // Parked back at idle with the mic freed.
+      await waitFor(() => expect(getByText('AI')).toBeTruthy());
+    });
+
+    it('double-tap while speaking stops TTS and parks at idle without re-listening', async () => {
+      const jarvis = 'Hey boss! Double-tap stops me mid-sentence.';
+      mockAiText.mockResolvedValueOnce({
+        data: {
+          actions: [{ action: 'CHAT', parameters: {} }],
+          results: [{ status: 'CHAT_OK', songs: [], displayText: jarvis }],
+          response: jarvis,
+        },
+      });
+      currentRecorder = makeRecorder('file://relisten.m4a');
+
+      const { getByTestId, getByText, getByPlaceholderText } = render(<AiOrb />);
+      // Keyboard path to speaking: long-press -> type -> Send.
+      await act(async () => {
+        fireEvent(getByTestId('ai-orb-button'), 'longPress');
+      });
+      fireEvent.changeText(getByPlaceholderText(/type a command/i), 'hello jarvis');
+      await act(async () => {
+        fireEvent.press(getByText('Send'));
+      });
+
+      await waitFor(() => expect(mockSpeak).toHaveBeenCalledWith(
+        jarvis,
+        expect.objectContaining({ onDone: expect.any(Function) }),
+      ));
+      await waitFor(() => expect(getByText('Speaking...')).toBeTruthy());
+      const speaksBefore = mockSpeak.mock.calls.length;
+
+      // Rapid double-tap: the orb lands idle with TTS stopped and no new
+      // request. (The first tap may briefly open the mic before the second
+      // cancels it — stopAll always aborts STT and frees the recorder.)
+      await act(async () => { pressOrb(getByTestId); });
+      await act(async () => { pressOrb(getByTestId); });
+      await act(async () => {});
+
+      expect(mockStop.mock.calls.length).toBeGreaterThan(0);
+      expect(mockSpeak.mock.calls.length).toBe(speaksBefore);
+      expect(mockAiText.mock.calls.length).toBe(1);
+      expect(mockAiVoice).not.toHaveBeenCalled();
+      expect(mockSTTAbort).toHaveBeenCalled();
+      await waitFor(() => expect(getByText('AI')).toBeTruthy());
+    });
+
+    it('double-tap while thinking drops the late response (no play, no speak)', async () => {
+      let resolveText!: (v: any) => void;
+      mockAiText.mockImplementationOnce(
+        () => new Promise((resolve) => { resolveText = resolve; }),
+      );
+      currentRecorder = makeRecorder('file://thinking.m4a');
+
+      const { getByTestId, getByText, getByPlaceholderText } = render(<AiOrb />);
+      await act(async () => {
+        fireEvent(getByTestId('ai-orb-button'), 'longPress');
+      });
+      fireEvent.changeText(getByPlaceholderText(/type a command/i), 'play something');
+      await act(async () => {
+        fireEvent.press(getByText('Send'));
+      });
+      await waitFor(() => expect(mockAiText).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(getByText('Thinking...')).toBeTruthy());
+      const speaksBefore = mockSpeak.mock.calls.length;
+
+      // Rapid double-tap while thinking: first tap is ignored (thinking),
+      // second is the kill-switch -> generation invalidated.
+      await act(async () => { pressOrb(getByTestId); });
+      await act(async () => { pressOrb(getByTestId); });
+
+      // Late backend response must not play or speak after the cancel.
+      await act(async () => {
+        resolveText({
+          data: {
+            actions: [{ action: 'CHAT', parameters: {} }],
+            results: [{ status: 'CHAT_OK', songs: [], displayText: 'late reply' }],
+            response: 'late reply',
+          },
+        });
+      });
+      await act(async () => {});
+
+      expect(mockSpeak.mock.calls.length).toBe(speaksBefore);
+      await waitFor(() => expect(getByText('AI')).toBeTruthy());
+    });
+
+    it('slow second tap still submits (kill-switch does not swallow normal stops)', async () => {
+      const uri = 'file://slow-tap.m4a';
+      currentRecorder = makeRecorder(uri);
+      mockGetInfo.mockResolvedValue({ exists: true, size: 8192, uri });
+      useTapClock();
+
+      const { getByTestId } = render(<AiOrb />);
+      await act(async () => { pressOrb(getByTestId); });
+      await waitFor(() => expect(mockSTTStart).toHaveBeenCalled());
+      await act(async () => {
+        sttHandlers['result']?.({ results: [{ transcript: 'pause music', isFinal: true }] });
+      });
+      tapGap();
+      await act(async () => { pressOrb(getByTestId); });
+
+      await waitFor(() => expect(mockAiVoice).toHaveBeenCalled());
     });
   });
 
@@ -548,6 +706,39 @@ describe('AiOrb mic voice input', () => {
         expect.objectContaining({ videoId: 'YQHsXMglC9A', title: 'Hello' })
       );
       await waitFor(() => expect(screen.getByText('Playing Hello on YouTube')).toBeTruthy());
+    });
+
+    it('plays QUEUED_YOUTUBE results even when the action is PLAY (lyric fallback)', async () => {
+      // Backend youtubeLyricFallback returns QUEUED_YOUTUBE + videoId inside
+      // results[i] while the action stays PLAY/SEARCH_*. The app must play
+      // the video in-app instead of dropping it for a local search.
+      mockAiText.mockResolvedValueOnce({
+        data: {
+          actions: [{ action: 'PLAY', parameters: { query: 'hello from the other side' } }],
+          results: [
+            {
+              status: 'QUEUED_YOUTUBE',
+              query: 'hello from the other side',
+              videoId: 'YQHsXMglC9A',
+              title: 'Adele - Hello',
+              channelTitle: 'Adele',
+              displayText: 'Playing Adele - Hello on YouTube',
+            },
+          ],
+          response: 'Playing Adele - Hello on YouTube',
+        },
+      });
+
+      const screen = render(<AiOrb />);
+      await sendTextCommand(screen, 'hello from the other side');
+
+      await waitFor(() => expect(playVideoSpy).toHaveBeenCalledTimes(1));
+      expect(playVideoSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ videoId: 'YQHsXMglC9A', title: 'Adele - Hello' })
+      );
+      await waitFor(() => expect(screen.getByText('Playing Adele - Hello on YouTube')).toBeTruthy());
+      // No local catalog search: the video result wins, never falls through.
+      expect(mockSearch).not.toHaveBeenCalled();
     });
 
     it('shows displayText only and never plays on invalid/missing videoId', async () => {

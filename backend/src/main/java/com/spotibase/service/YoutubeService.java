@@ -478,7 +478,7 @@ public class YoutubeService {
     }
 
     /**
-     * Effective outbound budget for log lines (1..30s, fallback 5s when the
+     * Effective outbound budget for log lines (1..30s, fallback 8s when the
      * config mock/bean misbehaves). Mirrors
      * {@link YoutubeConfig#getEffectiveTimeoutSeconds()} without failing.
      */
@@ -495,7 +495,7 @@ public class YoutubeService {
             int legacy = youtubeConfig.getTimeoutSeconds();
             return Math.min(30, Math.max(1, legacy));
         } catch (Exception ignored) {
-            return 5;
+            return 8;
         }
     }
 

@@ -25,15 +25,15 @@ class YoutubeConfigTest {
     }
 
     @Test
-    void defaults_splitThreePlusTwoWithinTotalFiveAndCapTwenty() {
-        YoutubeConfig config = configWith(5, -1, -1, 20);
+    void defaults_splitSixPlusTwoWithinTotalEightAndCapTwenty() {
+        YoutubeConfig config = configWith(8, -1, -1, 20);
 
         int total = config.getEffectiveTimeoutSeconds();
         int search = config.getEffectiveSearchTimeoutSeconds();
         int hydration = config.getEffectiveHydrationTimeoutSeconds();
 
-        assertThat(total).isEqualTo(5);
-        assertThat(search).isEqualTo(3);
+        assertThat(total).isEqualTo(8);
+        assertThat(search).isEqualTo(6);
         assertThat(hydration).isEqualTo(2);
         assertThat(search + hydration).isLessThanOrEqualTo(total);
         assertThat(config.getEffectiveHydrationMaxIds()).isEqualTo(20);
@@ -43,7 +43,7 @@ class YoutubeConfigTest {
     void splitInvariant_holdsAcrossTotals() {
         // Totals 2..30 (realistic budgets): Bs + Bh always fits. Total=1 is a
         // degenerate edge — both legs clamp to min 1s so the sum is 2s
-        // best-effort (covered below); production default is total=5 (3+2).
+        // best-effort (covered below); production default is total=8 (6+2).
         for (int total = 2; total <= 10; total++) {
             YoutubeConfig config = configWith(total, -1, -1, 20);
 
@@ -102,7 +102,7 @@ class YoutubeConfigTest {
     void timeoutMarker_messageContainsTimedOutForLogging() {
         // Translated timeout still contains the marker the service logs on.
         assertThat(new com.spotibase.exception.YoutubeUpstreamException(
-                "YouTube search timed out after 3s").getMessage()).contains("timed out");
+                "YouTube search timed out after 6s").getMessage()).contains("timed out");
         assertThat(new com.spotibase.exception.YoutubeUpstreamException(
                 "YouTube hydration timed out after 2s").getMessage()).contains("timed out");
     }

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
-  InteractionManager,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -44,10 +43,9 @@ const HomeScreen = ({ navigation }: any) => {
   } = useHomeTiers({ enabled: isAuthenticated });
 
   useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => {
-      setHeavyReady(true);
-    });
-    return () => task.cancel();
+    // RN 0.88 removed InteractionManager; defer past the first paint instead.
+    const timer = setTimeout(() => setHeavyReady(true), 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Cached data paints immediately. Only stale tiers refetch

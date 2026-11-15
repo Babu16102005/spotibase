@@ -101,6 +101,21 @@ public class AssistantService {
         // Keep first result songId for multi-action like SEARCH/PLAY + ADD_TO_PLAYLIST
         for (AssistantCommand cmd : actions) {
             Map<String, Object> res = dispatcher.dispatch(userId, cmd, ctxMap);
+            // CHAT passthrough: the Jarvis reply lives in the top-level
+            // `response`; the dispatcher only sees cmd params, so backfill a
+            // blank displayText here. results[i] stays parallel to actions[i].
+            if (cmd.getAction() == AssistantAction.CHAT
+                    && (res.get("displayText") == null
+                        || String.valueOf(res.get("displayText")).isBlank())
+                    && response != null && !response.isBlank()) {
+                try {
+                    res.put("displayText", response);
+                } catch (UnsupportedOperationException uoe) {
+                    Map<String, Object> copy = new java.util.HashMap<>(res);
+                    copy.put("displayText", response);
+                    res = copy;
+                }
+            }
             results.add(res);
             // Propagate for SEARCH too (not just PLAY_BY_MOOD): any result with
             // a non-empty songs[] feeds FIRST_RESULT follow-ups.
@@ -153,6 +168,20 @@ public class AssistantService {
         // can use FIRST_RESULT.
         for (AssistantCommand cmd : qr.actions()) {
             Map<String, Object> res = dispatcher.dispatch(userId, cmd, ctxMap);
+            // CHAT passthrough parity with handleText: backfill blank
+            // displayText from the top-level Jarvis reply.
+            if (cmd.getAction() == AssistantAction.CHAT
+                    && (res.get("displayText") == null
+                        || String.valueOf(res.get("displayText")).isBlank())
+                    && qr.response() != null && !qr.response().isBlank()) {
+                try {
+                    res.put("displayText", qr.response());
+                } catch (UnsupportedOperationException uoe) {
+                    Map<String, Object> copy = new java.util.HashMap<>(res);
+                    copy.put("displayText", qr.response());
+                    res = copy;
+                }
+            }
             results.add(res);
             if (res.containsKey("songs") && res.get("songs") instanceof List<?> songs && !songs.isEmpty()) {
                 ctxMap.put("firstResultSongId", songs.get(0).toString());

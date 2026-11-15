@@ -1,0 +1,23 @@
+﻿{
+    "accessToken":  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2YThkM2QzMS01YmZkLTRlZGMtODE2YS0xMmNiOGY5YjdhZmIiLCJlbWFpbCI6Imx5cmljdmVyaWZ5QGV4YW1wbGUuY29tIiwicm9sZSI6IlVTRVIiLCJpYXQiOjE3OTEwNDcwMDAsImV4cCI6MTc5MTEzMzQwMH0.NccZuJYf1dCDvcsD8NDJN2douYZJq5XCjxLitS_oxoE",
+    "refreshToken":  "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI2YThkM2QzMS01YmZkLTRlZGMtODE2YS0xMmNiOGY5YjdhZmIiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc5MTA0NzAwMCwiZXhwIjoxNzkzNjM5MDAwfQ.7QF-p7eEXIV4BVk-51WAQvmFfzR8Y9Hq7VMKN5_msxY",
+    "tokenType":  "Bearer",
+    "user":  {
+                 "id":  "6a8d3d31-5bfd-4edc-816a-12cb8f9b7afb",
+                 "email":  "lyricverify@example.com",
+                 "username":  "lyricverify",
+                 "avatarUrl":  null,
+                 "coverUrl":  null,
+                 "bio":  null,
+                 "country":  null,
+                 "favoriteGenres":  [
+
+                                    ],
+                 "role":  "USER",
+                 "emailVerified":  false,
+                 "totalListeningTimeMs":  0,
+                 "followerCount":  0,
+                 "followingCount":  0,
+                 "createdAt":  "2026-10-01T23:37:09.860043"
+             }
+}

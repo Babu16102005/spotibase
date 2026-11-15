@@ -302,6 +302,65 @@ describe('useHomeTiers staged tiers', () => {
     useAuthStore.setState({ isAuthenticated: true } as any);
   });
 
+  it('does not log out on 403 (authenticated-but-forbidden shows error instead)', async () => {
+    const logoutSpy = jest.spyOn(useAuthStore.getState(), 'logout');
+    let criticalCalls = 0;
+    mockedGetHomeTier.mockImplementation(async (tier: string) => {
+      if (tier === 'critical') {
+        criticalCalls += 1;
+        const err: any = new Error('forbidden');
+        err.response = { status: 403 };
+        throw err;
+      }
+      return { data: { greeting: '', sections: [] } };
+    });
+
+    const { result } = renderHook(() => useHomeTiers());
+
+    await act(async () => {
+      await result.current.refetchStale();
+    });
+
+    // 403 never logs out and never retries (deterministic forbidden).
+    expect(criticalCalls).toBe(1);
+    expect(logoutSpy).not.toHaveBeenCalled();
+    expect(result.current.statusPerTier.critical).toBe('error');
+    expect(result.current.sections).toHaveLength(0);
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    logoutSpy.mockRestore();
+    useAuthStore.setState({ isAuthenticated: true } as any);
+  });
+
+  it('does not log out on 401 with _refreshNetworkError (transient refresh failure)', async () => {
+    const logoutSpy = jest.spyOn(useAuthStore.getState(), 'logout');
+    let criticalCalls = 0;
+    mockedGetHomeTier.mockImplementation(async (tier: string) => {
+      if (tier === 'critical') {
+        criticalCalls += 1;
+        const err: any = new Error('unauthorized');
+        err.response = { status: 401 };
+        err._refreshNetworkError = true;
+        throw err;
+      }
+      return { data: { greeting: '', sections: [] } };
+    });
+
+    const { result } = renderHook(() => useHomeTiers());
+
+    await act(async () => {
+      // Includes the ~500ms transient retry.
+      await result.current.refetchStale();
+    });
+
+    // Transient: retried once, never logged out.
+    expect(criticalCalls).toBe(2);
+    expect(logoutSpy).not.toHaveBeenCalled();
+    expect(result.current.statusPerTier.critical).toBe('error');
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    logoutSpy.mockRestore();
+    useAuthStore.setState({ isAuthenticated: true } as any);
+  });
+
   it('does not retry when the tier already has data (keeps cached rows)', async () => {
     const recent = sec('recently-played', 'Recently Played');
     mockedReadHomeTier.mockImplementation((tier: string) =>

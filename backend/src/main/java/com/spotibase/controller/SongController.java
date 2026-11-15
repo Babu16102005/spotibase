@@ -245,6 +245,20 @@ public class SongController {
     }
 
     /**
+     * Synchronous Qwen listener-mindset re-evaluation (ADMIN only, e.g. to
+     * re-tag Makkamishi and compare with real-world perception). Persists the
+     * verdict only when it is a genuine LLM judgment
+     * ({@code evaluated_by=qwen}); otherwise returns the kept
+     * parameter-based tags with {@code evaluated_by=rule}.
+     */
+    @PostMapping("/{id}/evaluate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<java.util.Map<String, Object>> evaluateSong(@PathVariable String id) {
+        log.info("Evaluate song: {}", id);
+        return ResponseEntity.ok(songService.evaluateSongTags(id));
+    }
+
+    /**
      * @param fields {@code card} returns slim cards (capped at 30).
      */
     @GetMapping("/trending")

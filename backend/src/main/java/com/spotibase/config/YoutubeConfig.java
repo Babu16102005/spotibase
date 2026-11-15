@@ -33,7 +33,7 @@ public class YoutubeConfig {
     /** Outbound budget bounds: clamps misconfigured {@code timeout-seconds}. */
     public static final int MIN_TIMEOUT_SECONDS = 1;
     public static final int MAX_TIMEOUT_SECONDS = 30;
-    public static final int DEFAULT_TIMEOUT_SECONDS = 5;
+    public static final int DEFAULT_TIMEOUT_SECONDS = 8;
 
     @Value("${youtube.api-key:}")
     private String apiKey;
@@ -51,7 +51,7 @@ public class YoutubeConfig {
     private String relevanceLanguage;
 
     /** Outbound budget for every YouTube Data API call. */
-    @Value("${youtube.timeout-seconds:5}")
+    @Value("${youtube.timeout-seconds:8}")
     private int timeoutSeconds;
 
     /**

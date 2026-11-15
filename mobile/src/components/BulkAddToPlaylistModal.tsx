@@ -206,7 +206,7 @@ const BulkAddToPlaylistModalComponent: React.FC<BulkAddToPlaylistModalProps> = (
                   <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
                     No playlists found. Create one above!
                   </Text>
-                ) : null
+                ) : undefined
               }
             />
           )}

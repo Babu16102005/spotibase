@@ -29,14 +29,50 @@ public class QwenClient {
 
     /** Partial (fast) budget for voice STT; full understand budgets. */
     private static final Duration PARTIAL_TIMEOUT = Duration.ofMillis(800);
-    /** Text understand budget (CF p50 ~1.6s, p95 ~3.2s — 3s keeps failures fast). */
-    private static final Duration TEXT_TIMEOUT = Duration.ofSeconds(3);
+    /** Text understand budget (CF p50 ~1.6s, p95 ~3.2s — 6s covers cold p95 + warmup). */
+    private static final Duration TEXT_TIMEOUT = Duration.ofSeconds(6);
     /**
      * Voice full budget: STT + CF understand (CF_TIMEOUT_S=4.0) + 1s retry +
      * mock fallback + understand cache. 9s covers the full chain so the
      * per-request timeout never fires before CF finishes.
      */
     private static final Duration VOICE_FULL_TIMEOUT = Duration.ofSeconds(9);
+    /**
+     * Song-vibe evaluation budget: a real Qwen listener-mindset verdict
+     * (CF 30s server budget + JSON validation). Runs in background
+     * (@Async post-upload) and on the admin re-evaluate endpoint — never on
+     * the upload hot path, so the generous budget is safe.
+     */
+    private static final Duration EVAL_TIMEOUT = Duration.ofSeconds(60);
+
+    /**
+     * Qwen listener-mindset evaluation: POST /audio/evaluate with the song's
+     * parameters (+ lyrics excerpt when present). Returns the raw verdict map
+     * ({mood_tags, vibe_tags, activity_tags, energy_score, valence_score,
+     * bpm, evaluated_by, reason}) or empty when unreachable/disabled.
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> evaluateSong(Map<String, Object> songParams) {
+        if (!aiEnabled) {
+            log.debug("AI disabled, skipping song evaluation");
+            return Optional.empty();
+        }
+        try {
+            Map<String, Object> resp = aiWebClient.post()
+                    .uri("/audio/evaluate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(songParams)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .timeout(EVAL_TIMEOUT)
+                    .block(EVAL_TIMEOUT);
+            if (resp == null || !resp.containsKey("mood_tags")) return Optional.empty();
+            return Optional.of((Map<String, Object>) resp);
+        } catch (Exception e) {
+            log.warn("Qwen song evaluation failed: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
 
     public record QwenResponse(List<AssistantCommand> actions, String response, boolean clarificationNeeded, String clarificationQuestion) {}
 

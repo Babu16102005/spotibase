@@ -24,14 +24,14 @@ class YoutubeClientTest {
 
     @Test
     void budgetSplit_searchPlusHydrationWithinTotalAndCapTwenty() {
-        YoutubeConfig config = configWith(5, -1, -1, 20);
+        YoutubeConfig config = configWith(8, -1, -1, 20);
 
         int total = config.getEffectiveTimeoutSeconds();
         int search = config.getEffectiveSearchTimeoutSeconds();
         int hydration = config.getEffectiveHydrationTimeoutSeconds();
 
-        assertThat(total).isEqualTo(5);
-        assertThat(search).isEqualTo(3);
+        assertThat(total).isEqualTo(8);
+        assertThat(search).isEqualTo(6);
         assertThat(hydration).isEqualTo(2);
         assertThat(search + hydration).isLessThanOrEqualTo(total);
         assertThat(config.getEffectiveHydrationMaxIds()).isEqualTo(20);

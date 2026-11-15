@@ -186,7 +186,7 @@ const NotificationsScreen = (_props: Props) => {
               size="small"
               color={theme.colors.primary}
             />
-          ) : null
+          ) : undefined
         }
       />
     );

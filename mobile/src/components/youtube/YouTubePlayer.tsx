@@ -21,6 +21,20 @@ import Icon from '../Icon';
 interface YouTubePlayerProps {
   video: YouTubeVideo | null;
   autoplay?: boolean;
+  /**
+   * Resume offset in seconds — embed URL `start` param (YouTube embed
+   * supports ?start=SECONDS). When > 0 the embed autoplays (autoplay forced
+   * to 1) so mini handoff continues from the same second after its brief
+   * reload. Clamped to >= 0, floored. Defaults to 0 (no start param).
+   */
+  startSeconds?: number;
+  /**
+   * When false the player stays paused regardless of the shared isPlaying
+   * flag (no-double-audio gate). The overlay passes active=false to the
+   * hidden shared home while mini is visible, and active=true to the
+   * visible home. Defaults to true.
+   */
+  active?: boolean;
   onClose?: () => void;
   onError?: (message: string) => void;
   testID?: string;
@@ -32,6 +46,14 @@ interface YouTubePlayerProps {
    * keeps the card chrome below.
    */
   borderless?: boolean;
+  /**
+   * Mini hardening: explicit pixel height (miniVideoW * 9/16) for the 16:9
+   * frame/container. Passed only by the mini slot — expanded/fullscreen
+   * never pass it, so those layouts keep the pure aspectRatio chain.
+   * Kept alongside aspectRatio (backup) to survive RN builds where nested
+   * aspectRatio collapses to height 0.
+   */
+  explicitHeight?: number;
 }
 
 /**
@@ -86,12 +108,22 @@ export const escapeHtmlAttribute = (value: string): string =>
  * - Strict videoId: must match /^[A-Za-z0-9_-]{11}$/ — hostile ids throw
  *   instead of being encoded (fail fast, no param leakage, no 404 WebView).
  */
-export const buildYouTubeEmbedUrl = (videoId: string, autoplay = false): string => {
+export const buildYouTubeEmbedUrl = (
+  videoId: string,
+  autoplay = false,
+  startSeconds?: number,
+): string => {
   if (!isValidYouTubeVideoId(videoId)) {
     throw new Error(`Invalid YouTube videoId: ${String(videoId)}`);
   }
+  const start =
+    typeof startSeconds === 'number' && Number.isFinite(startSeconds)
+      ? Math.max(0, Math.floor(startSeconds))
+      : 0;
+  // startSeconds > 0 forces autoplay so handoff resumes inline.
+  const effectiveAutoplay = autoplay || start > 0;
   const params = new URLSearchParams({
-    autoplay: autoplay ? '1' : '0',
+    autoplay: effectiveAutoplay ? '1' : '0',
     rel: '0',
     playsinline: '1',
     modestbranding: '1',
@@ -99,6 +131,7 @@ export const buildYouTubeEmbedUrl = (videoId: string, autoplay = false): string 
     fs: '1',
     origin: YOUTUBE_APP_ORIGIN,
   });
+  if (start > 0) params.set('start', String(start));
   // Deliberately no mute param: unmuted playback is the default.
   return `https://${YOUTUBE_EMBED_HOST}/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
 };
@@ -136,13 +169,19 @@ export const sanitizeEmbedUrl = (
   url: string | null | undefined,
   videoId: string,
   autoplay = false,
+  startSeconds?: number,
 ): string => {
   // Strict videoId: invalid ids fail fast (no silent 404 WebView, no param
   // leakage via encodeURIComponent of hostile ids).
   if (!isValidYouTubeVideoId(videoId)) {
     throw new Error(`Invalid YouTube videoId: ${String(videoId)}`);
   }
-  const fallback = buildYouTubeEmbedUrl(videoId, autoplay);
+  const fallback = buildYouTubeEmbedUrl(videoId, autoplay, startSeconds);
+  const start =
+    typeof startSeconds === 'number' && Number.isFinite(startSeconds)
+      ? Math.max(0, Math.floor(startSeconds))
+      : 0;
+  const effectiveAutoplay = autoplay || start > 0;
   if (!url || typeof url !== 'string' || !url.trim()) return fallback;
   try {
     const parsed = new URL(url.trim());
@@ -161,7 +200,8 @@ export const sanitizeEmbedUrl = (
     parsed.searchParams.set('playsinline', '1');
     parsed.searchParams.set('rel', '0');
     parsed.searchParams.set('fs', '1');
-    parsed.searchParams.set('autoplay', autoplay ? '1' : '0');
+    parsed.searchParams.set('autoplay', effectiveAutoplay ? '1' : '0');
+    if (start > 0) parsed.searchParams.set('start', String(start));
     // Unmuted default: never emit mute=1 (strip legacy/backend mute params).
     parsed.searchParams.delete('mute');
     return parsed.toString();
@@ -197,6 +237,30 @@ export const setVolumeIframesJs = (volume: number): string => {
  * "Tap to unmute" overlay when the OS/WebView starts muted.
  */
 export const QUERY_MUTED_IFRAMES_JS = `(function(){try{if(window.__spotibaseQueryMute){window.__spotibaseQueryMute();}else if(window.__spotibasePlayer&&window.__spotibasePlayer.isMuted){var m=false;try{m=window.__spotibasePlayer.isMuted();}catch(e){}try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'yt-muted',muted:!!m}));}}catch(e){}}}catch(e){}return true;})();`;
+/**
+ * Position bridge without reload (mini <-> shared handoff).
+ * seekTo(t,true) + playVideo mirrors the replay bridge but for an arbitrary
+ * second. Used by the overlay to continue from the same second after a mode
+ * switch without remounting the shared WebView.
+ */
+export const seekToIframesJs = (seconds: number): string => {
+  const t = Math.max(0, Math.floor(Number(seconds) || 0));
+  return `(function(){try{var f=document.querySelectorAll('iframe');for(var i=0;i<f.length;i++){try{f[i].contentWindow.postMessage(JSON.stringify({event:'command',func:'seekTo',args:[${t},true]}),'${YOUTUBE_TARGET_ORIGIN}');}catch(e){}try{f[i].contentWindow.postMessage(JSON.stringify({event:'command',func:'playVideo',args:''}),'${YOUTUBE_TARGET_ORIGIN}');}catch(e){}}}catch(e){}return true;})();`;
+};
+/** Seek-only (no play) for paused handoff targets. */
+export const seekOnlyIframesJs = (seconds: number): string => {
+  const t = Math.max(0, Math.floor(Number(seconds) || 0));
+  return `(function(){try{var f=document.querySelectorAll('iframe');for(var i=0;i<f.length;i++){try{f[i].contentWindow.postMessage(JSON.stringify({event:'command',func:'seekTo',args:[${t},true]}),'${YOUTUBE_TARGET_ORIGIN}');}catch(e){}}}catch(e){}return true;})();`;
+};
+/**
+ * Current-time probe: asks window.__spotibasePlayer.getCurrentTime() and
+ * reports back via {type:'yt-time',seconds} so the RN side can resolve the
+ * pending getCurrentTime() promise. 800ms timeout -> 0 fallback lives in
+ * the component.
+ */
+export const QUERY_TIME_IFRAMES_JS = `(function(){try{var p=null;try{p=window.__spotibasePlayer||null;}catch(e){}var t=0;try{t=p&&p.getCurrentTime?p.getCurrentTime():0;}catch(e){t=0;}try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'yt-time',seconds:Number(t)||0}));}}catch(e){}}catch(e){}return true;})();`;
+/** Timeout for the getCurrentTime bridge (matches handoff choreography). */
+export const YT_TIME_TIMEOUT_MS = 800;
 
 /**
  * Inline-HTML shell for the native WebView.
@@ -215,7 +279,13 @@ export const QUERY_MUTED_IFRAMES_JS = `(function(){try{if(window.__spotibaseQuer
  *   yt-state so the store reconciles user taps inside the iframe.
  * - Pause/play helpers post to the matching https://www.youtube.com origin.
  */
-const buildNativeHtml = (embedUrl: string, borderless = false, videoId?: string, autoplay = false): string => {
+const buildNativeHtml = (
+  embedUrl: string,
+  borderless = false,
+  videoId?: string,
+  autoplay = false,
+  startSeconds?: number,
+): string => {
   // Full HTML-attribute escape: a hostile embedUrl/videoId can never break
   // out of src="..." into markup/JS. & -> &amp; is correct per spec
   // (browser decodes back to & for the request).
@@ -239,7 +309,11 @@ const buildNativeHtml = (embedUrl: string, borderless = false, videoId?: string,
     } catch {}
   }
   const safeVideoId = escapeHtmlAttribute(apiVideoId);
-  const autoplayInt = autoplay ? 1 : 0;
+  const startNum =
+    typeof startSeconds === 'number' && Number.isFinite(startSeconds)
+      ? Math.max(0, Math.floor(startSeconds))
+      : 0;
+  const autoplayInt = autoplay || startNum > 0 ? 1 : 0;
   const safeOrigin = escapeHtmlAttribute(YOUTUBE_APP_ORIGIN);
   const safeEncodedOrigin = escapeHtmlAttribute(encodeURIComponent(YOUTUBE_APP_ORIGIN));
   return `<!DOCTYPE html>
@@ -252,7 +326,7 @@ const buildNativeHtml = (embedUrl: string, borderless = false, videoId?: string,
 <div class="player-wrap">
 <div id="ytplayer"></div>
 </div>
-<script>window.__SPOTIBASE_EMBED_URL="${safeUrl}";window.__SPOTIBASE_VIDEO_ID="${safeVideoId}";window.__SPOTIBASE_AUTOPLAY=${autoplayInt};window.__SPOTIBASE_ORIGIN="${safeOrigin}";</script>
+<script>window.__SPOTIBASE_EMBED_URL="${safeUrl}";window.__SPOTIBASE_VIDEO_ID="${safeVideoId}";window.__SPOTIBASE_AUTOPLAY=${autoplayInt};window.__SPOTIBASE_START=${startNum};window.__SPOTIBASE_ORIGIN="${safeOrigin}";</script>
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
 (function(){
@@ -265,16 +339,20 @@ window.__spotibasePlay=function(){return post('playVideo');};
 window.__spotibaseMute=function(){return post('mute');};
 window.__spotibaseUnmute=function(){post('unMute');try{post('setVolume',[100]);}catch(e){}return true;};
 window.__spotibaseSetVolume=function(v){var n=Math.max(0,Math.min(100,parseInt(v,10)||0));return post('setVolume',[n]);};
-function handleIncoming(d){if(d==='spotibase-pause'){window.__spotibasePause();}else if(d==='spotibase-play'){window.__spotibasePlay();}else if(d==='spotibase-unmute'){window.__spotibaseUnmute();}else if(d==='spotibase-mute'){window.__spotibaseMute();}else if(typeof d==='string'&&d.indexOf('spotibase-volume:')===0){window.__spotibaseSetVolume(d.slice('spotibase-volume:'.length));}}
+window.__spotibaseSeek=function(t){var n=Math.max(0,Math.floor(Number(t)||0));try{post('seekTo',[n,true]);}catch(e){}try{post('playVideo');}catch(e){}return true;};
+window.__spotibaseSeekOnly=function(t){var n=Math.max(0,Math.floor(Number(t)||0));try{post('seekTo',[n,true]);}catch(e){}return true;};
+window.__spotibaseQueryTime=function(){try{var p=null;try{p=window.__spotibasePlayer||null;}catch(e){}var t=0;try{t=p&&p.getCurrentTime?p.getCurrentTime():0;}catch(e){t=0;}try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'yt-time',seconds:Number(t)||0}));}}catch(e){}}catch(e){}return true;};
+function handleIncoming(d){if(d==='spotibase-pause'){window.__spotibasePause();}else if(d==='spotibase-play'){window.__spotibasePlay();}else if(d==='spotibase-unmute'){window.__spotibaseUnmute();}else if(d==='spotibase-mute'){window.__spotibaseMute();}else if(d==='spotibase-time'){window.__spotibaseQueryTime();}else if(typeof d==='string'&&d.indexOf('spotibase-seek:')===0){window.__spotibaseSeek(d.slice('spotibase-seek:'.length));}else if(typeof d==='string'&&d.indexOf('spotibase-volume:')===0){window.__spotibaseSetVolume(d.slice('spotibase-volume:'.length));}}
 document.addEventListener('message',function(e){try{var d=typeof e.data==='string'?e.data:'';handleIncoming(d);}catch(err){}});
 window.addEventListener('message',function(e){try{var d=typeof e.data==='string'?e.data:'';handleIncoming(d);}catch(err){}});
 function reportError(code){try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'yt-error',code:code}));}}catch(e){}}
 function reportReady(){try{var el=document.getElementById('ytplayer');if(el&&el.classList)el.classList.add('yt-ready');}catch(e){}try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'yt-ready'}));}}catch(e){}}
 function reportState(state){try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'yt-state',state:state}));}}catch(e){}}
 function reportMuted(muted){try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'yt-muted',muted:!!muted}));}}catch(e){}}
+function reportTime(){try{var p=null;try{p=window.__spotibasePlayer||null;}catch(e){}var t=0;try{t=p&&p.getCurrentTime?p.getCurrentTime():0;}catch(e){t=0;}try{if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'yt-time',seconds:Number(t)||0}));}}catch(e){}}catch(e){}}
 function queryMuteOnReady(){try{var p=window.__spotibasePlayer;if(p&&p.isMuted){var m=false;try{m=p.isMuted();}catch(e){}reportMuted(!!m);}}catch(e){}}
 window.__spotibaseQueryMute=function(){queryMuteOnReady();return true;};
-function createPlayer(){try{if(typeof YT==='undefined'||!YT||!YT.Player)return false;if(!VIDEO_ID)return false;if(window.__spotibasePlayer)return true;try{window.__spotibasePlayer=new YT.Player('ytplayer',{videoId:VIDEO_ID,width:'100%',height:'100%',playerVars:{autoplay:window.__SPOTIBASE_AUTOPLAY||0,rel:0,playsinline:1,modestbranding:1,fs:1,origin:window.__SPOTIBASE_ORIGIN,enablejsapi:1},events:{'onReady':function(ev){reportReady();setTimeout(function(){queryMuteOnReady();},100);try{var f=document.querySelector('#ytplayer iframe');if(f)f.setAttribute('referrerpolicy','strict-origin-when-cross-origin');}catch(e){}},'onStateChange':function(ev){reportState(ev&&ev.data);},'onError':function(ev){reportError(ev&&ev.data);}}});}catch(e){return false;}return true;}catch(e){return false;}}
+function createPlayer(){try{if(typeof YT==='undefined'||!YT||!YT.Player)return false;if(!VIDEO_ID)return false;if(window.__spotibasePlayer)return true;try{window.__spotibasePlayer=new YT.Player('ytplayer',{videoId:VIDEO_ID,width:'100%',height:'100%',playerVars:{autoplay:window.__SPOTIBASE_AUTOPLAY||0,start:window.__SPOTIBASE_START||0,rel:0,playsinline:1,modestbranding:1,fs:1,origin:window.__SPOTIBASE_ORIGIN,enablejsapi:1},events:{'onReady':function(ev){reportReady();setTimeout(function(){queryMuteOnReady();},100);try{var f=document.querySelector('#ytplayer iframe');if(f)f.setAttribute('referrerpolicy','strict-origin-when-cross-origin');}catch(e){}},'onStateChange':function(ev){reportState(ev&&ev.data);},'onError':function(ev){reportError(ev&&ev.data);}}});}catch(e){return false;}return true;}catch(e){return false;}}
 window.onYouTubeIframeAPIReady=function(){createPlayer();};
 window.addEventListener('load',function(){setTimeout(function(){createPlayer();setTimeout(function(){queryMuteOnReady();},800);},300);});
 var __tries=0;var __iv=setInterval(function(){__tries++;try{if(createPlayer()||__tries>20)clearInterval(__iv);}catch(e){try{clearInterval(__iv);}catch(_){}}},250);
@@ -309,25 +387,46 @@ export const isEmbedBlockedByFlag = (video: unknown): boolean => {
  * - Native: react-native-webview with a www.youtube.com/embed iframe.
  * - Web: plain <iframe> (react-native-webview also works on web, but an
  *   explicit iframe keeps fullscreen + keyboard semantics native to the DOM).
- * - Only one instance is ever mounted — screens render it once at the top and
- *   swap `video`, never one player per row (single player).
+ * - Two homes in the overlay (shared for expanded/watch/fullscreen + dedicated
+ *   mini), each a single WebView: screens swap `video`, never one per row.
+ *   `active=false` gates the hidden home paused (no-double-audio) despite the
+ *   shared isPlaying flag; `startSeconds` resumes mini from the same second.
  * - autoplay defaults to false: playback starts from a user gesture with
- *   sound on. No `mute` URL param is emitted. The unMute/setVolume IFrame
- *   bridge (`handleUnmute`/`handleSetVolume` + `window.__spotibaseUnmute`)
- *   and the "Tap to unmute" overlay (`youtube-unmute`) recover sound when
- *   the OS starts a WebView muted. `isMuted` tracks that state.
+ *   sound on (forced true when startSeconds > 0 for handoff). No `mute` URL
+ *   param is emitted. The unMute/setVolume IFrame bridge + "Tap to unmute"
+ *   overlay recover sound when the OS starts muted.
+ * - Position bridge without reload: seekTo(t) + getCurrentTime() (800ms -> 0,
+ *   NaN -> 0) via yt-time postMessage; pending seeks flush on ready.
  * - Mounting/switching pauses audio (mutual exclusion vs playerStore).
  * - IFrame error 153 (or 150/101) swaps the player for a fallback card with
  *   an "Open in YouTube" action instead of a black frame.
  */
-const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
-  video,
-  autoplay = false,
-  onClose,
-  onError,
-  testID,
-  borderless = false,
-}) => {
+/**
+ * Imperative position bridge for mini <-> shared handoff (no reload).
+ * Overlay holds refs to both homes: getCurrentTime() before a mode switch,
+ * seekTo() after — the shared WebView never remounts on expand/fullscreen.
+ */
+export interface YouTubePlayerHandle {
+  seekTo: (seconds: number) => void;
+  getCurrentTime: () => Promise<number>;
+  pause: () => void;
+  play: () => void;
+}
+
+const YouTubePlayerInner = (
+  {
+    video,
+    autoplay = false,
+    startSeconds = 0,
+    active = true,
+    onClose,
+    onError,
+    testID,
+    borderless = false,
+    explicitHeight,
+  }: YouTubePlayerProps,
+  ref: React.ForwardedRef<YouTubePlayerHandle>,
+) => {
   const { theme } = useThemeStore();
   const isPlaying = useYouTubePlayerStore((s) => s.isPlaying);
   // P0-2 replay nonce: bumps on same-videoId replay so the player restarts
@@ -367,6 +466,18 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const resolveAbortRef = useRef<AbortController | null>(null);
   const webViewRef = useRef<any>(null);
   const webIframeRef = useRef<any>(null);
+  const webPlayerRef = useRef<any>(null);
+  /** Pending getCurrentTime resolver (single-flight, 800ms timeout -> 0). */
+  const timeRequestRef = useRef<{ resolve: (n: number) => void; timeout: any } | null>(null);
+  /** Seek requested before ready — flushed on ready like play/pause/mute. */
+  const pendingSeekRef = useRef<number | null>(null);
+  const startFloor =
+    typeof startSeconds === 'number' && Number.isFinite(startSeconds)
+      ? Math.max(0, Math.floor(startSeconds))
+      : 0;
+  const effectiveAutoplay = autoplay || startFloor > 0;
+  // No-double-audio gate: hidden home stays paused despite shared isPlaying.
+  const effectivePlaying = isPlaying && active !== false;
 
   const videoId = video?.videoId ?? null;
   // Strict: invalid ids never build a watch URL (no throw in render path).
@@ -477,12 +588,12 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           return;
         }
         const url = typeof rawUrl === 'string' ? rawUrl.trim() : '';
-        setEmbedUrl(sanitizeEmbedUrl(url || null, videoId, autoplay));
+        setEmbedUrl(sanitizeEmbedUrl(url || null, videoId, autoplay, startFloor));
       } catch (err: any) {
         if (controller.signal.aborted || err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
         if (!cancelled) {
           // Fallback: canonical embed still plays without backend support.
-          setEmbedUrl(buildYouTubeEmbedUrl(videoId, autoplay));
+          setEmbedUrl(buildYouTubeEmbedUrl(videoId, autoplay, startFloor));
         }
       } finally {
         if (!cancelled && !controller.signal.aborted) setResolving(false);
@@ -493,7 +604,7 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       cancelled = true;
       controller.abort();
     };
-  }, [videoId, autoplay, retryCount, replayNonce, failWith]);
+  }, [videoId, autoplay, startFloor, retryCount, replayNonce, failWith]);
 
   // P0-2 replay: same videoId with a bumped nonce seeks to 0 + plays in the
   // live WebView so Replay restarts immediately even before the re-resolve
@@ -568,13 +679,43 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   useEffect(() => {
     if (!embedUrl) return;
     if (!playerReadyRef.current) return;
-    sendPlayingCommand(isPlaying);
-  }, [isPlaying, embedUrl, sendPlayingCommand]);
+    sendPlayingCommand(effectivePlaying);
+  }, [isPlaying, active, effectivePlaying, embedUrl, sendPlayingCommand]);
 
   // Flush pending play/pause the moment the player becomes ready.
   useEffect(() => {
     if (!playerReady || !embedUrl) return;
-    sendPlayingCommand(isPlaying);
+    sendPlayingCommand(effectivePlaying);
+    // Flush a seek requested before ready (handoff seekTo while resolving).
+    try {
+      if (pendingSeekRef.current !== null) {
+        const t = pendingSeekRef.current;
+        pendingSeekRef.current = null;
+        if (Platform.OS === 'web') {
+          const frame = webIframeRef.current as any;
+          const win = frame?.contentWindow;
+          if (win?.postMessage) {
+            win.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [t, true] }), YOUTUBE_TARGET_ORIGIN);
+            if (effectivePlaying) {
+              win.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: '' }), YOUTUBE_TARGET_ORIGIN);
+            }
+          }
+          try {
+            const p = webPlayerRef.current as any;
+            if (p?.seekTo) {
+              p.seekTo(t, true);
+              if (effectivePlaying) p.playVideo?.();
+            }
+          } catch {}
+        } else {
+          const wv = webViewRef.current;
+          if (wv?.injectJavaScript) {
+            wv.injectJavaScript(effectivePlaying ? seekToIframesJs(t) : seekOnlyIframesJs(t));
+            if (!effectivePlaying) wv.injectJavaScript(PAUSE_IFRAMES_JS);
+          }
+        }
+      }
+    } catch {}
     // Flush a mute toggled before the frame was ready (e.g. sheet mute
     // pressed during resolve): a fresh embed starts unmuted, so re-assert.
     try {
@@ -638,9 +779,207 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   useEffect(
     () => () => {
       resolveAbortRef.current?.abort();
+      try {
+        if (timeRequestRef.current?.timeout) clearTimeout(timeRequestRef.current.timeout);
+      } catch {}
+      timeRequestRef.current = null;
     },
     []
   );
+
+  const doSeekTo = useCallback(
+    (seconds: number) => {
+      const t = Math.max(0, Math.floor(Number(seconds) || 0));
+      try {
+        if (Platform.OS === 'web') {
+          const frame = webIframeRef.current as any;
+          const win = frame?.contentWindow;
+          if (win?.postMessage) {
+            win.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [t, true] }), YOUTUBE_TARGET_ORIGIN);
+            win.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: '' }), YOUTUBE_TARGET_ORIGIN);
+          }
+          try {
+            const p = webPlayerRef.current as any;
+            if (p?.seekTo) {
+              p.seekTo(t, true);
+              try {
+                p.playVideo?.();
+              } catch {}
+            }
+          } catch {}
+        } else {
+          const wv = webViewRef.current;
+          if (wv?.injectJavaScript) {
+            if (!playerReadyRef.current) {
+              // Queue for the ready flush (mirrors play/pause/mute gating).
+              pendingSeekRef.current = t;
+            } else {
+              wv.injectJavaScript(seekToIframesJs(t));
+            }
+          } else if (wv?.postMessage) {
+            try {
+              wv.postMessage(`spotibase-seek:${t}`);
+            } catch {}
+            pendingSeekRef.current = t;
+          } else {
+            pendingSeekRef.current = t;
+          }
+        }
+      } catch {}
+    },
+    [],
+  );
+
+  const doPause = useCallback(() => {
+    try {
+      if (Platform.OS === 'web') {
+        const frame = webIframeRef.current as any;
+        const win = frame?.contentWindow;
+        if (win?.postMessage) {
+          win.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: '' }), YOUTUBE_TARGET_ORIGIN);
+        }
+        try {
+          (webPlayerRef.current as any)?.pauseVideo?.();
+        } catch {}
+      } else {
+        const wv = webViewRef.current;
+        if (wv?.injectJavaScript) wv.injectJavaScript(PAUSE_IFRAMES_JS);
+        else if (wv?.postMessage) {
+          try {
+            wv.postMessage('spotibase-pause');
+          } catch {}
+        }
+      }
+    } catch {}
+  }, []);
+
+  const doPlay = useCallback(() => {
+    try {
+      if (Platform.OS === 'web') {
+        const frame = webIframeRef.current as any;
+        const win = frame?.contentWindow;
+        if (win?.postMessage) {
+          win.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: '' }), YOUTUBE_TARGET_ORIGIN);
+        }
+        try {
+          (webPlayerRef.current as any)?.playVideo?.();
+        } catch {}
+      } else {
+        const wv = webViewRef.current;
+        if (wv?.injectJavaScript) {
+          if (!playerReadyRef.current) {
+            // Ready flush will play via effectivePlaying; nothing to queue
+            // beyond marking intent (isPlaying store already true).
+          } else {
+            wv.injectJavaScript(PLAY_IFRAMES_JS);
+          }
+        } else if (wv?.postMessage) {
+          try {
+            wv.postMessage('spotibase-play');
+          } catch {}
+        }
+      }
+    } catch {}
+  }, []);
+
+  const doGetCurrentTime = useCallback((): Promise<number> => {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (n: number) => {
+        if (settled) return;
+        settled = true;
+        try {
+          if (timeRequestRef.current?.timeout) clearTimeout(timeRequestRef.current.timeout);
+        } catch {}
+        if (timeRequestRef.current && (timeRequestRef.current.resolve as unknown) === (done as unknown)) {
+          timeRequestRef.current = null;
+        } else if (timeRequestRef.current) {
+          // Clear only if it is ours (single-flight always ours here).
+          try {
+            timeRequestRef.current = null;
+          } catch {}
+        }
+        let v = Number(n);
+        if (!Number.isFinite(v) || v < 0) v = 0;
+        resolve(v);
+      };
+      try {
+        if (timeRequestRef.current) {
+          try {
+            clearTimeout(timeRequestRef.current.timeout);
+          } catch {}
+          try {
+            timeRequestRef.current.resolve(0);
+          } catch {}
+          timeRequestRef.current = null;
+        }
+      } catch {}
+      const timeout = setTimeout(() => done(0), YT_TIME_TIMEOUT_MS);
+      timeRequestRef.current = { resolve: done, timeout };
+      try {
+        if (Platform.OS === 'web') {
+          // Direct YT.Player fast path when bound.
+          try {
+            const frame = webIframeRef.current as any;
+            const p = (frame as any)?.__spotibaseYTPlayer ?? webPlayerRef.current;
+            if (p?.getCurrentTime) {
+              const t = p.getCurrentTime();
+              if (Number.isFinite(Number(t))) {
+                clearTimeout(timeout);
+                timeRequestRef.current = null;
+                settled = true;
+                let v = Number(t);
+                if (!Number.isFinite(v) || v < 0) v = 0;
+                resolve(v);
+                return;
+              }
+            }
+          } catch {}
+          // Otherwise wait for a yt-time window message (tests post it) or
+          // the 800ms timeout -> 0.
+        } else {
+          const wv = webViewRef.current;
+          if (wv?.injectJavaScript) {
+            try {
+              wv.injectJavaScript(QUERY_TIME_IFRAMES_JS);
+            } catch {
+              done(0);
+            }
+          } else if (wv?.postMessage) {
+            try {
+              wv.postMessage('spotibase-time');
+            } catch {
+              done(0);
+            }
+          } else {
+            // No WebView yet (resolving) — timeout resolves 0.
+          }
+        }
+      } catch {
+        done(0);
+      }
+    });
+  }, []);
+
+  React.useImperativeHandle(
+    ref,
+    () => ({ seekTo: doSeekTo, getCurrentTime: doGetCurrentTime, pause: doPause, play: doPlay }),
+    [doSeekTo, doGetCurrentTime, doPause, doPlay],
+  );
+
+  const resolveTimeMessage = useCallback((rawSeconds: unknown) => {
+    try {
+      const req = timeRequestRef.current;
+      if (!req) return;
+      try {
+        clearTimeout(req.timeout);
+      } catch {}
+      timeRequestRef.current = null;
+      let v = Number(rawSeconds);
+      if (!Number.isFinite(v) || v < 0) v = 0;
+      req.resolve(v);
+    } catch {}
+  }, []);
 
   const handleWebViewMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -653,6 +992,7 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           state?: number;
           muted?: boolean;
           isMuted?: boolean;
+          seconds?: number;
         };
         // P0 ready-gate: IFrame onReady — allow isPlaying commands through.
         if (parsed?.type === 'yt-ready') {
@@ -662,6 +1002,14 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         }
         // P0 OS-mute detection: onReady queries isMuted(); a muted WebView
         // must show the "Tap to unmute" overlay (youtube-unmute).
+        if (parsed?.type === 'yt-time') {
+          const secs =
+            typeof (parsed as any)?.seconds === 'number'
+              ? (parsed as any).seconds
+              : NaN;
+          resolveTimeMessage(secs);
+          return;
+        }
         if (parsed?.type === 'yt-muted') {
           const m =
             typeof parsed.muted === 'boolean'
@@ -708,7 +1056,7 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         }
       } catch {}
     },
-    [failWith, setMuted],
+    [failWith, setMuted, resolveTimeMessage],
   );
 
   const handleOpenInYouTube = useCallback(() => {
@@ -813,6 +1161,9 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         if (!parsed || typeof parsed.type !== 'string') return;
         if (parsed.type === 'yt-ready') {
           markReady();
+        } else if (parsed.type === 'yt-time') {
+          const secs = typeof parsed.seconds === 'number' ? parsed.seconds : NaN;
+          resolveTimeMessage(secs);
         } else if (parsed.type === 'yt-muted') {
           const m =
             typeof parsed.muted === 'boolean'
@@ -854,7 +1205,7 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         window.removeEventListener('message', onWindowMessage as any);
       } catch {}
     };
-  }, [failWith, markReady, setMuted]);
+  }, [failWith, markReady, setMuted, resolveTimeMessage]);
 
   // P0-150 web parity: the plain DOM <iframe src> never posts yt-error by
   // itself (YouTube's restriction page is HTTP 200, so iframe onError never
@@ -904,6 +1255,10 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               },
             },
           });
+          try {
+            (frame as any).__spotibaseYTPlayer = player;
+            webPlayerRef.current = player;
+          } catch {}
           (frame as any).__spotibaseYTBound = embedUrl;
           return true;
         } catch {
@@ -1024,7 +1379,7 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     const Iframe = 'iframe' as any;
     return (
       <Iframe
-        key={`yt-web-${videoId}-${retryCount}-${replayNonce}`}
+        key={`yt-web-${videoId}-${retryCount}-${replayNonce}-${startFloor}`}
         ref={webIframeRef}
         src={embedUrl}
         title={video?.title ?? 'YouTube player'}
@@ -1041,7 +1396,7 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         testID="youtube-player-webview"
       />
     );
-  }, [embedUrl, videoId, video?.title, retryCount, replayNonce, handleWebIframeLoad, handleWebIframeError, handleFullscreenChange]);
+  }, [embedUrl, videoId, video?.title, retryCount, replayNonce, startFloor, handleWebIframeLoad, handleWebIframeError, handleFullscreenChange]);
 
   if (!video) return null;
 
@@ -1050,11 +1405,27 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   // Borderless embedded mode (overlay mini/expanded/fullscreen): no outer
   // margins, borders, or radius — the 16:9 frame bleeds edge-to-edge.
   // Standalone fallback keeps the card chrome (margin + border + radius 12).
+  // Mini hardening: when explicitHeight is passed (mini slot only), pin both
+  // container + frame to that pixel height alongside aspectRatio (backup) so
+  // the WebView can never collapse to height 0. Never passed outside mini.
+  const explicitHeightStyle =
+    typeof explicitHeight === 'number' &&
+    Number.isFinite(explicitHeight) &&
+    explicitHeight > 0
+      ? { height: explicitHeight, position: 'relative' as const, zIndex: 1 }
+      : undefined;
   const containerStyle = borderless
-    ? { backgroundColor: '#000', borderWidth: 0, borderRadius: 0, marginHorizontal: 0, marginTop: 0 }
+    ? {
+        backgroundColor: '#000',
+        borderWidth: 0,
+        borderRadius: 0,
+        marginHorizontal: 0,
+        marginTop: 0,
+        ...(explicitHeightStyle ?? {}),
+      }
     : { backgroundColor: '#000', borderColor: theme.colors.border };
   const frameStyle = borderless
-    ? { borderRadius: 0 }
+    ? { borderRadius: 0, ...(explicitHeightStyle ?? {}) }
     : undefined;
 
   return (
@@ -1095,10 +1466,12 @@ const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           Platform.OS === 'web' ? (
             <View style={styles.webFrame}>{webIframe}</View>
           ) : (
-            <WebView
-              key={`yt-native-${videoId}-${retryCount}-${replayNonce}`}
+            // react-native-webview 14 types the class as WebView<P = undefined>,
+            // which collapses props to `never`; pin P to `object` explicitly.
+            <WebView<object>
+              key={`yt-native-${videoId}-${retryCount}-${replayNonce}-${startFloor}`}
               ref={webViewRef}
-              source={{ html: buildNativeHtml(embedUrl, borderless, videoId ?? undefined, autoplay), baseUrl: YOUTUBE_PLAYER_BASE_URL }}
+              source={{ html: buildNativeHtml(embedUrl, borderless, videoId ?? undefined, effectiveAutoplay, startFloor), baseUrl: YOUTUBE_PLAYER_BASE_URL }}
               originWhitelist={['https://*']}
               style={styles.nativeFrame}
               javaScriptEnabled
@@ -1339,5 +1712,7 @@ const styles = StyleSheet.create({
   channel: { flex: 1, color: 'rgba(255,255,255,0.7)', fontSize: 12 },
   state: { color: '#1DB954', fontSize: 12, fontWeight: '700' },
 });
+
+const YouTubePlayer = React.forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(YouTubePlayerInner);
 
 export default React.memo(YouTubePlayer);

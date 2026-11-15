@@ -2,9 +2,7 @@ package com.spotibase.ai.service;
 
 import com.spotibase.entity.Song;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.*;
 
@@ -12,16 +10,7 @@ import java.util.*;
 @Slf4j
 public class AiTaggingService {
 
-    private final WebClient aiWebClient;
-
-    @Value("${ai.enabled:true}")
-    private boolean aiEnabled;
-
-    @Value("${ai.service-url:http://localhost:7860}")
-    private String aiServiceUrl;
-
-    public AiTaggingService(WebClient aiWebClient) {
-        this.aiWebClient = aiWebClient;
+    public AiTaggingService() {
     }
 
     public record TagResult(
@@ -35,48 +24,34 @@ public class AiTaggingService {
     ) {}
 
     /**
-     * Called on every song upload (single + bulk). Returns accurate mood/energy/vibe.
-     * Tries FastAPI /audio/tag for Qwen-based inference, falls back to rule-based.
+     * Called on every song upload (single + bulk). Evaluates mood/energy/vibe
+     * locally from the song's own parameters — title/artist/genre/language
+     * metadata plus measured file parameters (duration, bitrate, sample
+     * rate). No LLM call: uploaded-song tagging is a deterministic,
+     * parameter-based evaluation (keyword inference for labels, measured
+     * parameters for scores), so uploads never block on, or fail from, an
+     * AI service round-trip.
      */
-    public TagResult tag(Song song, String title, String artistName, String genreName, String language, Long durationMs, Integer bitrate) {
-        // Try FastAPI first (if up) - more accurate via Qwen
-        if (aiEnabled) {
-            try {
-                Map<String, Object> body = new HashMap<>();
-                body.put("title", title);
-                body.put("artist", artistName);
-                body.put("genre", genreName);
-                body.put("language", language);
-                body.put("durationMs", durationMs);
-                body.put("bitrate", bitrate);
-                Map resp = aiWebClient.post()
-                    .uri("/audio/tag")
-                    .bodyValue(body)
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block();
-                if (resp != null && resp.containsKey("mood_tags")) {
-                    List<String> moods = (List<String>) resp.getOrDefault("mood_tags", List.of("CALM"));
-                    List<String> vibes = (List<String>) resp.getOrDefault("vibe_tags", List.of("CHILL"));
-                    List<String> activities = (List<String>) resp.getOrDefault("activity_tags", List.of("LISTENING"));
-                    Number energy = (Number) resp.getOrDefault("energy_score", 0.5);
-                    Number valence = (Number) resp.getOrDefault("valence_score", 0.6);
-                    Number bpm = (Number) resp.getOrDefault("bpm", 90);
-                    log.info("AI tag (FastAPI) for '{}' -> mood={} energy={}", title, moods, energy);
-                    return new TagResult(moods, vibes, activities, energy.floatValue(), valence.floatValue(), bpm.floatValue(), true);
-                }
-            } catch (Exception e) {
-                log.warn("AI tag FastAPI failed for '{}', fallback to rule: {}", title, e.getMessage());
-            }
-        }
-        // Rule-based fallback - accurate for Tamil + known artists
-        return ruleBased(title, artistName, genreName, language, durationMs, bitrate);
+    public TagResult tag(Song song, String title, String artistName, String genreName, String language, Long durationMs, Integer bitrate, Integer sampleRate) {
+        return evaluateFromParameters(title, artistName, genreName, language, durationMs, bitrate, sampleRate);
     }
 
-    private TagResult ruleBased(String title, String artist, String genre, String language, Long durationMs, Integer bitrate) {
+    /** Backwards-compatible overload (no sample rate measured). */
+    public TagResult tag(Song song, String title, String artistName, String genreName, String language, Long durationMs, Integer bitrate) {
+        return evaluateFromParameters(title, artistName, genreName, language, durationMs, bitrate, null);
+    }
+
+    /**
+     * Parameter-based evaluation. Labels come from title/artist/genre/
+     * language keyword inference (the only semantic signal available without
+     * DSP); energy/valence/bpm start from the genre base, the keyword branch
+     * may override on strong title/artist signal, and measured file
+     * parameters always adjust the scores (see {@link #applyMeasuredAdjustments}).
+     */
+    private TagResult evaluateFromParameters(String title, String artistName, String genreName, String language, Long durationMs, Integer bitrate, Integer sampleRate) {
         String t = (title != null ? title.toLowerCase() : "");
-        String a = (artist != null ? artist.toLowerCase() : "");
-        String g = (genre != null ? genre.toLowerCase() : "");
+        String a = (artistName != null ? artistName.toLowerCase() : "");
+        String g = (genreName != null ? genreName.toLowerCase() : "");
         String lang = (language != null ? language.toLowerCase() : "");
 
         // Defaults
@@ -104,13 +79,79 @@ public class AiTaggingService {
         }
         // Language nudges
         if ("tamil".equals(lang) && energy > 0.7) vibe = List.of("INTENSE", "PARTY");
-        // Duration/bitrate nudges: long + low bitrate -> calm
-        if (durationMs != null && durationMs > 300000 && bitrate != null && bitrate < 200) {
-            energy = Math.min(energy, 0.4f);
-            mood = List.of("CALM", "NOSTALGIC");
+        // Every keyword branch above moves energy off the 0.45 default, so a
+        // changed energy (or mood) means a branch matched and its scores stand.
+        boolean matched = energy != 0.45f || valence != 0.6f || bpm != 92f || !mood.equals(List.of("CALM"));
+        // No keyword branch matched: seed scores from the configured genre base
+        // so the numbers still reflect a configured parameter (not defaults).
+        if (!matched) {
+            float[] base = genreBase(g);
+            energy = base[0];
+            valence = base[1];
+            bpm = base[2];
         }
+        // Measured file parameters always shape the final scores.
+        float[] adjusted = applyMeasuredAdjustments(energy, valence, bpm, durationMs, bitrate, sampleRate);
+        energy = adjusted[0];
+        valence = adjusted[1];
+        bpm = adjusted[2];
 
-        log.info("AI tag (rule) for '{}' by '{}' -> mood={} energy={} bpm={}", title, artist, mood, energy, bpm);
+        log.info("tag (parameters) for '{}' by '{}' -> mood={} energy={} bpm={}", title, artistName, mood, energy, bpm);
         return new TagResult(mood, vibe, activity, energy, valence, bpm, true);
+    }
+
+    /**
+     * Configured genre base scores (mirrors the upload genre table:
+     * ROCK/METAL, POP/DANCE, HIP-HOP/RAP, MELODY/CLASSICAL/JAZZ/BLUES,
+     * CHILL/AMBIENT/LOFI, default). Returns {energy, valence, bpm}.
+     */
+    private float[] genreBase(String genreLower) {
+        String g = genreLower != null ? genreLower : "";
+        if (g.contains("rock") || g.contains("metal")) return new float[]{0.85f, 0.45f, 125f};
+        if (g.contains("pop") || g.contains("dance")) return new float[]{0.80f, 0.75f, 120f};
+        if (g.contains("hip") || g.contains("hop") || g.contains("rap")) return new float[]{0.75f, 0.60f, 95f};
+        if (g.contains("melody") || g.contains("classical") || g.contains("jazz") || g.contains("blues") || g.contains("raga")) return new float[]{0.30f, 0.40f, 80f};
+        if (g.contains("chill") || g.contains("ambient") || g.contains("lofi") || g.contains("lo-fi")) return new float[]{0.25f, 0.50f, 75f};
+        return new float[]{0.50f, 0.50f, 100f};
+    }
+
+    /**
+     * Adjusts scores from measured file parameters:
+     * - bitrate (fidelity): >=320kbps hi-fi punch (energy +0.03);
+     *   <128kbps thin/low-fi (energy -0.08, valence -0.03).
+     * - duration: >5min long-form calms down (energy -0.08, bpm -4);
+     *   <2min short cuts run hotter (energy +0.04, bpm +2).
+     * - sample rate: >=48kHz hi-res (energy +0.02); <22.05kHz (energy -0.05).
+     * Energy/valence clamp 0.05-0.99, bpm clamps 60-180.
+     */
+    private float[] applyMeasuredAdjustments(float energy, float valence, float bpm, Long durationMs, Integer bitrate, Integer sampleRate) {
+        if (bitrate != null) {
+            if (bitrate >= 320) {
+                energy += 0.03f;
+            } else if (bitrate < 128) {
+                energy -= 0.08f;
+                valence -= 0.03f;
+            }
+        }
+        if (durationMs != null) {
+            if (durationMs > 300000) {
+                energy -= 0.08f;
+                bpm -= 4f;
+            } else if (durationMs < 120000) {
+                energy += 0.04f;
+                bpm += 2f;
+            }
+        }
+        if (sampleRate != null) {
+            if (sampleRate >= 48000) {
+                energy += 0.02f;
+            } else if (sampleRate < 22050) {
+                energy -= 0.05f;
+            }
+        }
+        energy = Math.min(0.99f, Math.max(0.05f, energy));
+        valence = Math.min(0.99f, Math.max(0.05f, valence));
+        bpm = Math.min(180f, Math.max(60f, bpm));
+        return new float[]{energy, valence, bpm};
     }
 }

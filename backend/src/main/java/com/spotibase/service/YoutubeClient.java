@@ -25,8 +25,9 @@ import reactor.core.publisher.Mono;
 /**
  * Thin HTTP client over YouTube Data API v3.
  *
- * <p>Base URL {@code https://www.googleapis.com/youtube/v3} with a 5s
- * timeout comes from the {@code youtubeWebClient} bean. The API key is only
+ * <p>Base URL {@code https://www.googleapis.com/youtube/v3} with an 8s
+ * total budget (Bs 6s search + Bh 2s hydration) comes from the
+ * {@code youtubeWebClient} bean. The API key is only
  * ever sent as the {@code key} query parameter — it is never logged.
  *
  * <p>Issue #153: every {@code videos.list} call requests
@@ -66,7 +67,7 @@ public class YoutubeClient {
     private final YoutubeConfig youtubeConfig;
 
     /**
-     * Clamped outbound budget (1..30s, default 5s). Single choke point so a
+     * Clamped outbound budget (1..30s, default 8s). Single choke point so a
      * misconfigured {@code YOUTUBE_TIMEOUT_SECONDS} can never produce a zero
      * block window (instant {@code IllegalStateException}) or hang threads.
      */

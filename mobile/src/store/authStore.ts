@@ -53,6 +53,17 @@ const getInitialAuthStatus = (): boolean => {
   }
 };
 
+/**
+ * Only an explicit auth rejection from /auth/refresh means the refresh token
+ * is dead (invalid grant). Everything else — offline / no-response, timeout
+ * (ECONNABORTED), 5xx / cold-start 502, cancel — is transient and must keep
+ * the cached session so the user is not logged out by a slow backend.
+ */
+const isInvalidGrant = (err: any): boolean => {
+  const status = err?.response?.status;
+  return status === 400 || status === 401 || status === 403;
+};
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: getCachedUser(),
   isAuthenticated: getInitialAuthStatus(),
@@ -158,15 +169,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             saveAuthSession(newAccess, newRefresh, newUser);
             set({ user: newUser, isAuthenticated: true, isLoading: false });
           } catch (refreshErr: any) {
-            const isNetworkError = refreshErr.message === 'Network Error' || refreshErr.code === 'ERR_NETWORK';
-            if (!isNetworkError) {
+            // Wipe ONLY on explicit invalid-grant (dead refresh token).
+            // Timeouts, offline, 5xx / cold-start boot failures keep the
+            // cached session as-is (still authenticated from cache).
+            if (isInvalidGrant(refreshErr)) {
               storage.clearAll();
               try {
                 queryClient.clear();
               } catch {}
               set({ user: null, isAuthenticated: false, isLoading: false });
             }
-            // On network error/offline, keep the cached session as-is.
           }
         })();
         return;
@@ -186,15 +198,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         void prefetchHomeFeed();
         void prefetchSongs();
       } catch (refreshErr: any) {
-        const isNetworkError = refreshErr.message === 'Network Error' || refreshErr.code === 'ERR_NETWORK';
-        if (!isNetworkError) {
+        // Same rule as the background path: only an explicit invalid-grant
+        // wipes the stored tokens. Transient failures (timeout, offline,
+        // 5xx) keep the token and simply stop loading.
+        if (isInvalidGrant(refreshErr)) {
           storage.clearAll();
           try {
             queryClient.clear();
           } catch {}
           set({ user: null, isAuthenticated: false, isLoading: false });
         } else {
-          // On network error or offline, maintain the cached session!
+          // On transient failure, maintain the stored token(s).
           set({ isLoading: false });
         }
       }

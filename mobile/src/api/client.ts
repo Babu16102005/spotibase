@@ -145,11 +145,12 @@ export const READ_TIMEOUT_MS = 10_000;
 export const SEARCH_TIMEOUT_MS = 8_000;
 
 /**
- * YouTube catalog budget — aligns with the backend total 5s split
- * (Bs 3s search + Bh 2s hydration, hydration cap 20, pooled WebClient).
- * Search/trending/resolve must fail fast at 5s while typing/scrolling.
+ * YouTube catalog budget — aligns with the backend total 8s split
+ * (Bs 6s search + Bh 2s hydration, hydration cap 20, pooled WebClient).
+ * Search/trending/resolve carry 10s headroom above the server 8s total so
+ * slower-but-live server responses (~500ms-6s) are not aborted client-side.
  */
-export const YOUTUBE_SEARCH_TIMEOUT_MS = 5_000;
+export const YOUTUBE_SEARCH_TIMEOUT_MS = 10_000;
 
 /**
  * Ordered home tier served by `GET /api/v1/home?tier=`.
@@ -188,15 +189,13 @@ const reqOpts = (
 // of racing (a loser could otherwise wipe tokens stored by the winner).
 let refreshPromise: Promise<AuthResponse> | null = null;
 
-const isNetworkError = (err: any): boolean =>
-  !err?.response &&
-  (err?.message === 'Network Error' || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED');
-
 const isInvalidGrant = (err: any): boolean => {
   const status = err?.response?.status;
-  // Only an explicit auth rejection means the refresh token is dead. Network
-  // errors/timeouts and 5xx responses are transient — offline is not logged out.
-  return status === 401 || status === 403;
+  // Only an explicit auth rejection means the refresh token is dead (invalid
+  // grant). Timeouts / no-response / 5xx (cold-start boot, transient) are
+  // NOT invalid grants — offline is not logged out. 400 is included: the
+  // backend rejects malformed/empty grants with 400 as well as 401/403.
+  return status === 400 || status === 401 || status === 403;
 };
 
 /**
@@ -332,7 +331,7 @@ apiClient.interceptors.response.use(
             url: fullUrl,
             data: originalRequest.data,
             headers: retryHeaders,
-            // Preserve the original per-request budget (e.g. YouTube 5s,
+            // Preserve the original per-request budget (e.g. YouTube 10s,
             // search 8s, reads 10s, uploads 0 = no timeout). `??` (not `||`)
             // keeps an explicit 0 (no timeout) from replaying as 30s.
             timeout: originalRequest.timeout ?? 30000,
@@ -380,19 +379,18 @@ apiClient.interceptors.response.use(
         }
         return apiClient(originalRequest);
       } catch (refreshError: any) {
-        // Keep the stored session on network errors/timeouts so the user stays
-        // logged in while offline; only wipe when the backend explicitly
-        // rejects the refresh grant (401/403). The original 401 is rejected so
-        // screens can redirect to Login; it is tagged when the refresh never
-        // reached the server so screens don't wipe a still-valid session.
-        if (!isNetworkError(refreshError) && isInvalidGrant(refreshError)) {
+        // Keep the stored session on ANY transient failure (timeout,
+        // offline/no-response, 5xx/cold-start) so the user stays logged in;
+        // only wipe when the backend explicitly rejects the refresh grant
+        // (400/401/403). The original 401 is rejected so screens can redirect
+        // to Login; it is tagged whenever the refresh never proved the grant
+        // dead (transient) so screens don't wipe a still-valid session.
+        if (isInvalidGrant(refreshError)) {
           storage.clearAll();
+          return Promise.reject(refreshError);
         }
-        if (isNetworkError(refreshError)) {
-          (error as any)._refreshNetworkError = true;
-          return Promise.reject(error);
-        }
-        return Promise.reject(refreshError);
+        (error as any)._refreshNetworkError = true;
+        return Promise.reject(error);
       }
     }
     return Promise.reject(error);
